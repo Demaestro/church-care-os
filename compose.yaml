@@ -1,0 +1,17 @@
+services:
+  app:
+    build:
+      context: .
+    image: church-care-os:local
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      CARE_DB_PATH: /app/data/care.db
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    volumes:
+      - church-care-data:/app/data
+
+volumes:
+  church-care-data:

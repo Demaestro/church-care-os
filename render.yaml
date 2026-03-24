@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: church-care-os
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOSTNAME
+        value: 0.0.0.0
+      - key: PORT
+        value: 3000
+      - key: CARE_DB_PATH
+        value: /app/storage/care.db
+    disk:
+      name: care-data
+      mountPath: /app/storage
+      sizeGB: 1

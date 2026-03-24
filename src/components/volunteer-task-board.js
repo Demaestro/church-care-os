@@ -1,0 +1,274 @@
+'use client';
+
+import { useState } from "react";
+import {
+  acceptVolunteerTask,
+  addVolunteerTaskNote,
+  completeVolunteerTask,
+} from "@/app/actions";
+import { SubmitButton } from "@/components/submit-button";
+
+const sectionLabels = {
+  overdue: "Overdue",
+  dueToday: "Due today",
+  upcoming: "Upcoming",
+};
+
+const badgeClasses = {
+  high: "bg-[rgba(184,101,76,0.10)] text-clay",
+  watch: "bg-[rgba(179,138,69,0.14)] text-[#7a6128]",
+  routine: "bg-[rgba(34,28,22,0.06)] text-muted",
+  done: "bg-[rgba(73,106,77,0.10)] text-moss",
+};
+
+const avatarClasses = [
+  "bg-[rgba(77,115,193,0.12)] text-[#365aa2]",
+  "bg-[rgba(73,106,77,0.12)] text-moss",
+  "bg-[rgba(179,138,69,0.14)] text-[#8a6b2b]",
+  "bg-[rgba(184,101,76,0.12)] text-clay",
+];
+
+export function VolunteerTaskBoard({ preview, initialTab = "assigned" }) {
+  const [tab, setTab] = useState(
+    initialTab === "completed" ? "completed" : "assigned"
+  );
+  const sections = Object.entries(preview.assigned);
+  const hasAssignedTasks = sections.some(([, tasks]) => tasks.length > 0);
+
+  return (
+    <section className="space-y-8">
+      <div className="max-w-4xl">
+        <p className="text-4xl leading-tight tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-5xl">
+          Finally, the volunteer task view - what a volunteer sees when they
+          log in, with just enough context to act and nothing more.
+        </p>
+      </div>
+
+      <div>
+        <h1 className="text-4xl tracking-[-0.04em] text-foreground [font-family:var(--font-display)]">
+          Your care tasks
+        </h1>
+        <p className="mt-2 text-lg text-muted">
+          {preview.volunteer.name} - {preview.volunteer.team}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <TabButton
+          label={`Assigned (${preview.tabs.assigned})`}
+          active={tab === "assigned"}
+          onClick={() => setTab("assigned")}
+        />
+        <TabButton
+          label={`Completed (${preview.tabs.completed})`}
+          active={tab === "completed"}
+          onClick={() => setTab("completed")}
+        />
+      </div>
+
+      {tab === "assigned" ? (
+        hasAssignedTasks ? (
+          <div className="space-y-8">
+            {sections.map(([key, tasks]) =>
+              tasks.length > 0 ? (
+                <section key={key}>
+                  <p className="text-[0.8rem] font-semibold uppercase tracking-[0.16em] text-muted">
+                    {sectionLabels[key]}
+                  </p>
+                  <div className="mt-4 space-y-5">
+                    {tasks.map((task, index) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        avatarClass={avatarClasses[index % avatarClasses.length]}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null
+            )}
+          </div>
+        ) : (
+          <article className="surface-card rounded-[1.75rem] border border-dashed border-line bg-paper p-6">
+            <h2 className="text-2xl text-foreground [font-family:var(--font-display)]">
+              No assigned tasks right now
+            </h2>
+            <p className="mt-3 text-sm leading-7 text-muted">
+              When a leader routes work to this volunteer, it will appear here
+              automatically.
+            </p>
+          </article>
+        )
+      ) : (
+        <section>
+          <p className="text-[0.8rem] font-semibold uppercase tracking-[0.16em] text-muted">
+            Completed
+          </p>
+          {preview.completed.length > 0 ? (
+            <div className="mt-4 space-y-5">
+              {preview.completed.map((task, index) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  avatarClass={avatarClasses[(index + 1) % avatarClasses.length]}
+                />
+              ))}
+            </div>
+          ) : (
+            <article className="surface-card mt-4 rounded-[1.75rem] border border-dashed border-line bg-paper p-6">
+              <h2 className="text-2xl text-foreground [font-family:var(--font-display)]">
+                No completed tasks yet
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-muted">
+                Completed volunteer handoffs will collect here once requests are
+                closed.
+              </p>
+            </article>
+          )}
+        </section>
+      )}
+    </section>
+  );
+}
+
+function TabButton({ label, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-[1rem] border px-6 py-3 text-2xl font-medium transition sm:text-3xl ${
+        active
+          ? "border-[rgba(34,28,22,0.16)] bg-paper text-foreground"
+          : "border-line bg-transparent text-muted hover:bg-paper"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function TaskCard({ task, avatarClass }) {
+  const [showNoteForm, setShowNoteForm] = useState(false);
+
+  return (
+    <article className="surface-card rounded-[1.75rem] border border-line bg-paper p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
+            {task.title}
+          </h2>
+          <div className="mt-4 flex items-start gap-4">
+            <span
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-xl font-semibold ${avatarClass}`}
+            >
+              {task.initials}
+            </span>
+            <div>
+              <p className="text-2xl font-medium text-foreground">{task.memberName}</p>
+              <p className="text-lg text-muted">{task.detail}</p>
+            </div>
+          </div>
+        </div>
+
+        <span
+          className={`inline-flex w-fit rounded-full px-4 py-2 text-lg font-medium ${badgeClasses[task.badgeTone]}`}
+        >
+          {task.badge}
+        </span>
+      </div>
+
+      <div className="mt-5 rounded-[1.25rem] bg-canvas px-4 py-5 text-lg leading-8 text-foreground">
+        {task.instruction}
+      </div>
+
+      {task.accepted ? (
+        <p className="mt-4 text-sm text-muted">
+          Accepted {task.acceptedLabel !== "No time set" ? task.acceptedLabel : "recently"}.
+        </p>
+      ) : null}
+
+      {task.canAccept || task.canComplete || task.canAddNote ? (
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          {task.canAccept ? (
+            <form
+              action={acceptVolunteerTask.bind(
+                null,
+                task.id,
+                task.householdSlug,
+                task.volunteerName
+              )}
+            >
+              <SubmitButton
+                idleLabel="Accept task"
+                pendingLabel="Accepting..."
+                className="w-full rounded-[1rem] border border-line bg-paper px-4 py-4 text-xl font-medium text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
+              />
+            </form>
+          ) : (
+            <div />
+          )}
+
+          {task.canComplete ? (
+            <form
+              action={completeVolunteerTask.bind(
+                null,
+                task.id,
+                task.householdSlug,
+                task.volunteerName
+              )}
+            >
+              <SubmitButton
+                idleLabel="Mark complete"
+                pendingLabel="Completing..."
+                className="w-full rounded-[1rem] border border-line bg-paper px-4 py-4 text-xl font-medium text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
+              />
+            </form>
+          ) : (
+            <div />
+          )}
+
+          {task.canAddNote ? (
+            <button
+              type="button"
+              onClick={() => setShowNoteForm((value) => !value)}
+              className="rounded-[1rem] border border-line bg-paper px-4 py-4 text-xl font-medium text-foreground transition hover:bg-[#f4ecde]"
+            >
+              {showNoteForm ? "Hide note" : "Add note"}
+            </button>
+          ) : (
+            <div />
+          )}
+        </div>
+      ) : null}
+
+      {showNoteForm ? (
+        <form
+          action={addVolunteerTaskNote.bind(
+            null,
+            task.id,
+            task.householdSlug,
+            task.volunteerName
+          )}
+          className="mt-4 space-y-3 rounded-[1.25rem] border border-line bg-canvas p-4"
+        >
+          <label className="block">
+            <span className="text-sm font-medium text-foreground">
+              Note for the care timeline
+            </span>
+            <textarea
+              name="body"
+              rows={3}
+              placeholder="What happened, and what should the leader or pastor know next?"
+              className="mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground outline-none transition focus:border-moss"
+            />
+          </label>
+          <SubmitButton
+            idleLabel="Save note"
+            pendingLabel="Saving note..."
+            className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
+          />
+        </form>
+      ) : null}
+    </article>
+  );
+}

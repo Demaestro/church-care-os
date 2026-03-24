@@ -1,0 +1,35 @@
+{
+  "name": "church-care-os",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "postbuild": "node scripts/prepare-standalone.mjs",
+    "start": "next start",
+    "start:standalone": "node .next/standalone/server.js",
+    "lint": "eslint",
+    "db:init": "node scripts/init-care-db.mjs",
+    "auth:create-user": "node scripts/create-auth-user.mjs",
+    "db:backup": "node scripts/backup-care-db.mjs",
+    "db:restore": "node scripts/restore-care-db.mjs",
+    "db:drill": "node scripts/staging-drill.mjs",
+    "ops:backup-freshness": "node scripts/check-backup-freshness.mjs",
+    "ops:healthcheck": "node scripts/check-health.mjs",
+    "ops:retention": "node scripts/run-retention-sweep.mjs"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "dependencies": {
+    "next": "16.2.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.1",
+    "tailwindcss": "^4"
+  }
+}

@@ -1,0 +1,9 @@
+[Unit]
+Description=Church Care OS health probe
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/church-care-os
+Environment=PORT=3000
+ExecStart=/usr/bin/node /srv/church-care-os/scripts/check-health.mjs

@@ -1,0 +1,230 @@
+{
+  "households": [
+    {
+      "id": "household-okafor",
+      "slug": "okafor-family",
+      "name": "Okafor family",
+      "stage": "Stabilize",
+      "risk": "urgent",
+      "situation": "Post-surgery meals and transport after hospital discharge.",
+      "owner": "Mercy team",
+      "nextTouchpoint": "2026-03-24T14:00:00+01:00",
+      "summaryNote": "Family is grateful but overwhelmed. Daughter can coordinate evenings only.",
+      "tags": [
+        "Meals",
+        "Transport",
+        "Recovery"
+      ],
+      "notes": [
+        {
+          "id": "note-okafor-1",
+          "createdAt": "2026-03-23T21:15:00+01:00",
+          "author": "Prayer desk",
+          "kind": "Prayer",
+          "body": "Prayer call completed Monday night and transport needs were confirmed for discharge day."
+        },
+        {
+          "id": "note-okafor-2",
+          "createdAt": "2026-03-24T08:30:00+01:00",
+          "author": "Mercy team",
+          "kind": "Coordination",
+          "body": "Meal captain confirmed two drop-offs and a volunteer pharmacy run for Tuesday afternoon."
+        }
+      ]
+    },
+    {
+      "id": "household-williams",
+      "slug": "williams-household",
+      "name": "Williams household",
+      "stage": "Support",
+      "risk": "watch",
+      "situation": "NICU schedule is creating childcare and fatigue pressure at home.",
+      "owner": "Volunteer rides",
+      "nextTouchpoint": "2026-03-24T16:30:00+01:00",
+      "summaryNote": "Mom prefers text check-ins. Grandmother is available for daytime support.",
+      "tags": [
+        "New baby",
+        "Rides",
+        "Prayer"
+      ],
+      "notes": [
+        {
+          "id": "note-williams-1",
+          "createdAt": "2026-03-23T18:00:00+01:00",
+          "author": "Meal coordinator",
+          "kind": "Meal",
+          "body": "Two meals were delivered over the weekend and another family offered Wednesday dinner."
+        }
+      ]
+    },
+    {
+      "id": "household-adeyemi",
+      "slug": "adeyemi-siblings",
+      "name": "Adeyemi siblings",
+      "stage": "Review",
+      "risk": "steady",
+      "situation": "Job loss and rent strain, with benevolence paperwork now submitted.",
+      "owner": "Finance deacon",
+      "nextTouchpoint": "2026-03-25T10:00:00+01:00",
+      "summaryNote": "Good engagement so far. Main need is clarity and emotional steadiness.",
+      "tags": [
+        "Benevolence",
+        "Employment",
+        "Coaching"
+      ],
+      "pastoralNeed": {
+        "title": "Job loss checkpoint",
+        "detail": "Benevolence is in motion, but encouragement and next-steps coaching are still needed.",
+        "nextStep": "Pair a deacon and marketplace mentor for a Friday follow-up call."
+      },
+      "notes": [
+        {
+          "id": "note-adeyemi-1",
+          "createdAt": "2026-03-23T15:20:00+01:00",
+          "author": "Finance deacon",
+          "kind": "Review",
+          "body": "Budget review completed Sunday afternoon and documentation is ready for benevolence approval."
+        }
+      ]
+    },
+    {
+      "id": "household-daniels",
+      "slug": "daniels-household",
+      "name": "Daniels household",
+      "stage": "Escalate",
+      "risk": "urgent",
+      "situation": "Conflict at home requires pastoral counseling and close follow-up.",
+      "owner": "Pastoral staff",
+      "nextTouchpoint": "2026-03-24T18:30:00+01:00",
+      "summaryNote": "Handle carefully and keep communications tight between staff and leaders.",
+      "tags": [
+        "Counseling",
+        "Pastoral",
+        "Confidential"
+      ],
+      "pastoralNeed": {
+        "title": "Marriage crisis escalation",
+        "detail": "A small-group leader requested same-day follow-up after a late-night conflict.",
+        "nextStep": "Pastor Bayo to call before 6:30 PM and log the outcome tonight."
+      },
+      "notes": [
+        {
+          "id": "note-daniels-1",
+          "createdAt": "2026-03-24T09:10:00+01:00",
+          "author": "Small-group lead",
+          "kind": "Escalation",
+          "body": "Shared a same-day concern after a difficult night at home and requested pastoral follow-up."
+        }
+      ]
+    },
+    {
+      "id": "household-akinola",
+      "slug": "akinola-family",
+      "name": "Akinola family",
+      "stage": "Comfort",
+      "risk": "watch",
+      "situation": "Grief support and funeral logistics after an unexpected loss.",
+      "owner": "Care host team",
+      "nextTouchpoint": "2026-03-26T17:00:00+01:00",
+      "summaryNote": "Family responds well to in-person visits and practical help.",
+      "tags": [
+        "Grief",
+        "Hosting",
+        "Meals"
+      ],
+      "pastoralNeed": {
+        "title": "Funeral planning support",
+        "detail": "The family needs a pastor present for home prayers before visitors arrive.",
+        "nextStep": "Assign the Thursday evening visit and confirm the prayer team lead."
+      },
+      "notes": [
+        {
+          "id": "note-akinola-1",
+          "createdAt": "2026-03-24T07:45:00+01:00",
+          "author": "Care host team",
+          "kind": "Visit",
+          "body": "Home prayer visit completed Monday evening and the family asked for help with hosting."
+        }
+      ]
+    },
+    {
+      "id": "household-mensah",
+      "slug": "mensah-household",
+      "name": "Mensah household",
+      "stage": "Assign",
+      "risk": "steady",
+      "situation": "Single parent needs after-school help during a schedule change.",
+      "owner": "Unassigned",
+      "nextTouchpoint": "2026-03-25T13:00:00+01:00",
+      "summaryNote": "A neighborhood volunteer may be a good fit if screening is completed quickly.",
+      "tags": [
+        "Childcare",
+        "Volunteer match",
+        "Schedule"
+      ],
+      "notes": [
+        {
+          "id": "note-mensah-1",
+          "createdAt": "2026-03-23T12:15:00+01:00",
+          "author": "Sunday response team",
+          "kind": "Intake",
+          "body": "Request was logged after service and needs an owner before Wednesday review."
+        }
+      ]
+    }
+  ],
+  "requests": [
+    {
+      "id": "request-okafor-meals",
+      "householdSlug": "okafor-family",
+      "householdName": "Okafor family",
+      "need": "Meal train restart",
+      "summary": "Hospital discharge moved forward and the freezer is empty.",
+      "owner": "Mercy team",
+      "dueAt": "2026-03-24T14:00:00+01:00",
+      "tone": "urgent",
+      "status": "Open",
+      "source": "Hospital recovery lane",
+      "createdAt": "2026-03-24T08:20:00+01:00"
+    },
+    {
+      "id": "request-williams-rides",
+      "householdSlug": "williams-household",
+      "householdName": "Williams household",
+      "need": "School-run coverage",
+      "summary": "A new baby and a NICU visit schedule are stretching both parents thin.",
+      "owner": "Volunteer rides",
+      "dueAt": "2026-03-24T16:30:00+01:00",
+      "tone": "watch",
+      "status": "Open",
+      "source": "Postpartum support",
+      "createdAt": "2026-03-24T09:00:00+01:00"
+    },
+    {
+      "id": "request-adeyemi-benevolence",
+      "householdSlug": "adeyemi-siblings",
+      "householdName": "Adeyemi siblings",
+      "need": "Benevolence review",
+      "summary": "Rent support request is ready for finance approval and follow-up prayer.",
+      "owner": "Finance deacon",
+      "dueAt": "2026-03-25T09:00:00+01:00",
+      "tone": "steady",
+      "status": "Open",
+      "source": "Finance review",
+      "createdAt": "2026-03-23T16:20:00+01:00"
+    },
+    {
+      "id": "request-daniels-counseling",
+      "householdSlug": "daniels-household",
+      "householdName": "Daniels household",
+      "need": "Counseling follow-up",
+      "summary": "Small-group leaders flagged a conflict that needs same-day pastoral care.",
+      "owner": "Pastoral staff",
+      "dueAt": "2026-03-24T18:30:00+01:00",
+      "tone": "urgent",
+      "status": "Open",
+      "source": "Leader escalation",
+      "createdAt": "2026-03-24T09:05:00+01:00"
+    }
+  ]
+}

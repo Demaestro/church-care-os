@@ -1,0 +1,19 @@
+[Unit]
+Description=Church Care OS
+After=network.target
+
+[Service]
+Type=simple
+User=churchcare
+Group=churchcare
+WorkingDirectory=/srv/church-care-os/.next/standalone
+Environment=NODE_ENV=production
+Environment=HOSTNAME=0.0.0.0
+Environment=PORT=3000
+Environment=CARE_DB_PATH=/srv/church-care-os/data/care.db
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
