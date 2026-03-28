@@ -3,6 +3,7 @@ import { requireCurrentUser } from "@/lib/auth";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getHouseholds } from "@/lib/care-store";
 import { getCopy, translateRisk, translateStage } from "@/lib/i18n";
+import { filterHouseholds, hasActiveFilters } from "@/lib/search-filters";
 
 const toneClasses = {
   urgent: "border-[rgba(184,101,76,0.22)] bg-[rgba(184,101,76,0.10)] text-clay",
@@ -16,12 +17,21 @@ export const metadata = {
     "A live board of households, risk levels, owners, requests, and next touchpoints across the care team.",
 };
 
-export default async function HouseholdsPage() {
+export default async function HouseholdsPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   await requireCurrentUser(["leader", "pastor", "owner"]);
+  const params = await searchParams;
   const households = await getHouseholds();
   const pageCopy = copy.households;
+  const filters = {
+    query: typeof params?.q === "string" ? params.q.trim() : "",
+    risk: typeof params?.risk === "string" ? params.risk : "all",
+    assignment:
+      typeof params?.assignment === "string" ? params.assignment : "all",
+  };
+  const visibleHouseholds = filterHouseholds(households, filters);
+  const showClearFilters = hasActiveFilters(filters);
 
   const urgentCount = households.filter((household) => household.risk === "urgent").length;
   const watchCount = households.filter((household) => household.risk === "watch").length;
@@ -116,8 +126,62 @@ export default async function HouseholdsPage() {
           </p>
         </div>
 
+        <form
+          action="/households"
+          className="mt-6 rounded-[1.8rem] border border-line bg-paper p-5"
+        >
+          <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr_0.7fr_auto]">
+            <SearchField
+              label={pageCopy.filters.searchLabel}
+              name="q"
+              defaultValue={filters.query}
+              placeholder={pageCopy.filters.searchPlaceholder}
+            />
+            <SelectField
+              label={pageCopy.filters.riskLabel}
+              name="risk"
+              defaultValue={filters.risk}
+              options={[
+                { value: "all", label: copy.common.allRisks },
+                { value: "urgent", label: translateRisk("urgent", preferences.language) },
+                { value: "watch", label: translateRisk("watch", preferences.language) },
+                { value: "steady", label: translateRisk("steady", preferences.language) },
+              ]}
+            />
+            <SelectField
+              label={pageCopy.filters.assignmentLabel}
+              name="assignment"
+              defaultValue={filters.assignment}
+              options={[
+                { value: "all", label: copy.common.allAssignments },
+                { value: "assigned", label: copy.common.assigned },
+                { value: "unassigned", label: copy.common.unassignedOnly },
+              ]}
+            />
+            <div className="flex items-end gap-3">
+              <button
+                type="submit"
+                className="inline-flex min-h-14 items-center justify-center rounded-[1rem] bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f]"
+              >
+                {copy.common.searchLabel}
+              </button>
+              {showClearFilters ? (
+                <Link
+                  href="/households"
+                  className="inline-flex min-h-14 items-center justify-center rounded-[1rem] border border-line bg-canvas px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#ece1d1]"
+                >
+                  {copy.common.clearFilters}
+                </Link>
+              ) : null}
+            </div>
+          </div>
+          <p className="mt-4 text-sm leading-7 text-muted">
+            {pageCopy.filters.resultsSummary(visibleHouseholds.length, households.length)}
+          </p>
+        </form>
+
         <div className="mt-6 grid gap-4 xl:grid-cols-2">
-          {households.map((household) => (
+          {visibleHouseholds.map((household) => (
             <article
               key={household.slug}
               className="surface-card rounded-[1.75rem] border border-line bg-paper p-6"
@@ -187,6 +251,11 @@ export default async function HouseholdsPage() {
             </article>
           ))}
         </div>
+        {visibleHouseholds.length === 0 ? (
+          <div className="mt-4 rounded-[1.5rem] border border-line bg-paper p-6 text-sm leading-7 text-muted">
+            {pageCopy.filters.emptyResults}
+          </div>
+        ) : null}
       </section>
     </div>
   );
@@ -226,5 +295,39 @@ function DetailItem({ label, value }) {
       <p className="text-xs uppercase tracking-[0.2em] text-muted">{label}</p>
       <p className="mt-2 text-sm leading-7 text-foreground">{value}</p>
     </div>
+  );
+}
+
+function SearchField({ label, name, defaultValue, placeholder }) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <input
+        type="search"
+        name={name}
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        className="mt-2 min-h-14 w-full rounded-[1rem] border border-line bg-canvas px-4 py-3 text-base text-foreground outline-none transition placeholder:text-[#8b847d] focus:border-moss"
+      />
+    </label>
+  );
+}
+
+function SelectField({ label, name, defaultValue, options }) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        className="mt-2 min-h-14 w-full rounded-[1rem] border border-line bg-canvas px-4 py-3 text-base text-foreground outline-none transition focus:border-moss"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

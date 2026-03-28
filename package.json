@@ -9,6 +9,8 @@
     "start": "next start",
     "start:standalone": "node .next/standalone/server.js",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:init": "node scripts/init-care-db.mjs",
     "auth:create-user": "node scripts/create-auth-user.mjs",
     "db:backup": "node scripts/backup-care-db.mjs",
@@ -30,6 +32,7 @@
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
-    "tailwindcss": "^4"
+    "tailwindcss": "^4",
+    "vitest": "^4.1.2"
   }
 }

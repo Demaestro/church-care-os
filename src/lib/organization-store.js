@@ -300,6 +300,8 @@ export const listRecoveryRequests = cache(function listRecoveryRequests() {
 });
 
 export function createRecoveryRequestEntry(input) {
+  const id = randomUUID();
+
   getDatabase()
     .prepare(`
       INSERT INTO recovery_requests (
@@ -308,7 +310,7 @@ export function createRecoveryRequestEntry(input) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
-      randomUUID(),
+      id,
       input.email.trim().toLowerCase(),
       input.requesterName || null,
       input.note || null,
@@ -318,6 +320,8 @@ export function createRecoveryRequestEntry(input) {
       null,
       null
     );
+
+  return id;
 }
 
 export function resolveRecoveryRequestEntry(requestId, input) {

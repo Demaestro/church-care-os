@@ -226,12 +226,12 @@ const englishDictionary = {
   },
   recoveryPage: {
     kicker: "Protected sign-in support",
-    title: "Request account recovery.",
+    title: "Send yourself a secure reset link.",
     description:
-      "Internal accounts are recovered manually so pastors and care admins can verify requests carefully before any password is changed.",
+      "Use the email connected to your internal care account. If it matches an active account, we will send a one-time link so you can choose a new password safely.",
     nextTitle: "What happens next",
     nextBody:
-      "A pastor or owner reviews the request inside the admin workspace, verifies the account, and issues a new password safely.",
+      "If the email matches an active account, we send a time-limited reset link. If not, this screen still responds the same way so account details stay private.",
     supportTitle: "Need direct support?",
     supportBody: (email, phone) =>
       `${email || "Contact your church care team"}${phone ? ` or call ${phone}` : ""}.`,
@@ -239,20 +239,20 @@ const englishDictionary = {
     trackInstead: "Track a request instead",
     tellUsTitle: "Tell us which account needs help",
     tellUsBody:
-      "We do not expose whether an account exists on this screen. Every request is reviewed the same way.",
+      "We respond the same way whether or not an account exists. Use the email tied to your care role if you know it.",
   },
   recoveryForm: {
-    successKicker: "Recovery request logged",
-    successTitle: "A care admin will review this manually.",
+    successKicker: "Reset request received",
+    successTitle: "Check your email for the next step.",
     nameLabel: "Your name (optional)",
     namePlaceholder: "Name of the person requesting help",
     emailLabel: "Account email",
     emailPlaceholder: "you@example.com",
-    noteLabel: "What would help us verify this request? (optional)",
+    noteLabel: "Anything we should know? (optional)",
     notePlaceholder:
-      "For example: your ministry role, last login, or safest way to reach you",
-    submit: "Request account recovery",
-    submitting: "Sending request...",
+      "For example: best callback number, ministry role, or why email access may be difficult",
+    submit: "Send reset link",
+    submitting: "Sending link...",
     actionMessages: {
       emailRequired: "Enter the email address connected to your care account.",
       emailInvalid: "Enter a valid email address.",
@@ -260,7 +260,44 @@ const englishDictionary = {
       rateLimited:
         "We have received several recovery requests from this connection in a short window. Please wait a bit and try again.",
       logged:
-        "We have logged your request. A pastor or care admin will review it and follow up safely.",
+        "If the email matches an active account, we sent a secure reset link. If not, the response stays the same to protect privacy.",
+    },
+  },
+  resetPasswordPage: {
+    kicker: "Secure password reset",
+    title: "Choose a new password.",
+    description:
+      "This reset link is time-limited and works only once. Pick a password you can remember but others cannot guess.",
+    validFor: (label) => `This link stays active until ${label}.`,
+    autoExpireBody:
+      "After you save the new password, this link will stop working automatically.",
+    invalidTitle: "This reset link cannot be used.",
+    invalidBody:
+      "The link may have expired, already been used, or been replaced by a newer request. Request a fresh link to continue.",
+    requestNewLink: "Request a new link",
+    backToSignIn: "Back to sign in",
+  },
+  resetPasswordForm: {
+    successKicker: "Password updated",
+    successTitle: "Your password has been changed.",
+    successBody:
+      "You can now return to sign in with the new password you just chose.",
+    passwordLabel: "New password",
+    passwordPlaceholder: "At least 8 characters",
+    confirmPasswordLabel: "Confirm new password",
+    confirmPasswordPlaceholder: "Type the same password again",
+    submit: "Save new password",
+    submitting: "Saving password...",
+    actionMessages: {
+      passwordRequired: "Enter a new password.",
+      confirmPasswordRequired: "Confirm the new password.",
+      minimumLength: "Use at least 8 characters for the new password.",
+      mismatch: "The two password entries must match.",
+      invalidLink: "This reset link is not valid anymore. Request a fresh one.",
+      expiredLink: "This reset link has expired. Request a fresh one.",
+      usedLink: "This reset link has already been used. Request a fresh one.",
+      fixFields: "Please correct the highlighted fields and try again.",
+      saved: "Your password has been updated successfully.",
     },
   },
   volunteer: {
@@ -305,6 +342,21 @@ const englishDictionary = {
   common: {
     flashNotice: "Saved",
     flashError: "Needs attention",
+    searchLabel: "Search",
+    searchPlaceholder: "Type a name, email, tag, or care note",
+    clearFilters: "Clear filters",
+    all: "All",
+    allRoles: "All roles",
+    allStatuses: "All statuses",
+    allRecoveryStatuses: "All recovery statuses",
+    allRisks: "All risk levels",
+    allAssignments: "All assignments",
+    assigned: "Assigned",
+    unassignedOnly: "Unassigned only",
+    activeOnly: "Active only",
+    inactiveOnly: "Inactive only",
+    showingResults: (visible, total) =>
+      `Showing ${visible} of ${total}.`,
     member: "Member",
     user: "User",
     active: "Active",
@@ -364,7 +416,7 @@ const englishDictionary = {
     },
     recoveryStatuses: {
       open: "Open",
-      issued: "Password issued",
+      issued: "Recovery sent",
       resolved: "Resolved",
       dismissed: "Dismissed",
     },
@@ -480,6 +532,13 @@ const englishDictionary = {
         "Requests waiting on a named team, lead, or volunteer match.",
     },
     filters: {
+      searchLabel: "Search households",
+      searchPlaceholder: "Search by household, owner, need, or tag",
+      riskLabel: "Risk",
+      assignmentLabel: "Assignment",
+      resultsSummary: (visible, total) => `Showing ${visible} of ${total} households.`,
+      emptyResults:
+        "No households match the current search yet. Try a different name, tag, or filter.",
       urgent: {
         title: "Urgent",
         description: "Immediate touchpoints, counseling, or rapid practical support.",
@@ -571,6 +630,16 @@ const englishDictionary = {
       volunteers: "Volunteers",
       leaders: "Leaders",
     },
+    filters: {
+      searchLabel: "Search people and recovery requests",
+      searchPlaceholder: "Search by name, email, lane, or note",
+      roleLabel: "Role",
+      statusLabel: "Account status",
+      recoveryStatusLabel: "Recovery status",
+      peopleSummary: (visible, total) => `Showing ${visible} of ${total} accounts.`,
+      recoverySummary: (visible, total) =>
+        `Showing ${visible} of ${total} recovery requests.`,
+    },
     createAccount: {
       eyebrow: "Create account",
       title: "Add an internal care user",
@@ -614,9 +683,9 @@ const englishDictionary = {
     creatingButton: "Creating account...",
     recovery: {
       eyebrow: "Recovery queue",
-      title: "Handle password recovery manually",
+      title: "Handle manual recovery edge cases",
       body:
-        "Requests from the public recovery form land here for review. Reset a password only after you have verified the requester.",
+        "Use this queue when self-serve email reset is not enough or when someone needs offline help. Reset a password only after you have verified the requester.",
       none: "No recovery requests have been submitted yet.",
       recoveryRequest: "Recovery request",
       requested: "Requested",
@@ -629,7 +698,7 @@ const englishDictionary = {
       statusOptions: {
         resolved: "Resolved",
         dismissed: "Dismissed",
-        issued: "Password issued",
+        issued: "Recovery sent",
       },
     },
     directory: {
@@ -637,6 +706,7 @@ const englishDictionary = {
       title: "Review each internal account",
       body:
         "Every account card below can be adjusted in place. Owners can manage every role. Pastors can manage leaders and volunteers.",
+      emptyResults: "No internal accounts match the current search yet.",
       createdOn: "Created",
       saveAccessChanges: "Save access changes",
       savingChanges: "Saving changes...",

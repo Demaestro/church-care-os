@@ -158,6 +158,7 @@ export function renderEmailTemplate(templateKey, context) {
   const notificationsUrl = buildAbsoluteUrl(baseUrl, "/notifications");
   const volunteerUrl = buildAbsoluteUrl(baseUrl, context.volunteerPath || "/volunteer");
   const householdUrl = buildAbsoluteUrl(baseUrl, context.householdPath || "");
+  const resetUrl = buildAbsoluteUrl(baseUrl, context.resetPath || "");
   const requestStatusUrl = buildAbsoluteUrl(
     baseUrl,
     context.statusPath || "/requests/status"
@@ -364,6 +365,41 @@ export function renderEmailTemplate(templateKey, context) {
             "For safety, temporary passwords are never included inside notification emails.",
         }),
       };
+    case "password-reset-link":
+      return {
+        purpose: "account-security",
+        ...buildEmailDocument({
+          settings,
+          subject: `${subjectPrefix}Reset your care account password`,
+          preheader: "Use this secure one-time link to choose a new password.",
+          eyebrow: "Secure sign-in help",
+          heading: "Choose a new password",
+          intro:
+            "We received a request to reset the password for your internal care account.",
+          facts: [
+            {
+              label: "Account email",
+              value: context.email,
+            },
+            {
+              label: "Link expires",
+              value: context.expiresLabel || "In about 1 hour",
+            },
+          ],
+          paragraphs: [
+            "This link works once and expires automatically to protect the account.",
+            "If you did not request this reset, you can safely ignore this email and your current password will stay in place.",
+          ],
+          cta: resetUrl
+            ? {
+                label: "Set a new password",
+                href: resetUrl,
+              }
+            : null,
+          footerNote:
+            "For security, never forward this email or share the reset link with another person.",
+        }),
+      };
     case "account-created":
       return {
         purpose: "account-onboarding",
@@ -440,11 +476,11 @@ export function renderEmailTemplate(templateKey, context) {
           settings,
           subject: `${subjectPrefix}We received your recovery request`,
           preheader:
-            "Your church care team logged your request for account recovery.",
+            "Your church care team received a request for sign-in help.",
           eyebrow: "Recovery received",
           heading: "We received your account recovery request",
           intro:
-            "A pastor or owner will review this request manually and follow up safely after they verify it.",
+            "If the email you entered matches an active internal account, the next step will be handled safely without exposing account details on-screen.",
           facts: [
             {
               label: "Account email",

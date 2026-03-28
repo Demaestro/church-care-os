@@ -49,6 +49,13 @@ export function getDatabase() {
   return database;
 }
 
+export function closeDatabase() {
+  if (database) {
+    database.close();
+    database = undefined;
+  }
+}
+
 export function withTransaction(callback) {
   const db = getDatabase();
   db.exec("BEGIN IMMEDIATE");
@@ -265,6 +272,21 @@ function createSchema(db) {
 
     CREATE INDEX IF NOT EXISTS idx_recovery_requests_status
       ON recovery_requests (status, requested_at DESC);
+
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      requested_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user
+      ON password_reset_tokens (user_id, requested_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expiry
+      ON password_reset_tokens (expires_at, consumed_at);
 
     CREATE TABLE IF NOT EXISTS notifications (
       id TEXT PRIMARY KEY,

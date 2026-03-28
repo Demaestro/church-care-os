@@ -17,11 +17,13 @@ import {
 } from "@/lib/auth";
 import {
   createUserEntry,
+  findUserByEmail,
   findUserById,
   setUserPasswordEntry,
   toggleUserActiveEntry,
   updateUserEntry,
 } from "@/lib/auth-store";
+import { formatDateTime } from "@/lib/care-format";
 import { createSession, destroySession } from "@/lib/session";
 import {
   addHouseholdNoteEntry,
@@ -58,6 +60,12 @@ import {
   updateMinistryTeamEntry,
 } from "@/lib/organization-store";
 import { getCopy } from "@/lib/i18n";
+import {
+  createPasswordResetTokenEntry,
+  consumePasswordResetTokenEntry,
+  getPasswordResetTokenEntry,
+  invalidatePasswordResetTokensForUser,
+} from "@/lib/password-reset-store";
 
 function getString(formData, key) {
   const value = formData.get(key);
@@ -126,6 +134,12 @@ function buildMemberStatusPath(trackingCode) {
   return trackingCode
     ? `/requests/status?code=${encodeURIComponent(trackingCode)}`
     : "/requests/status";
+}
+
+function buildResetPasswordPath(token) {
+  return token
+    ? `/reset-password?token=${encodeURIComponent(token)}`
+    : "/reset-password";
 }
 
 function notifyRoles(roles, input) {
@@ -977,56 +991,101 @@ export async function requestAccountRecovery(prevState, formData) {
     };
   }
 
-  createRecoveryRequestEntry({
-    email,
-    requesterName,
-    note,
-  });
+  const matchedUser = findUserByEmail(email);
+  const needsManualReview = !matchedUser?.active || Boolean(note);
+  let recoveryRequestId = "";
 
-  recordAuditLog({
-    actorName: requesterName || "Public recovery form",
-    actorRole: "public",
-    action: "auth.recovery_requested",
-    targetType: "recovery_request",
-    targetId: email,
-    summary: `Password recovery requested for ${email}.`,
-  });
-  notifyRoles(["pastor", "owner"], {
-    kind: "recovery-request",
-    title: "Account recovery requested",
-    body: `${requesterName || "A team member"} requested help recovering access for ${email}.`,
-    href: "/admin/users",
-    metadata: {
-      email,
-    },
-  });
-  await emailRoles(
-    ["pastor", "owner"],
-    "recovery-request-alert",
-    {
+  if (needsManualReview) {
+    recoveryRequestId = createRecoveryRequestEntry({
       email,
       requesterName,
       note,
-    },
-    {
+    });
+  }
+
+  if (matchedUser?.active) {
+    const resetToken = createPasswordResetTokenEntry(email);
+
+    if (resetToken) {
+      if (recoveryRequestId) {
+        resolveRecoveryRequestEntry(recoveryRequestId, {
+          status: "issued",
+          handledBy: "Self-service reset",
+          resolutionNote: "Secure reset link sent automatically.",
+        });
+      }
+
+      recordAuditLog({
+        actorName: requesterName || "Public recovery form",
+        actorRole: "public",
+        action: "auth.password_reset_link_requested",
+        targetType: "user",
+        targetId: matchedUser.id,
+        summary: `Password reset link requested for ${email}.`,
+      });
+      createNotifications({
+        userIds: [matchedUser.id],
+        kind: "account",
+        title: "Password reset link sent",
+        body:
+          "A one-time password reset link was sent to the email address on your care account.",
+        href: "/login",
+        metadata: {
+          recoveryRequestId,
+        },
+      });
+      await emailAddress(
+        email,
+        "password-reset-link",
+        {
+          email,
+          expiresLabel: formatDateTime(resetToken.expiresAt),
+          resetPath: buildResetPasswordPath(resetToken.token),
+        },
+        {
+          recipientName: matchedUser.name || requesterName,
+          metadata: {
+            recoveryRequestId,
+            userId: matchedUser.id,
+          },
+        }
+      );
+    }
+  } else {
+    recordAuditLog({
+      actorName: requesterName || "Public recovery form",
+      actorRole: "public",
+      action: "auth.recovery_requested",
+      targetType: "recovery_request",
+      targetId: email,
+      summary: `Manual recovery review requested for ${email}.`,
+    });
+    notifyRoles(["pastor", "owner"], {
+      kind: "recovery-request",
+      title: "Manual recovery follow-up requested",
+      body: `${requesterName || "A team member"} asked for recovery help for ${email}.`,
+      href: "/admin/users",
       metadata: {
         email,
+        recoveryRequestId,
       },
-    }
-  );
-  await emailAddress(
-    email,
-    "recovery-request-received",
-    {
-      email,
-    },
-    {
-      recipientName: requesterName,
-      metadata: {
+    });
+    await emailRoles(
+      ["pastor", "owner"],
+      "recovery-request-alert",
+      {
         email,
+        requesterName,
+        note,
       },
-    }
-  );
+      {
+        metadata: {
+          email,
+          recoveryRequestId,
+        },
+      }
+    );
+  }
 
   revalidateCarePaths();
 
@@ -1034,6 +1093,84 @@ export async function requestAccountRecovery(prevState, formData) {
     message: recoveryCopy.actionMessages.logged,
     errors: {},
     values: {},
+    submitted: true,
+  };
+}
+
+export async function completePasswordReset(prevState, formData) {
+  void prevState;
+  const copy = await getRequestCopy();
+  const resetCopy = copy.resetPasswordForm;
+  const token = getString(formData, "token");
+  const password = getString(formData, "password");
+  const confirmPassword = getString(formData, "confirmPassword");
+  const errors = {};
+  const tokenState = getPasswordResetTokenEntry(token);
+
+  if (!password) {
+    errors.password = resetCopy.actionMessages.passwordRequired;
+  } else if (password.length < 8) {
+    errors.password = resetCopy.actionMessages.minimumLength;
+  }
+
+  if (!confirmPassword) {
+    errors.confirmPassword = resetCopy.actionMessages.confirmPasswordRequired;
+  } else if (password && password !== confirmPassword) {
+    errors.confirmPassword = resetCopy.actionMessages.mismatch;
+  }
+
+  if (tokenState.status === "invalid") {
+    errors.password = resetCopy.actionMessages.invalidLink;
+  } else if (tokenState.status === "expired") {
+    errors.password = resetCopy.actionMessages.expiredLink;
+  } else if (tokenState.status === "used") {
+    errors.password = resetCopy.actionMessages.usedLink;
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return {
+      message: resetCopy.actionMessages.fixFields,
+      errors,
+      submitted: false,
+    };
+  }
+
+  try {
+    const updatedUser = consumePasswordResetTokenEntry(token, password);
+
+    recordAuditLog({
+      actorUserId: updatedUser.id,
+      actorName: updatedUser.name,
+      actorRole: updatedUser.role,
+      action: "auth.password_reset_completed",
+      targetType: "user",
+      targetId: updatedUser.id,
+      summary: `${updatedUser.name} completed a self-service password reset.`,
+    });
+    createNotifications({
+      userIds: [updatedUser.id],
+      kind: "account",
+      title: "Password updated successfully",
+      body: "Your care account password was changed through a secure reset link.",
+      href: "/login",
+      metadata: {},
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    return {
+      message: resetCopy.actionMessages.fixFields,
+      errors: {
+        password: message || resetCopy.actionMessages.invalidLink,
+      },
+      submitted: false,
+    };
+  }
+
+  revalidateCarePaths();
+
+  return {
+    message: resetCopy.actionMessages.saved,
+    errors: {},
     submitted: true,
   };
 }
@@ -1219,6 +1356,7 @@ export async function resetUserPassword(userId, formData) {
   try {
     assertUserManagement(actor, targetUser, targetUser.role);
     setUserPasswordEntry(userId, password);
+    invalidatePasswordResetTokensForUser(userId);
 
     if (recoveryRequestId) {
       resolveRecoveryRequestEntry(recoveryRequestId, {

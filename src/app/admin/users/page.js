@@ -13,11 +13,16 @@ import { listUsers } from "@/lib/auth-store";
 import { getCopy, translateRecoveryStatus, translateRoleLabel } from "@/lib/i18n";
 import { listMinistryTeams, listRecoveryRequests } from "@/lib/organization-store";
 import { internalRoleOptions } from "@/lib/policies";
+import {
+  filterRecoveryRequests,
+  filterUsers,
+  hasActiveFilters,
+} from "@/lib/search-filters";
 
 export const metadata = {
   title: "People",
   description:
-    "Manage user access, role assignments, and manual account recovery for internal care staff.",
+    "Manage user access, role assignments, and recovery oversight for internal care staff.",
 };
 
 export default async function AdminUsersPage({ searchParams }) {
@@ -32,6 +37,13 @@ export default async function AdminUsersPage({ searchParams }) {
   const recoveryRequests = listRecoveryRequests();
   const notice = typeof params?.notice === "string" ? params.notice : "";
   const error = typeof params?.error === "string" ? params.error : "";
+  const filters = {
+    query: typeof params?.q === "string" ? params.q.trim() : "",
+    role: typeof params?.role === "string" ? params.role : "all",
+    status: typeof params?.status === "string" ? params.status : "all",
+    recoveryStatus:
+      typeof params?.recoveryStatus === "string" ? params.recoveryStatus : "all",
+  };
   const roleOptions =
     currentUser.role === "owner"
       ? internalRoleOptions
@@ -45,6 +57,12 @@ export default async function AdminUsersPage({ searchParams }) {
   const laneSuggestions = Array.from(
     new Set(teams.map((team) => team.lane).filter(Boolean))
   ).sort((first, second) => first.localeCompare(second));
+  const visibleUsers = filterUsers(users, filters);
+  const visibleRecoveryRequests = filterRecoveryRequests(recoveryRequests, {
+    query: filters.query,
+    status: filters.recoveryStatus,
+  });
+  const showClearFilters = hasActiveFilters(filters);
   const activeUsers = users.filter((user) => user.active);
   const openRecoveryRequests = recoveryRequests.filter(
     (request) => request.status === "open"
@@ -101,6 +119,85 @@ export default async function AdminUsersPage({ searchParams }) {
 
       <section className="mt-8 grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
+          <form action="/admin/users" className="rounded-[1.35rem] border border-line bg-canvas p-4">
+            <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.75fr_0.85fr_auto]">
+              <Field
+                label={pageCopy.filters.searchLabel}
+                name="q"
+                defaultValue={filters.query}
+                placeholder={pageCopy.filters.searchPlaceholder}
+              />
+              <SelectField
+                label={pageCopy.filters.roleLabel}
+                name="role"
+                defaultValue={filters.role}
+                options={[
+                  { value: "all", label: copy.common.allRoles },
+                  ...localizedRoleOptions,
+                ]}
+              />
+              <SelectField
+                label={pageCopy.filters.statusLabel}
+                name="status"
+                defaultValue={filters.status}
+                options={[
+                  { value: "all", label: copy.common.allStatuses },
+                  { value: "active", label: copy.common.activeOnly },
+                  { value: "inactive", label: copy.common.inactiveOnly },
+                ]}
+              />
+              <SelectField
+                label={pageCopy.filters.recoveryStatusLabel}
+                name="recoveryStatus"
+                defaultValue={filters.recoveryStatus}
+                options={[
+                  { value: "all", label: copy.common.allRecoveryStatuses },
+                  {
+                    value: "open",
+                    label: translateRecoveryStatus("open", preferences.language),
+                  },
+                  {
+                    value: "issued",
+                    label: translateRecoveryStatus("issued", preferences.language),
+                  },
+                  {
+                    value: "resolved",
+                    label: translateRecoveryStatus("resolved", preferences.language),
+                  },
+                  {
+                    value: "dismissed",
+                    label: translateRecoveryStatus("dismissed", preferences.language),
+                  },
+                ]}
+              />
+              <div className="flex items-end gap-3">
+                <button
+                  type="submit"
+                  className="inline-flex min-h-14 items-center justify-center rounded-[1rem] bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f]"
+                >
+                  {copy.common.searchLabel}
+                </button>
+                {showClearFilters ? (
+                  <a
+                    href="/admin/users"
+                    className="inline-flex min-h-14 items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
+                  >
+                    {copy.common.clearFilters}
+                  </a>
+                ) : null}
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2 text-sm leading-7 text-muted sm:grid-cols-2">
+              <p>{pageCopy.filters.peopleSummary(visibleUsers.length, users.length)}</p>
+              <p>
+                {pageCopy.filters.recoverySummary(
+                  visibleRecoveryRequests.length,
+                  recoveryRequests.length
+                )}
+              </p>
+            </div>
+          </form>
+
           <SectionHeading
             eyebrow={pageCopy.createAccount.eyebrow}
             title={pageCopy.createAccount.title}
@@ -173,10 +270,10 @@ export default async function AdminUsersPage({ searchParams }) {
           />
 
           <div className="mt-6 space-y-4">
-            {recoveryRequests.length === 0 ? (
+            {visibleRecoveryRequests.length === 0 ? (
               <EmptyCard body={pageCopy.recovery.none} />
             ) : (
-              recoveryRequests.map((request) => {
+              visibleRecoveryRequests.map((request) => {
                 const matchedUser = users.find((user) => user.email === request.email);
                 const canManageMatchedUser =
                   matchedUser && canManageRole(currentUser.role, matchedUser.role);
@@ -300,7 +397,7 @@ export default async function AdminUsersPage({ searchParams }) {
           body={pageCopy.directory.body}
         />
 
-        {users.map((account) => {
+        {visibleUsers.map((account) => {
           const canManage = canManageRole(currentUser.role, account.role);
 
           return (
@@ -421,6 +518,9 @@ export default async function AdminUsersPage({ searchParams }) {
             </article>
           );
         })}
+        {visibleUsers.length === 0 ? (
+          <EmptyCard body={pageCopy.directory.emptyResults} />
+        ) : null}
       </section>
     </div>
   );

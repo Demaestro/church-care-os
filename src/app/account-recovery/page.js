@@ -7,7 +7,7 @@ import { getChurchSettings } from "@/lib/organization-store";
 export const metadata = {
   title: "Account Recovery",
   description:
-    "Request manual password recovery for internal care accounts without exposing whether an account exists.",
+    "Request a secure reset link for an internal care account without exposing whether an account exists.",
 };
 
 export default async function AccountRecoveryPage() {
