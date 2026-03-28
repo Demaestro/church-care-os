@@ -1,5 +1,11 @@
 import Link from "next/link";
 import { requireCurrentUser } from "@/lib/auth";
+import { getAppPreferences } from "@/lib/app-preferences-server";
+import {
+  getCopy,
+  translateStage,
+  translateSupportNeed,
+} from "@/lib/i18n";
 import { getOperationalReportData } from "@/lib/organization-store";
 
 export const metadata = {
@@ -9,6 +15,9 @@ export const metadata = {
 };
 
 export default async function ReportsPage() {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
+  const pageCopy = copy.reports;
   await requireCurrentUser(["pastor", "owner"]);
   const report = await getOperationalReportData();
   const needMax = Math.max(...report.needBreakdown.map((item) => item.count), 1);
@@ -17,6 +26,30 @@ export default async function ReportsPage() {
     ...report.volunteerLoads.map((item) => item.activeCount),
     1
   );
+  const summaryCards = [
+    {
+      label: pageCopy.summary.openCareRequests,
+      value: report.summaryCards[0]?.value ?? report.overdueFollowUps.length,
+      detail: pageCopy.summary.openCareRequestsDetail(report.overdueFollowUps.length),
+    },
+    {
+      label: pageCopy.summary.activeVolunteers,
+      value: report.summaryCards[1]?.value ?? report.volunteerLoads.length,
+      detail: pageCopy.summary.activeVolunteersDetail(
+        report.volunteerLoads.filter((item) => item.team).length
+      ),
+    },
+    {
+      label: pageCopy.summary.resolvedRequests,
+      value: report.summaryCards[2]?.value ?? report.recentClosures.length,
+      detail: pageCopy.summary.resolvedRequestsDetail,
+    },
+    {
+      label: pageCopy.summary.recentAuditActivity,
+      value: report.summaryCards[3]?.value ?? report.ops.auditLogCount,
+      detail: pageCopy.summary.recentAuditActivityDetail,
+    },
+  ];
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-10 pb-16 lg:px-10 lg:py-14">
@@ -24,28 +57,29 @@ export default async function ReportsPage() {
         <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-4xl">
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-              Dashboard and reporting
+              {pageCopy.kicker}
             </p>
             <h1 className="mt-4 text-5xl leading-none tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-6xl">
-              Understand the care system, not just the queue.
+              {pageCopy.title}
             </h1>
             <p className="mt-5 text-lg leading-8 text-muted">
-              Review request mix, team load, overdue follow-ups, and operational
-              signals in one oversight surface. Export what you need for board or
-              pastoral review.
+              {pageCopy.description}
             </p>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <ExportLink href="/reports/export?type=cases" label="Export cases" />
-            <ExportLink href="/reports/export?type=households" label="Export households" />
-            <ExportLink href="/reports/export?type=users" label="Export users" />
-            <ExportLink href="/reports/export?type=audit" label="Export audit" />
+            <ExportLink href="/reports/export?type=cases" label={pageCopy.exports.cases} />
+            <ExportLink
+              href="/reports/export?type=households"
+              label={pageCopy.exports.households}
+            />
+            <ExportLink href="/reports/export?type=users" label={pageCopy.exports.users} />
+            <ExportLink href="/reports/export?type=audit" label={pageCopy.exports.audit} />
           </div>
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {report.summaryCards.map((card) => (
+          {summaryCards.map((card) => (
             <article
               key={card.label}
               className="rounded-[1.4rem] border border-line bg-canvas p-5"
@@ -63,16 +97,31 @@ export default async function ReportsPage() {
       </section>
 
       <section className="mt-8 grid gap-6 xl:grid-cols-2">
-        <DataPanel title="Need mix">
-          <BarList items={report.needBreakdown} max={needMax} />
+        <DataPanel title={pageCopy.panels.needMix}>
+          <BarList
+            items={report.needBreakdown.map((item) => ({
+              ...item,
+              label: translateSupportNeed(item.label, preferences.language),
+            }))}
+            max={needMax}
+            emptyBody={pageCopy.noSliceData}
+          />
         </DataPanel>
-        <DataPanel title="Stage mix">
-          <BarList items={report.stageBreakdown} max={stageMax} tone="moss" />
+        <DataPanel title={pageCopy.panels.stageMix}>
+          <BarList
+            items={report.stageBreakdown.map((item) => ({
+              ...item,
+              label: translateStage(item.label, preferences.language),
+            }))}
+            max={stageMax}
+            tone="moss"
+            emptyBody={pageCopy.noSliceData}
+          />
         </DataPanel>
       </section>
 
       <section className="mt-8 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <DataPanel title="Volunteer capacity">
+        <DataPanel title={pageCopy.panels.volunteerCapacity}>
           <div className="space-y-4">
             {report.volunteerLoads.map((volunteer) => (
               <article
@@ -83,11 +132,15 @@ export default async function ReportsPage() {
                   <div>
                     <p className="text-lg font-semibold text-foreground">{volunteer.name}</p>
                     <p className="mt-1 text-sm text-muted">
-                      {volunteer.team || "Volunteer roster"}
+                      {volunteer.team || copy.common.volunteerRoster}
                     </p>
                   </div>
                   <span className="rounded-full border border-line bg-paper px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                    {volunteer.loadLabel}
+                    {volunteer.activeCount === 0
+                      ? copy.common.available
+                      : `${volunteer.activeCount} active task${
+                          volunteer.activeCount === 1 ? "" : "s"
+                        }`}
                   </span>
                 </div>
                 <div className="mt-4 h-2.5 rounded-full bg-[rgba(34,28,22,0.08)]">
@@ -106,7 +159,7 @@ export default async function ReportsPage() {
           </div>
         </DataPanel>
 
-        <DataPanel title="Overdue follow-ups">
+        <DataPanel title={pageCopy.panels.overdueFollowUps}>
           <div className="space-y-4">
             {report.overdueFollowUps.length > 0 ? (
               report.overdueFollowUps.map((item) => (
@@ -117,20 +170,20 @@ export default async function ReportsPage() {
                 >
                   <p className="text-lg font-semibold text-foreground">{item.name}</p>
                   <p className="mt-2 text-sm leading-7 text-muted">
-                    {item.owner || "Unassigned"}
+                    {item.owner || copy.common.unassigned}
                   </p>
                   <p className="mt-2 text-sm font-medium text-clay">{item.dueLabel}</p>
                 </Link>
               ))
             ) : (
-              <EmptyCopy body="No overdue follow-ups are showing right now." />
+              <EmptyCopy body={pageCopy.noOverdue} />
             )}
           </div>
         </DataPanel>
       </section>
 
       <section className="mt-8 grid gap-6 xl:grid-cols-[1.02fr_0.98fr]">
-        <DataPanel title="Recent closures">
+        <DataPanel title={pageCopy.panels.recentClosures}>
           <div className="space-y-4">
             {report.recentClosures.length > 0 ? (
               report.recentClosures.map((item) => (
@@ -139,30 +192,35 @@ export default async function ReportsPage() {
                   className="rounded-[1.25rem] border border-line bg-canvas p-4"
                 >
                   <p className="text-lg font-semibold text-foreground">{item.householdName}</p>
-                  <p className="mt-2 text-sm leading-7 text-muted">{item.need}</p>
+                  <p className="mt-2 text-sm leading-7 text-muted">
+                    {translateSupportNeed(item.need, preferences.language)}
+                  </p>
                   <p className="mt-2 text-sm text-muted">{item.closedLabel}</p>
                 </article>
               ))
             ) : (
-              <EmptyCopy body="No closed requests are available yet." />
+              <EmptyCopy body={pageCopy.noClosures} />
             )}
           </div>
         </DataPanel>
 
-        <DataPanel title="Governance snapshot">
+        <DataPanel title={pageCopy.panels.governanceSnapshot}>
           <div className="grid gap-4 md:grid-cols-2">
-            <GovernanceCard label="Plan" value={report.settings?.planName || "Not set"} />
             <GovernanceCard
-              label="Backup posture"
-              value={report.settings?.backupExpectation || "Not set"}
+              label={pageCopy.governance.plan}
+              value={report.settings?.planName || copy.common.notSet}
             />
             <GovernanceCard
-              label="Database path"
+              label={pageCopy.governance.backupPosture}
+              value={report.settings?.backupExpectation || copy.common.notSet}
+            />
+            <GovernanceCard
+              label={pageCopy.governance.databasePath}
               value={report.ops.databasePath}
               compact
             />
             <GovernanceCard
-              label="Audit events logged"
+              label={pageCopy.governance.auditEventsLogged}
               value={report.ops.auditLogCount}
             />
           </div>
@@ -194,11 +252,11 @@ function DataPanel({ title, children }) {
   );
 }
 
-function BarList({ items, max, tone = "blue" }) {
+function BarList({ items, max, tone = "blue", emptyBody }) {
   const barClass = tone === "moss" ? "bg-moss" : "bg-[#356fbe]";
 
   if (items.length === 0) {
-    return <EmptyCopy body="No reporting data is available for this slice yet." />;
+    return <EmptyCopy body={emptyBody} />;
   }
 
   return (

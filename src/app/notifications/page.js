@@ -5,6 +5,12 @@ import {
 } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { requireCurrentUser } from "@/lib/auth";
+import { getAppPreferences } from "@/lib/app-preferences-server";
+import {
+  getCopy,
+  translateNotificationKind,
+  translateRoleLabel,
+} from "@/lib/i18n";
 import {
   getUnreadNotificationCountForUser,
   listNotificationsForUser,
@@ -24,6 +30,9 @@ export const metadata = {
 };
 
 export default async function NotificationsPage() {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
+  const pageCopy = copy.notifications;
   const user = await requireCurrentUser(["volunteer", "leader", "pastor", "owner"]);
   const notifications = listNotificationsForUser(user);
   const unreadCount = getUnreadNotificationCountForUser(user);
@@ -36,22 +45,23 @@ export default async function NotificationsPage() {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-4xl">
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-              Private inbox
+              {pageCopy.kicker}
             </p>
             <h1 className="mt-4 text-5xl leading-none tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-6xl">
-              Notifications that keep care moving without widening access.
+              {pageCopy.title}
             </h1>
             <p className="mt-5 text-lg leading-8 text-muted">
-              This feed reflects only what belongs to your role and your account.
-              New requests, routed tasks, password changes, and pastoral escalations
-              arrive here with just enough context to act safely.
+              {pageCopy.description}
             </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3 lg:min-w-[26rem]">
-            <MetricCard label="Unread" value={unreadCount} />
-            <MetricCard label="Total" value={notifications.length} />
-            <MetricCard label="Role" value={formatRoleLabel(user.role)} />
+            <MetricCard label={pageCopy.metrics.unread} value={unreadCount} />
+            <MetricCard label={pageCopy.metrics.total} value={notifications.length} />
+            <MetricCard
+              label={pageCopy.metrics.role}
+              value={translateRoleLabel(user.role, preferences.language)}
+            />
           </div>
         </div>
 
@@ -59,8 +69,8 @@ export default async function NotificationsPage() {
           <div className="mt-6 flex flex-wrap gap-3">
             <form action={markAllNotificationsRead}>
               <SubmitButton
-                idleLabel="Mark all as read"
-                pendingLabel="Updating..."
+                idleLabel={pageCopy.markAllRead}
+                pendingLabel={pageCopy.updating}
                 className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
               />
             </form>
@@ -68,7 +78,7 @@ export default async function NotificationsPage() {
               href={getPrimaryReturnPath(user.role)}
               className="inline-flex items-center rounded-[1rem] border border-line bg-canvas px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#ece1d1]"
             >
-              Back to workspace
+              {pageCopy.backToWorkspace}
             </Link>
           </div>
         ) : null}
@@ -76,26 +86,30 @@ export default async function NotificationsPage() {
 
       <section className="mt-8 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
         <InboxPanel
-          title="Needs your attention"
-          eyebrow={`Unread (${unreadNotifications.length})`}
-          emptyMessage="You are all caught up. New care events will appear here as they happen."
+          title={pageCopy.panels.unreadTitle}
+          eyebrow={pageCopy.panels.unreadEyebrow(unreadNotifications.length)}
+          emptyMessage={pageCopy.panels.unreadEmpty}
           items={unreadNotifications}
           variant="unread"
+          copy={copy}
+          language={preferences.language}
         />
 
         <InboxPanel
-          title="Recent activity"
-          eyebrow={`Read (${readNotifications.length})`}
-          emptyMessage="Read items will settle here after you open or mark them."
+          title={pageCopy.panels.readTitle}
+          eyebrow={pageCopy.panels.readEyebrow(readNotifications.length)}
+          emptyMessage={pageCopy.panels.readEmpty}
           items={readNotifications}
           variant="read"
+          copy={copy}
+          language={preferences.language}
         />
       </section>
     </div>
   );
 }
 
-function InboxPanel({ title, eyebrow, emptyMessage, items, variant }) {
+function InboxPanel({ title, eyebrow, emptyMessage, items, variant, copy, language }) {
   return (
     <section className="surface-card rounded-[1.75rem] border border-line bg-paper p-6">
       <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
@@ -116,6 +130,8 @@ function InboxPanel({ title, eyebrow, emptyMessage, items, variant }) {
               key={notification.id}
               notification={notification}
               variant={variant}
+              copy={copy}
+              language={language}
             />
           ))}
         </div>
@@ -124,7 +140,7 @@ function InboxPanel({ title, eyebrow, emptyMessage, items, variant }) {
   );
 }
 
-function NotificationCard({ notification, variant }) {
+function NotificationCard({ notification, variant, copy, language }) {
   const hasHref = Boolean(notification.href);
   const toneClass = resolveToneClass(notification.kind);
 
@@ -141,7 +157,7 @@ function NotificationCard({ notification, variant }) {
           <span
             className={`inline-flex rounded-full border px-3 py-1 text-[0.72rem] font-semibold uppercase tracking-[0.18em] ${toneClass}`}
           >
-            {formatKind(notification.kind)}
+            {translateNotificationKind(notification.kind, language)}
           </span>
           <h3 className="mt-3 text-2xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
             {notification.title}
@@ -151,7 +167,9 @@ function NotificationCard({ notification, variant }) {
         <div className="text-sm text-muted sm:text-right">
           <p>{notification.createdLabel}</p>
           {notification.read && notification.readLabel !== "No time set" ? (
-            <p className="mt-1">Read {notification.readLabel}</p>
+            <p className="mt-1">
+              {copy.common.labels.read} {notification.readLabel}
+            </p>
           ) : null}
         </div>
       </div>
@@ -166,8 +184,8 @@ function NotificationCard({ notification, variant }) {
             )}
           >
             <SubmitButton
-              idleLabel={hasHref ? "Open" : "Mark as read"}
-              pendingLabel={hasHref ? "Opening..." : "Saving..."}
+              idleLabel={hasHref ? copy.notifications.open : copy.notifications.markAsRead}
+              pendingLabel={hasHref ? copy.notifications.opening : copy.notifications.saving}
               className="inline-flex items-center rounded-[1rem] bg-foreground px-4 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
             />
           </form>
@@ -176,7 +194,7 @@ function NotificationCard({ notification, variant }) {
             href={notification.href}
             className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
           >
-            Open
+            {copy.notifications.open}
           </Link>
         ) : null}
       </div>
@@ -193,10 +211,6 @@ function MetricCard({ label, value }) {
       </p>
     </article>
   );
-}
-
-function formatKind(kind) {
-  return String(kind || "update").replaceAll("-", " ");
 }
 
 function resolveToneClass(kind) {
@@ -225,9 +239,4 @@ function getPrimaryReturnPath(role) {
     default:
       return "/volunteer";
   }
-}
-
-function formatRoleLabel(role) {
-  const value = String(role || "");
-  return value ? value[0].toUpperCase() + value.slice(1) : "User";
 }

@@ -2,7 +2,12 @@ import Link from "next/link";
 import { assignRequestVolunteer, escalateRequestToPastor } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { requireCurrentUser } from "@/lib/auth";
+import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getDashboardData } from "@/lib/care-store";
+import {
+  getCopy,
+  translateSupportNeed,
+} from "@/lib/i18n";
 import { listVolunteerRoster } from "@/lib/organization-store";
 import { leaderPreview, volunteerPreview } from "@/lib/role-previews";
 
@@ -20,6 +25,9 @@ export const metadata = {
 };
 
 export default async function LeaderPage() {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
+  const pageCopy = copy.leader;
   const user = await requireCurrentUser(["leader", "pastor", "owner"]);
   const { households, openRequests } = await getDashboardData();
   const householdMap = Object.fromEntries(
@@ -35,10 +43,10 @@ export default async function LeaderPage() {
         household,
         canAssignVolunteer: canAssignVolunteer(request),
         defaultVolunteerName: suggestVolunteerName(request),
-        defaultVolunteerBrief: buildVolunteerBrief(request),
-        status: resolveStatus(request),
-        privacyLabel: resolvePrivacyLabel(request),
-        assignmentHint: resolveAssignmentHint(request),
+        defaultVolunteerBrief: buildVolunteerBrief(request, pageCopy),
+        status: resolveStatus(request, pageCopy),
+        privacyLabel: resolvePrivacyLabel(request, pageCopy),
+        assignmentHint: resolveAssignmentHint(request, pageCopy),
       };
     });
   const escalations = openRequests
@@ -54,6 +62,7 @@ export default async function LeaderPage() {
           household?.pastoralNeed?.detail ||
           "Leader requested a pastor to review the next step directly.",
         nextStep:
+          request.escalation?.nextStep ||
           household?.pastoralNeed?.nextStep ||
           "Pastoral review is needed before this request is handed off more widely.",
       };
@@ -74,7 +83,7 @@ export default async function LeaderPage() {
       return {
         ...preview,
         ...volunteer,
-        role: volunteer.team || preview?.role || user.lane || "Volunteer roster",
+        role: volunteer.team || preview?.role || user.lane || copy.common.volunteerRoster,
         availability:
           preview?.availability ||
           (volunteer.active
@@ -110,21 +119,21 @@ export default async function LeaderPage() {
     assignableVolunteers.length > 0 ? assignableVolunteers : volunteers;
   const metrics = [
     {
-      label: "Routed cases",
+      label: pageCopy.metrics.routedCases,
       value: laneRequests.length,
     },
     {
-      label: "Needs volunteer",
+      label: pageCopy.metrics.needsVolunteer,
       value: laneRequests.filter(
         (request) => !request.assignedVolunteer && request.canAssignVolunteer
       ).length,
     },
     {
-      label: "Pastor escalations",
+      label: pageCopy.metrics.pastorEscalations,
       value: escalations.length,
     },
     {
-      label: "Volunteers available",
+      label: pageCopy.metrics.volunteersAvailable,
       value: volunteers.filter((volunteer) => volunteer.activeCount < 3).length,
     },
   ];
@@ -135,16 +144,14 @@ export default async function LeaderPage() {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-4xl">
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-              Ministry leader routing view
+              {pageCopy.kicker}
             </p>
             <h1 className="mt-4 text-4xl leading-tight tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-5xl">
-              Where pastor triage becomes lane ownership and volunteer handoff.
+              {pageCopy.title}
             </h1>
             <p className="mt-5 text-base leading-8 text-muted sm:text-lg">
               {leaderPreview.leader.name} is working inside the{" "}
-              {user.lane || leaderPreview.leader.lane}. This screen reads from the
-              live request store, so assignments here immediately shape the
-              volunteer, household, and notification views.
+              {user.lane || leaderPreview.leader.lane}. {pageCopy.body}
             </p>
             <p className="mt-4 text-sm uppercase tracking-[0.18em] text-muted">
               {leaderPreview.leader.church} - {user.lane || leaderPreview.leader.lane}
@@ -156,13 +163,13 @@ export default async function LeaderPage() {
               href="/permissions"
               className="inline-flex items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-base font-medium text-foreground transition hover:bg-[#f4ecde]"
             >
-              View permissions
+              {pageCopy.viewPermissions}
             </Link>
             <Link
               href="/volunteer"
               className="inline-flex items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-base font-medium text-foreground transition hover:bg-[#f4ecde]"
             >
-              Preview volunteer handoff
+              {pageCopy.previewVolunteerHandoff}
             </Link>
           </div>
         </div>
@@ -185,11 +192,9 @@ export default async function LeaderPage() {
       </section>
 
       <section className="mt-8 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <PanelCard title="Routed into your lane">
+        <PanelCard title={pageCopy.panels.routedLane}>
           {laneRequests.length === 0 ? (
-            <p className="text-sm leading-7 text-muted">
-              No live requests are currently routed into this lane.
-            </p>
+            <p className="text-sm leading-7 text-muted">{pageCopy.emptyLane}</p>
           ) : (
             <div className="space-y-4">
               {laneRequests.map((item) => (
@@ -202,7 +207,7 @@ export default async function LeaderPage() {
                       <Avatar initials={getInitials(item.householdName)} />
                       <div>
                         <p className="text-sm uppercase tracking-[0.16em] text-muted">
-                          {item.need}
+                          {translateSupportNeed(item.need, preferences.language)}
                         </p>
                         <h2 className="mt-2 text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
                           {item.householdName}
@@ -221,7 +226,7 @@ export default async function LeaderPage() {
                   <div className="mt-4 grid gap-4 rounded-[1.25rem] bg-paper p-4 md:grid-cols-2">
                     <div>
                       <p className="text-xs uppercase tracking-[0.18em] text-muted">
-                        Assignment hint
+                        {pageCopy.assignmentHint}
                       </p>
                       <p className="mt-2 text-sm leading-7 text-foreground">
                         {item.assignmentHint}
@@ -229,7 +234,7 @@ export default async function LeaderPage() {
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-[0.18em] text-muted">
-                        Privacy boundary
+                        {pageCopy.privacyBoundary}
                       </p>
                       <p className="mt-2 text-sm leading-7 text-foreground">
                         {item.privacyLabel}
@@ -240,14 +245,14 @@ export default async function LeaderPage() {
                   {item.assignedVolunteer ? (
                     <div className="mt-4 rounded-[1.25rem] border border-[rgba(73,106,77,0.18)] bg-[rgba(73,106,77,0.08)] p-4">
                       <p className="text-xs uppercase tracking-[0.18em] text-moss">
-                        Current assignment
+                        {pageCopy.currentAssignment}
                       </p>
                       <p className="mt-2 text-sm leading-7 text-foreground">
-                        {item.assignedVolunteer.name} was assigned by{" "}
-                        {item.assignedVolunteer.assignedBy || "the leader team"}.
+                        {pageCopy.currentAssignmentBy(item.assignedVolunteer.name)}{" "}
+                        {item.assignedVolunteer.assignedBy || pageCopy.leaderTeam}.
                         {item.assignedVolunteer.acceptedLabel &&
                         item.assignedVolunteer.acceptedLabel !== "No time set"
-                          ? ` Accepted ${item.assignedVolunteer.acceptedLabel}.`
+                          ? ` ${pageCopy.acceptedAt(item.assignedVolunteer.acceptedLabel)}`
                           : ""}
                       </p>
                     </div>
@@ -274,7 +279,7 @@ export default async function LeaderPage() {
 
                         <label className="block">
                           <span className="text-sm font-medium text-foreground">
-                            Volunteer
+                            {pageCopy.volunteerLabel}
                           </span>
                           <select
                             name="volunteerName"
@@ -291,7 +296,7 @@ export default async function LeaderPage() {
 
                         <label className="block">
                           <span className="text-sm font-medium text-foreground">
-                            Volunteer brief
+                            {pageCopy.volunteerBrief}
                           </span>
                           <textarea
                             name="volunteerBrief"
@@ -303,20 +308,21 @@ export default async function LeaderPage() {
 
                         <SubmitButton
                           idleLabel={
-                            item.assignedVolunteer ? "Reassign volunteer" : "Assign volunteer"
+                            item.assignedVolunteer
+                              ? pageCopy.reassignVolunteer
+                              : pageCopy.assignVolunteer
                           }
-                          pendingLabel="Saving assignment..."
+                          pendingLabel={pageCopy.savingAssignment}
                           className="inline-flex items-center rounded-[1rem] border border-line bg-canvas px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#ece1d1] disabled:cursor-not-allowed disabled:opacity-70"
                         />
                       </form>
                     ) : (
                       <div className="rounded-[1.25rem] border border-line bg-paper p-4">
                         <p className="text-xs uppercase tracking-[0.18em] text-muted">
-                          Volunteer assignment blocked
+                          {pageCopy.volunteerAssignmentBlocked}
                         </p>
                         <p className="mt-2 text-sm leading-7 text-foreground">
-                          This request is still pastor-only and cannot be routed to a
-                          volunteer until that boundary changes.
+                          {pageCopy.volunteerAssignmentBlockedBody}
                         </p>
                       </div>
                     )}
@@ -341,7 +347,7 @@ export default async function LeaderPage() {
 
                         <label className="block">
                           <span className="text-sm font-medium text-foreground">
-                            Escalation reason
+                            {pageCopy.escalationReason}
                           </span>
                           <textarea
                             name="reason"
@@ -352,8 +358,8 @@ export default async function LeaderPage() {
                         </label>
 
                         <SubmitButton
-                          idleLabel="Escalate to pastor"
-                          pendingLabel="Escalating..."
+                          idleLabel={pageCopy.escalateToPastor}
+                          pendingLabel={pageCopy.escalating}
                           className="inline-flex items-center rounded-[1rem] border border-[rgba(184,101,76,0.2)] bg-[rgba(184,101,76,0.08)] px-4 py-3 text-sm font-semibold text-clay transition hover:bg-[rgba(184,101,76,0.14)] disabled:cursor-not-allowed disabled:opacity-70"
                         />
                       </form>
@@ -362,7 +368,7 @@ export default async function LeaderPage() {
                         href={`/households/${item.householdSlug}`}
                         className="inline-flex items-center rounded-[1rem] border border-line bg-canvas px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#ece1d1]"
                       >
-                        Open timeline
+                        {pageCopy.openTimeline}
                       </Link>
                     </div>
                   </div>
@@ -373,7 +379,7 @@ export default async function LeaderPage() {
         </PanelCard>
 
         <div className="space-y-6">
-          <PanelCard title="Volunteer capacity in this lane">
+          <PanelCard title={pageCopy.panels.volunteerCapacity}>
             <div className="space-y-4">
               {volunteers.map((volunteer) => (
                 <article
@@ -402,7 +408,7 @@ export default async function LeaderPage() {
                       href={`/volunteer?volunteer=${encodeURIComponent(volunteer.name)}`}
                       className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-4 py-2 text-sm font-medium text-foreground transition hover:bg-[#f4ecde]"
                     >
-                      Open volunteer view
+                      {pageCopy.openVolunteerView}
                     </Link>
                   </div>
                 </article>
@@ -410,9 +416,9 @@ export default async function LeaderPage() {
             </div>
           </PanelCard>
 
-          <PanelCard title="Visibility in this lane">
+          <PanelCard title={pageCopy.panels.visibility}>
             <ul className="space-y-4 text-sm leading-7 text-muted">
-              {leaderPreview.visibilityRules.map((rule) => (
+              {pageCopy.visibilityRules.map((rule) => (
                 <li
                   key={rule}
                   className="rounded-[1.5rem] border border-line bg-canvas p-5"
@@ -426,11 +432,9 @@ export default async function LeaderPage() {
       </section>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-        <PanelCard title="Escalations back to pastor">
+        <PanelCard title={pageCopy.panels.escalations}>
           {escalations.length === 0 ? (
-            <p className="text-sm leading-7 text-muted">
-              No requests are currently escalated back to pastor from this lane.
-            </p>
+            <p className="text-sm leading-7 text-muted">{pageCopy.noEscalations}</p>
           ) : (
             <div className="space-y-4">
               {escalations.map((item) => (
@@ -444,7 +448,7 @@ export default async function LeaderPage() {
                   <p className="mt-3 text-sm leading-7 text-muted">{item.reason}</p>
                   <div className="mt-4 rounded-[1.25rem] bg-paper p-4">
                     <p className="text-xs uppercase tracking-[0.18em] text-muted">
-                      Next step
+                      {copy.common.labels.nextStep}
                     </p>
                     <p className="mt-2 text-sm leading-7 text-foreground">
                       {item.nextStep}
@@ -456,13 +460,9 @@ export default async function LeaderPage() {
           )}
         </PanelCard>
 
-        <PanelCard title="The routing sequence for leaders">
+        <PanelCard title={pageCopy.panels.routingSequence}>
           <ol className="space-y-4">
-            {[
-              "Receive only the cases already routed into your ministry lane.",
-              "Match the case to a volunteer-safe brief and the best available team member.",
-              "Send any ambiguity, sensitivity, or scope creep back to a pastor instead of widening access.",
-            ].map((step, index) => (
+            {pageCopy.sequenceSteps.map((step, index) => (
               <li
                 key={step}
                 className="rounded-[1.5rem] border border-line bg-canvas p-5"
@@ -558,88 +558,85 @@ function suggestVolunteerName(request) {
   return volunteerPreview.volunteer.name;
 }
 
-function buildVolunteerBrief(request) {
+function buildVolunteerBrief(request, copy) {
   if (!canAssignVolunteer(request)) {
-    return "Pastor-only visibility is set on this request. Do not assign a volunteer yet.";
+    return copy.pastorOnlyBrief;
   }
 
   if (request.privacy?.visibility === "pastors-only") {
-    return "Sensitive details are not shared with volunteers. Give a simple encouragement task and route all questions back to the care lead.";
+    return copy.sensitiveBrief;
   }
 
-  return (
-    request.summary ||
-    "Follow the leader brief and route questions back to the care lead."
-  );
+  return request.summary || copy.defaultBrief;
 }
 
-function resolveStatus(request) {
+function resolveStatus(request, copy) {
   if (
     request.assignedVolunteer?.acceptedLabel &&
     request.assignedVolunteer.acceptedLabel !== "No time set"
   ) {
     return {
-      label: "Volunteer accepted",
+      label: copy.volunteerAccepted,
       tone: "assigned",
     };
   }
 
   if (request.assignedVolunteer) {
     return {
-      label: `Assigned to ${request.assignedVolunteer.name.split(" ")[0]}`,
+      label: copy.assignedTo(request.assignedVolunteer.name.split(" ")[0]),
       tone: "assigned",
     };
   }
 
   if (request.owner === "Unassigned") {
     return {
-      label: "Needs owner",
+      label: copy.needsOwner,
       tone: "routine",
     };
   }
 
   if (request.tone === "urgent") {
     return {
-      label: "Route today",
+      label: copy.routeToday,
       tone: "watch",
     };
   }
 
   return {
-    label: "Ready to assign",
+    label: copy.readyToAssign,
     tone: "routine",
   };
 }
 
-function resolvePrivacyLabel(request) {
+function resolvePrivacyLabel(request, copy) {
   if (!canAssignVolunteer(request)) {
-    return "Pastor-only visibility is active on this request.";
+    return copy.pastorOnlyVisibility;
   }
 
   if (request.privacy?.visibility === "pastors-only") {
-    return "Generic volunteer brief only.";
+    return copy.genericVolunteerBriefOnly;
   }
 
-  return "Volunteer-safe summary approved.";
+  return copy.volunteerSafeSummaryApproved;
 }
 
-function resolveAssignmentHint(request) {
+function resolveAssignmentHint(request, copy) {
   if (request.assignedVolunteer) {
-    return `Currently assigned to ${request.assignedVolunteer.name}. Reassign only if the load or fit has changed.`;
+    return copy.reassignHint(request.assignedVolunteer.name);
   }
 
   const lowerNeed = request.need.toLowerCase();
   if (lowerNeed.includes("meal")) {
-    return "Best fit: meal support or short recovery visits.";
+    return copy.bestFitMeal;
   }
 
   if (lowerNeed.includes("transport") || lowerNeed.includes("ride")) {
-    return "Best fit: transport or errand volunteer.";
+    return copy.bestFitTransport;
   }
 
   if (lowerNeed.includes("prayer")) {
-    return "Best fit: short prayer call or encouragement follow-up.";
+    return copy.bestFitPrayer;
   }
 
-  return "Best fit: practical support with a clear, bounded brief.";
+  return copy.bestFitGeneric;
 }

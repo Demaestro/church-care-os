@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireCurrentUser } from "@/lib/auth";
+import { getAppPreferences } from "@/lib/app-preferences-server";
 import {
   addHouseholdNote,
   closeCareRequest,
@@ -9,6 +10,14 @@ import {
 import { SubmitButton } from "@/components/submit-button";
 import { toDateTimeLocalValue } from "@/lib/care-format";
 import { getHouseholdBySlug } from "@/lib/care-store";
+import {
+  getCopy,
+  translateRequestStatus,
+  translateRisk,
+  translateStage,
+  translateSupportNeed,
+  translateTimelineKind,
+} from "@/lib/i18n";
 
 const toneClasses = {
   urgent: "border-[rgba(184,101,76,0.22)] bg-[rgba(184,101,76,0.10)] text-clay",
@@ -24,6 +33,9 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function HouseholdDetailPage({ params }) {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
+  const pageCopy = copy.householdDetail;
   await requireCurrentUser(["leader", "pastor", "owner"]);
   const { slug } = await params;
   const household = await getHouseholdBySlug(slug);
@@ -34,6 +46,16 @@ export default async function HouseholdDetailPage({ params }) {
 
   const snapshotAction = updateHouseholdSnapshot.bind(null, household.slug);
   const noteAction = addHouseholdNote.bind(null, household.slug);
+  const stageOptions = ["Assign", "Stabilize", "Support", "Review", "Escalate", "Comfort"];
+  const riskOptions = ["urgent", "watch", "steady"];
+  const noteTypeOptions = [
+    "Follow-up",
+    "Prayer",
+    "Visit",
+    "Coordination",
+    "Review",
+    "Escalation",
+  ];
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8 pb-16 lg:px-10 lg:py-12">
@@ -42,32 +64,30 @@ export default async function HouseholdDetailPage({ params }) {
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-full border border-line bg-canvas px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-muted">
-                {household.stage}
+                {translateStage(household.stage, preferences.language)}
               </span>
               <span
                 className={`rounded-full border px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] ${toneClasses[household.risk]}`}
               >
-                {household.risk}
+                {translateRisk(household.risk, preferences.language)}
               </span>
             </div>
             <h1 className="mt-4 text-5xl leading-none tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-6xl">
               {household.name}
             </h1>
-            <p className="mt-5 text-lg leading-8 text-muted">
-              {household.situation}
-            </p>
+            <p className="mt-5 text-lg leading-8 text-muted">{household.situation}</p>
             <div className="mt-6 grid gap-4 text-sm text-muted sm:grid-cols-2 lg:grid-cols-4">
-              <DetailItem label="Owner" value={household.owner} />
+              <DetailItem label={pageCopy.details.owner} value={household.owner} />
               <DetailItem
-                label="Next touchpoint"
+                label={pageCopy.details.nextTouchpoint}
                 value={household.nextTouchpointLabel}
               />
               <DetailItem
-                label="Last touchpoint"
+                label={pageCopy.details.lastTouchpoint}
                 value={household.lastTouchpointLabel}
               />
               <DetailItem
-                label="Open requests"
+                label={pageCopy.details.openRequests}
                 value={String(household.openRequestCount).padStart(2, "0")}
               />
             </div>
@@ -78,13 +98,13 @@ export default async function HouseholdDetailPage({ params }) {
               href="/households"
               className="inline-flex w-fit items-center rounded-full border border-line bg-canvas px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#ece1d1]"
             >
-              Back to households
+              {pageCopy.backToHouseholds}
             </Link>
             <Link
               href="/requests/new"
               className="inline-flex w-fit items-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f]"
             >
-              Log request
+              {pageCopy.logRequest}
             </Link>
           </div>
         </div>
@@ -103,11 +123,9 @@ export default async function HouseholdDetailPage({ params }) {
 
       <section className="mt-10 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
-          <Card title="Requests" eyebrow="Work in motion">
+          <Card title={pageCopy.cards.requests} eyebrow={pageCopy.cards.workInMotion}>
             {household.relatedRequests.length === 0 ? (
-              <p className="text-sm leading-7 text-muted">
-                No requests are linked to this household yet.
-              </p>
+              <p className="text-sm leading-7 text-muted">{pageCopy.noRequests}</p>
             ) : (
               <div className="space-y-4">
                 {household.relatedRequests.map((request) => (
@@ -118,10 +136,10 @@ export default async function HouseholdDetailPage({ params }) {
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <p className="text-sm uppercase tracking-[0.2em] text-muted">
-                          {request.status}
+                          {translateRequestStatus(request.status, preferences.language)}
                         </p>
                         <h2 className="mt-2 text-2xl text-foreground [font-family:var(--font-display)]">
-                          {request.need}
+                          {translateSupportNeed(request.need, preferences.language)}
                         </h2>
                         <p className="mt-3 text-sm leading-7 text-muted">
                           {request.summary}
@@ -130,28 +148,28 @@ export default async function HouseholdDetailPage({ params }) {
                       <span
                         className={`inline-flex w-fit rounded-full border px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] ${toneClasses[request.tone]}`}
                       >
-                        {request.tone}
+                        {translateRisk(request.tone, preferences.language)}
                       </span>
                     </div>
 
                     <div className="mt-5 grid gap-4 text-sm text-muted sm:grid-cols-2 lg:grid-cols-5">
-                      <DetailItem label="Owner" value={request.owner} />
+                      <DetailItem label={pageCopy.details.owner} value={request.owner} />
                       <DetailItem
-                        label="Volunteer"
-                        value={request.assignedVolunteer?.name || "Not assigned"}
+                        label={pageCopy.details.volunteer}
+                        value={request.assignedVolunteer?.name || copy.common.notAssigned}
                       />
                       <DetailItem
-                        label="Volunteer status"
-                        value={getVolunteerStatus(request)}
+                        label={pageCopy.details.volunteerStatus}
+                        value={getVolunteerStatus(request, pageCopy)}
                       />
-                      <DetailItem label="Due" value={request.dueLabel} />
-                      <DetailItem label="Source" value={request.source} />
+                      <DetailItem label={pageCopy.details.due} value={request.dueLabel} />
+                      <DetailItem label={pageCopy.details.source} value={request.source} />
                     </div>
 
                     {request.escalation ? (
                       <div className="mt-4 rounded-[1.25rem] border border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)] p-4">
                         <p className="text-xs uppercase tracking-[0.2em] text-clay">
-                          Escalation
+                          {pageCopy.escalation}
                         </p>
                         <p className="mt-2 text-sm leading-7 text-foreground">
                           {request.escalation.reason}
@@ -169,8 +187,8 @@ export default async function HouseholdDetailPage({ params }) {
                         className="mt-5"
                       >
                         <SubmitButton
-                          idleLabel="Mark request closed"
-                          pendingLabel="Closing request..."
+                          idleLabel={pageCopy.markRequestClosed}
+                          pendingLabel={pageCopy.closingRequest}
                           className="inline-flex items-center rounded-full border border-line bg-paper px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-[#ece1d1] disabled:cursor-not-allowed disabled:opacity-70"
                         />
                       </form>
@@ -182,7 +200,10 @@ export default async function HouseholdDetailPage({ params }) {
           </Card>
 
           {household.pastoralNeed ? (
-            <Card title="Pastoral attention" eyebrow="Escalation">
+            <Card
+              title={pageCopy.cards.pastoralAttention}
+              eyebrow={pageCopy.cards.escalation}
+            >
               <div className="rounded-[1.5rem] border border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)] p-5">
                 <h2 className="text-2xl text-foreground [font-family:var(--font-display)]">
                   {household.pastoralNeed.title}
@@ -192,7 +213,7 @@ export default async function HouseholdDetailPage({ params }) {
                 </p>
                 <div className="mt-4 rounded-[1.25rem] bg-paper p-4">
                   <p className="text-xs uppercase tracking-[0.2em] text-muted">
-                    Next step
+                    {copy.common.labels.nextStep}
                   </p>
                   <p className="mt-2 text-sm leading-7 text-foreground">
                     {household.pastoralNeed.nextStep}
@@ -202,7 +223,7 @@ export default async function HouseholdDetailPage({ params }) {
             </Card>
           ) : null}
 
-          <Card title="Timeline" eyebrow="Notes and touchpoints">
+          <Card title={pageCopy.cards.timeline} eyebrow={pageCopy.cards.notesAndTouchpoints}>
             <div className="space-y-4">
               {household.notes.map((note) => (
                 <article
@@ -212,7 +233,7 @@ export default async function HouseholdDetailPage({ params }) {
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-sm uppercase tracking-[0.2em] text-muted">
-                        {note.kind}
+                        {translateTimelineKind(note.kind, preferences.language)}
                       </p>
                       <h2 className="mt-1 text-xl text-foreground [font-family:var(--font-display)]">
                         {note.author}
@@ -228,39 +249,41 @@ export default async function HouseholdDetailPage({ params }) {
         </div>
 
         <div className="space-y-6">
-          <Card title="Update household snapshot" eyebrow="Keep the board current">
+          <Card
+            title={pageCopy.cards.updateSnapshot}
+            eyebrow={pageCopy.cards.keepBoardCurrent}
+          >
             <form action={snapshotAction} className="space-y-5">
               <div className="grid gap-5 md:grid-cols-2">
                 <SelectField
-                  label="Stage"
+                  label={pageCopy.stageLabel}
                   name="stage"
                   defaultValue={household.stage}
-                  options={[
-                    "Assign",
-                    "Stabilize",
-                    "Support",
-                    "Review",
-                    "Escalate",
-                    "Comfort",
-                  ]}
+                  options={stageOptions.map((option) => ({
+                    value: option,
+                    label: translateStage(option, preferences.language),
+                  }))}
                 />
                 <SelectField
-                  label="Risk"
+                  label={pageCopy.riskLabel}
                   name="risk"
                   defaultValue={household.risk}
-                  options={["urgent", "watch", "steady"]}
+                  options={riskOptions.map((option) => ({
+                    value: option,
+                    label: translateRisk(option, preferences.language),
+                  }))}
                 />
               </div>
 
               <Field
-                label="Owner"
+                label={pageCopy.ownerLabel}
                 name="owner"
                 defaultValue={household.owner === "Unassigned" ? "" : household.owner}
                 placeholder="Mercy team"
               />
 
               <Field
-                label="Next touchpoint"
+                label={pageCopy.nextTouchpointLabel}
                 name="nextTouchpoint"
                 type="datetime-local"
                 defaultValue={toDateTimeLocalValue(household.nextTouchpoint)}
@@ -268,71 +291,67 @@ export default async function HouseholdDetailPage({ params }) {
               />
 
               <Field
-                label="Situation"
+                label={pageCopy.situationLabel}
                 name="situation"
                 defaultValue={household.situation}
-                placeholder="What is happening right now?"
+                placeholder={pageCopy.situationPlaceholder}
                 multiline
                 required
               />
 
               <Field
-                label="Summary note"
+                label={pageCopy.summaryNoteLabel}
                 name="summaryNote"
                 defaultValue={household.summaryNote}
-                placeholder="A concise handoff note for the next responder."
+                placeholder={pageCopy.summaryNotePlaceholder}
                 multiline
               />
 
               <Field
-                label="Tags"
+                label={pageCopy.tagsLabel}
                 name="tags"
                 defaultValue={household.tags.join(", ")}
-                placeholder="Meals, Transport, Recovery"
+                placeholder={pageCopy.tagsPlaceholder}
               />
 
               <SubmitButton
-                idleLabel="Save household update"
-                pendingLabel="Saving update..."
+                idleLabel={pageCopy.saveHouseholdUpdate}
+                pendingLabel={pageCopy.savingUpdate}
                 className="inline-flex items-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
               />
             </form>
           </Card>
 
-          <Card title="Add timeline note" eyebrow="Capture the next touchpoint">
+          <Card title={pageCopy.cards.addTimelineNote} eyebrow={pageCopy.cards.captureTouchpoint}>
             <form action={noteAction} className="space-y-5">
               <div className="grid gap-5 md:grid-cols-2">
                 <Field
-                  label="Author"
+                  label={pageCopy.authorLabel}
                   name="author"
-                  placeholder="Care team"
+                  placeholder={pageCopy.authorPlaceholder}
                 />
                 <SelectField
-                  label="Type"
+                  label={pageCopy.typeLabel}
                   name="kind"
                   defaultValue="Follow-up"
-                  options={[
-                    "Follow-up",
-                    "Prayer",
-                    "Visit",
-                    "Coordination",
-                    "Review",
-                    "Escalation",
-                  ]}
+                  options={noteTypeOptions.map((option) => ({
+                    value: option,
+                    label: translateTimelineKind(option, preferences.language),
+                  }))}
                 />
               </div>
 
               <Field
-                label="Note"
+                label={pageCopy.noteLabel}
                 name="body"
-                placeholder="What happened, and what should the next person know?"
+                placeholder={pageCopy.notePlaceholder}
                 multiline
                 required
               />
 
               <SubmitButton
-                idleLabel="Add timeline note"
-                pendingLabel="Adding note..."
+                idleLabel={pageCopy.addNote}
+                pendingLabel={pageCopy.addingNote}
                 className="inline-flex items-center rounded-full border border-line bg-canvas px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#ece1d1] disabled:cursor-not-allowed disabled:opacity-70"
               />
             </form>
@@ -414,8 +433,8 @@ function SelectField({ label, name, defaultValue, options }) {
         className="mt-2 w-full rounded-[1rem] border border-line bg-canvas px-4 py-3 text-sm text-foreground outline-none transition focus:border-moss"
       >
         {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
+          <option key={option.value} value={option.value}>
+            {option.label}
           </option>
         ))}
       </select>
@@ -423,18 +442,21 @@ function SelectField({ label, name, defaultValue, options }) {
   );
 }
 
-function getVolunteerStatus(request) {
+function getVolunteerStatus(request, pageCopy) {
   if (request.status === "Closed" && request.assignedVolunteer?.completedLabel) {
-    return `Completed ${request.assignedVolunteer.completedLabel}`;
+    return pageCopy.completedAt(request.assignedVolunteer.completedLabel);
   }
 
-  if (request.assignedVolunteer?.acceptedLabel && request.assignedVolunteer.acceptedLabel !== "No time set") {
-    return `Accepted ${request.assignedVolunteer.acceptedLabel}`;
+  if (
+    request.assignedVolunteer?.acceptedLabel &&
+    request.assignedVolunteer.acceptedLabel !== "No time set"
+  ) {
+    return pageCopy.acceptedAt(request.assignedVolunteer.acceptedLabel);
   }
 
   if (request.assignedVolunteer?.name) {
-    return "Assigned";
+    return pageCopy.assigned;
   }
 
-  return "Awaiting volunteer";
+  return pageCopy.awaitingVolunteer;
 }

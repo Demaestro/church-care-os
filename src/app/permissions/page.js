@@ -4,6 +4,12 @@ import {
   permissionRoles,
   permissionRules,
 } from "@/lib/role-previews";
+import { getAppPreferences } from "@/lib/app-preferences-server";
+import {
+  getCopy,
+  translatePermissionAccess,
+  translateRoleLabel,
+} from "@/lib/i18n";
 
 export const metadata = {
   title: "Permission Matrix",
@@ -11,27 +17,29 @@ export const metadata = {
     "A detailed role matrix showing how members, volunteers, leaders, pastors, and owners see care requests and records.",
 };
 
-export default function PermissionsPage() {
+export default async function PermissionsPage() {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
+  const pageCopy = copy.permissions;
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-10 pb-16 lg:px-10 lg:py-14">
       <section className="surface-card rounded-[2rem] border border-line bg-paper p-7 lg:p-10">
         <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-          Permission matrix
+          {pageCopy.kicker}
         </p>
         <h1 className="mt-4 max-w-4xl text-4xl leading-tight tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-5xl">
-          The privacy model is visible in the UI, not hidden in policy.
+          {pageCopy.title}
         </h1>
         <p className="mt-5 max-w-4xl text-base leading-8 text-muted sm:text-lg">
-          This table mirrors the access logic behind the care product. It makes
-          two boundaries explicit: volunteers only see assigned work, and the
-          pastor-only at-risk list never appears in general task views.
+          {pageCopy.description}
         </p>
 
         <div className="mt-8 flex flex-wrap gap-6">
           {permissionLegend.map((item) => (
             <div key={item.key} className="flex items-center gap-3 text-sm text-foreground">
               <AccessMark access={item.key} />
-              <span>{item.label}</span>
+              <span>{translatePermissionAccess(item.key, preferences.language)}</span>
             </div>
           ))}
         </div>
@@ -41,7 +49,7 @@ export default function PermissionsPage() {
             <thead>
               <tr>
                 <th className="border-b border-line px-4 py-4 text-base font-semibold text-foreground">
-                  Action
+                  {pageCopy.action}
                 </th>
                 {permissionRoles.map((role) => (
                   <th
@@ -51,7 +59,9 @@ export default function PermissionsPage() {
                     <span
                       className={`inline-flex rounded-full px-4 py-2 text-base font-semibold ${role.pillClass}`}
                     >
-                      {role.label}
+                      {role.key === "member"
+                        ? copy.common.member
+                        : translateRoleLabel(role.key, preferences.language)}
                     </span>
                   </th>
                 ))}

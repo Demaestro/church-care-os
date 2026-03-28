@@ -18,6 +18,7 @@ const englishDictionary = {
     textSizeLabel: "Text size",
     applyPreferences: "Apply",
     roleLabels: {
+      member: "Member",
       owner: "Owner",
       pastor: "Pastor",
       leader: "Leader",
@@ -300,6 +301,614 @@ const englishDictionary = {
       "Share what changed so the leader can reassign this safely.",
     reroute: "Send back for re-routing",
     rerouting: "Sending back...",
+  },
+  common: {
+    flashNotice: "Saved",
+    flashError: "Needs attention",
+    member: "Member",
+    user: "User",
+    active: "Active",
+    inactive: "Inactive",
+    open: "Open",
+    closed: "Closed",
+    yes: "Yes",
+    no: "No",
+    unassigned: "Unassigned",
+    notAssigned: "Not assigned",
+    noTimeSet: "No time set",
+    notSet: "Not set",
+    noChannelsListed: "No channels listed",
+    volunteerRoster: "Volunteer roster",
+    notNeededInLogOnlyMode: "Not needed in log-only mode",
+    notAttemptedYet: "Not attempted yet",
+    labels: {
+      template: "Template",
+      provider: "Provider",
+      created: "Created",
+      lastAttempt: "Last attempt",
+      read: "Read",
+      nextStep: "Next step",
+    },
+    stages: {
+      Assign: "Assign",
+      Stabilize: "Stabilize",
+      Support: "Support",
+      Review: "Review",
+      Escalate: "Escalate",
+      Comfort: "Comfort",
+    },
+    risks: {
+      urgent: "Urgent",
+      watch: "Watch",
+      steady: "Steady",
+      routine: "Routine",
+      sensitive: "Sensitive",
+      assigned: "Assigned",
+      new: "New",
+    },
+    requestStatuses: {
+      Open: "Open",
+      Closed: "Closed",
+    },
+    timelineKinds: {
+      "Follow-up": "Follow-up",
+      Prayer: "Prayer",
+      Visit: "Visit",
+      Coordination: "Coordination",
+      Review: "Review",
+      Escalation: "Escalation",
+      Request: "Request",
+      Assignment: "Assignment",
+      Completion: "Completion",
+      Status: "Status",
+    },
+    recoveryStatuses: {
+      open: "Open",
+      issued: "Password issued",
+      resolved: "Resolved",
+      dismissed: "Dismissed",
+    },
+    outboxStatuses: {
+      queued: "Queued",
+      logged: "Logged",
+      sent: "Sent",
+      failed: "Failed",
+    },
+    notificationKinds: {
+      escalation: "Escalation",
+      task: "Task",
+      "task-note": "Task note",
+      "care-request": "Care request",
+      account: "Account",
+      update: "Update",
+    },
+    permissionAccess: {
+      full: "Full access",
+      own: "Own records only",
+      none: "No access",
+    },
+  },
+  leader: {
+    kicker: "Ministry leader routing view",
+    title: "Where pastor triage becomes lane ownership and volunteer handoff.",
+    body:
+      "This screen reads from the live request store, so assignments here immediately shape the volunteer, household, and notification views.",
+    viewPermissions: "View permissions",
+    previewVolunteerHandoff: "Preview volunteer handoff",
+    metrics: {
+      routedCases: "Routed cases",
+      needsVolunteer: "Needs volunteer",
+      pastorEscalations: "Pastor escalations",
+      volunteersAvailable: "Volunteers available",
+    },
+    panels: {
+      routedLane: "Routed into your lane",
+      volunteerCapacity: "Volunteer capacity in this lane",
+      visibility: "Visibility in this lane",
+      escalations: "Escalations back to pastor",
+      routingSequence: "The routing sequence for leaders",
+    },
+    emptyLane: "No live requests are currently routed into this lane.",
+    assignmentHint: "Assignment hint",
+    privacyBoundary: "Privacy boundary",
+    currentAssignment: "Current assignment",
+    volunteerLabel: "Volunteer",
+    volunteerBrief: "Volunteer brief",
+    assignVolunteer: "Assign volunteer",
+    reassignVolunteer: "Reassign volunteer",
+    savingAssignment: "Saving assignment...",
+    volunteerAssignmentBlocked: "Volunteer assignment blocked",
+    volunteerAssignmentBlockedBody:
+      "This request is still pastor-only and cannot be routed to a volunteer until that boundary changes.",
+    escalationReason: "Escalation reason",
+    escalateToPastor: "Escalate to pastor",
+    escalating: "Escalating...",
+    openTimeline: "Open timeline",
+    openVolunteerView: "Open volunteer view",
+    noEscalations:
+      "No requests are currently escalated back to pastor from this lane.",
+    currentAssignmentBy: (name) => `${name} was assigned by`,
+    leaderTeam: "the leader team",
+    acceptedAt: (label) => `Accepted ${label}.`,
+    visibilityRules: [
+      "Only cases already routed into this lane appear here.",
+      "Sensitive requests stay within the privacy boundary set by the pastor.",
+      "Volunteers only receive the brief they need to act safely.",
+    ],
+    sequenceSteps: [
+      "Receive only the cases already routed into your ministry lane.",
+      "Match the case to a volunteer-safe brief and the best available team member.",
+      "Send any ambiguity, sensitivity, or scope creep back to a pastor instead of widening access.",
+    ],
+    routeToday: "Route today",
+    readyToAssign: "Ready to assign",
+    needsOwner: "Needs owner",
+    volunteerAccepted: "Volunteer accepted",
+    assignedTo: (name) => `Assigned to ${name}`,
+    pastorOnlyVisibility: "Pastor-only visibility is active on this request.",
+    genericVolunteerBriefOnly: "Generic volunteer brief only.",
+    volunteerSafeSummaryApproved: "Volunteer-safe summary approved.",
+    bestFitMeal: "Best fit: meal support or short recovery visits.",
+    bestFitTransport: "Best fit: transport or errand volunteer.",
+    bestFitPrayer: "Best fit: short prayer call or encouragement follow-up.",
+    bestFitGeneric: "Best fit: practical support with a clear, bounded brief.",
+    reassignHint: (name) =>
+      `Currently assigned to ${name}. Reassign only if the load or fit has changed.`,
+    pastorOnlyBrief:
+      "Pastor-only visibility is set on this request. Do not assign a volunteer yet.",
+    sensitiveBrief:
+      "Sensitive details are not shared with volunteers. Give a simple encouragement task and route all questions back to the care lead.",
+    defaultBrief:
+      "Follow the leader brief and route questions back to the care lead.",
+  },
+  households: {
+    kicker: "Household board",
+    title: "A live map of the people already in your care orbit.",
+    description:
+      "Each card now reads from the shared store, links into a household timeline, and reflects the latest request intake and note activity.",
+    backToDashboard: "Back to dashboard",
+    logNewRequest: "Log new request",
+    summary: {
+      openHouseholds: "Open households",
+      openHouseholdsDetail:
+        "Every visible household has a timeline and next touchpoint behind it.",
+      urgentFollowUp: "Urgent follow-up",
+      urgentFollowUpDetail:
+        "These households need movement today from staff or ministry leads.",
+      needsAssignment: "Needs assignment",
+      needsAssignmentDetail:
+        "Requests waiting on a named team, lead, or volunteer match.",
+    },
+    filters: {
+      urgent: {
+        title: "Urgent",
+        description: "Immediate touchpoints, counseling, or rapid practical support.",
+      },
+      watch: {
+        title: "Watch",
+        description:
+          "Healthy momentum, but the team should keep a close eye on the next step.",
+      },
+      steady: {
+        title: "Steady",
+        description: "Progress is moving; the main need is consistent follow-through.",
+      },
+    },
+    activeKicker: "Active households",
+    activeTitle: "Scan for risk, ownership, request load, and the next concrete move.",
+    activeBody:
+      "Open a household to update its snapshot, log notes, and close related requests without leaving the care workflow.",
+    details: {
+      owner: "Owner",
+      nextTouchpoint: "Next touchpoint",
+      lastTouchpoint: "Last touchpoint",
+      openRequests: "Open requests",
+    },
+    openTimeline: "Open timeline",
+    addRequest: "Add request",
+  },
+  householdDetail: {
+    backToHouseholds: "Back to households",
+    logRequest: "Log request",
+    details: {
+      owner: "Owner",
+      nextTouchpoint: "Next touchpoint",
+      lastTouchpoint: "Last touchpoint",
+      openRequests: "Open requests",
+      volunteer: "Volunteer",
+      volunteerStatus: "Volunteer status",
+      due: "Due",
+      source: "Source",
+    },
+    cards: {
+      requests: "Requests",
+      workInMotion: "Work in motion",
+      pastoralAttention: "Pastoral attention",
+      escalation: "Escalation",
+      timeline: "Timeline",
+      notesAndTouchpoints: "Notes and touchpoints",
+      updateSnapshot: "Update household snapshot",
+      keepBoardCurrent: "Keep the board current",
+      addTimelineNote: "Add timeline note",
+      captureTouchpoint: "Capture the next touchpoint",
+    },
+    noRequests: "No requests are linked to this household yet.",
+    escalation: "Escalation",
+    markRequestClosed: "Mark request closed",
+    closingRequest: "Closing request...",
+    stageLabel: "Stage",
+    riskLabel: "Risk",
+    ownerLabel: "Owner",
+    nextTouchpointLabel: "Next touchpoint",
+    situationLabel: "Situation",
+    situationPlaceholder: "What is happening right now?",
+    summaryNoteLabel: "Summary note",
+    summaryNotePlaceholder: "A concise handoff note for the next responder.",
+    tagsLabel: "Tags",
+    tagsPlaceholder: "Meals, Transport, Recovery",
+    saveHouseholdUpdate: "Save household update",
+    savingUpdate: "Saving update...",
+    authorLabel: "Author",
+    authorPlaceholder: "Care team",
+    typeLabel: "Type",
+    noteLabel: "Note",
+    notePlaceholder: "What happened, and what should the next person know?",
+    addNote: "Add timeline note",
+    addingNote: "Adding note...",
+    completedAt: (label) => `Completed ${label}`,
+    acceptedAt: (label) => `Accepted ${label}`,
+    assigned: "Assigned",
+    awaitingVolunteer: "Awaiting volunteer",
+  },
+  people: {
+    kicker: "Access control",
+    title: "People, roles, and recovery oversight.",
+    description:
+      "Manage who can enter internal care workflows, what lane they operate inside, and how account recovery gets handled with pastoral care rather than guesswork.",
+    metrics: {
+      activeAccounts: "Active accounts",
+      openRecoveryRequests: "Open recovery requests",
+      volunteers: "Volunteers",
+      leaders: "Leaders",
+    },
+    createAccount: {
+      eyebrow: "Create account",
+      title: "Add an internal care user",
+      body:
+        "Create owner, pastor, leader, or volunteer accounts from one place. Pastors can create leaders and volunteers; owners can create any role.",
+    },
+    fields: {
+      fullName: "Full name",
+      email: "Email",
+      role: "Role",
+      lane: "Lane or team lane",
+      volunteerDisplayName: "Volunteer display name",
+      temporaryPassword: "Temporary password",
+      activateImmediately: "Activate immediately",
+      activateImmediatelyDetail:
+        "Turn this off only if you want to create the profile before access goes live.",
+      newPassword: "New password",
+      resolutionNote: "Resolution note",
+      status: "Status",
+      adminNote: "Admin note",
+      passwordReset: "Password reset",
+      passwordResetBody:
+        "Issue a new temporary password when the team member has been verified offline.",
+      accountIsActive: "Account is active",
+      accountIsActiveDetail:
+        "Inactive users remain in the database but cannot sign in.",
+    },
+    placeholders: {
+      fullName: "Sister Ngozi Okafor",
+      email: "ngozi@gracecommunity.church",
+      lane: "Mercy & welfare lane",
+      volunteerDisplayName: "Shown in volunteer task view",
+      temporaryPassword: "Create a strong password",
+      newPassword: "Set a new temporary password",
+      verificationNote:
+        "Verified identity by phone and issued a temporary password.",
+      resolutionNote: "Record what was verified or why this was closed.",
+      volunteerDisplayNameNeeded: "Only needed for volunteer accounts",
+    },
+    createButton: "Create account",
+    creatingButton: "Creating account...",
+    recovery: {
+      eyebrow: "Recovery queue",
+      title: "Handle password recovery manually",
+      body:
+        "Requests from the public recovery form land here for review. Reset a password only after you have verified the requester.",
+      none: "No recovery requests have been submitted yet.",
+      recoveryRequest: "Recovery request",
+      requested: "Requested",
+      matchedAccount: "Matched account",
+      noMatchedAccount: "No internal account matches this email yet.",
+      resetAndResolve: "Reset password and resolve",
+      resetting: "Resetting password...",
+      updateRequest: "Update request",
+      updating: "Updating...",
+      statusOptions: {
+        resolved: "Resolved",
+        dismissed: "Dismissed",
+        issued: "Password issued",
+      },
+    },
+    directory: {
+      eyebrow: "Directory",
+      title: "Review each internal account",
+      body:
+        "Every account card below can be adjusted in place. Owners can manage every role. Pastors can manage leaders and volunteers.",
+      createdOn: "Created",
+      saveAccessChanges: "Save access changes",
+      savingChanges: "Saving changes...",
+      setNewPassword: "Set new password",
+      updatingPassword: "Updating password...",
+      oversightOnly:
+        "This account is visible for oversight, but only an owner can manage users at this role level.",
+    },
+  },
+  reports: {
+    kicker: "Dashboard and reporting",
+    title: "Understand the care system, not just the queue.",
+    description:
+      "Review request mix, team load, overdue follow-ups, and operational signals in one oversight surface. Export what you need for board or pastoral review.",
+    exports: {
+      cases: "Export cases",
+      households: "Export households",
+      users: "Export users",
+      audit: "Export audit",
+    },
+    summary: {
+      openCareRequests: "Open care requests",
+      openCareRequestsDetail: (count) =>
+        `${count} households need a follow-up touchpoint.`,
+      activeVolunteers: "Active volunteers",
+      activeVolunteersDetail: (count) =>
+        `${count} ministry teams currently configured.`,
+      resolvedRequests: "Resolved requests",
+      resolvedRequestsDetail:
+        "Closed requests remain in reporting until retention archives them.",
+      recentAuditActivity: "Recent audit activity",
+      recentAuditActivityDetail:
+        "Latest auth and workflow events captured for oversight.",
+    },
+    panels: {
+      needMix: "Need mix",
+      stageMix: "Stage mix",
+      volunteerCapacity: "Volunteer capacity",
+      overdueFollowUps: "Overdue follow-ups",
+      recentClosures: "Recent closures",
+      governanceSnapshot: "Governance snapshot",
+    },
+    noOverdue: "No overdue follow-ups are showing right now.",
+    noClosures: "No closed requests are available yet.",
+    noSliceData: "No reporting data is available for this slice yet.",
+    governance: {
+      plan: "Plan",
+      backupPosture: "Backup posture",
+      databasePath: "Database path",
+      auditEventsLogged: "Audit events logged",
+    },
+  },
+  teams: {
+    kicker: "Ministry routing",
+    title: "Shape the lanes behind care handoffs.",
+    description:
+      "Every routed case depends on clear lane ownership. Manage the teams, capabilities, and active volunteer surface that the rest of the app relies on.",
+    metrics: {
+      activeTeams: "Active teams",
+      configuredVolunteers: "Configured volunteers",
+      openRoutedCases: "Open routed cases",
+    },
+    create: {
+      eyebrow: "Create lane",
+      title: "Add a ministry team",
+      body:
+        "Create a new lane when a type of care needs its own owner, capabilities, and volunteer capacity.",
+    },
+    fields: {
+      teamName: "Team name",
+      laneName: "Lane name",
+      leadName: "Lead name",
+      contactEmail: "Contact email",
+      description: "Description",
+      capabilities: "Capabilities",
+      teamIsActive: "Team is active",
+      teamIsActiveDetail:
+        "Inactive teams stay visible in the configuration list but no longer represent live routing capacity.",
+      updatedDetail: (label) => `Last updated ${label}.`,
+    },
+    placeholders: {
+      teamName: "Prayer & encouragement team",
+      laneName: "Prayer & encouragement lane",
+      leadName: "Pastor Emmanuel",
+      contactEmail: "care@gracecommunity.church",
+      description: "Describe what kind of care this lane should handle.",
+      capabilities: "Prayer, Encouragement, Phone follow-up",
+    },
+    buttons: {
+      create: "Create ministry team",
+      creating: "Creating team...",
+      save: "Save team changes",
+      saving: "Saving team...",
+    },
+    cards: {
+      leaders: "Leaders",
+      volunteers: "Volunteers",
+      openCases: "Open cases",
+      assignedTasks: "Assigned tasks",
+      laneLeaders: "Lane leaders",
+      volunteerRoster: "Volunteer roster",
+      noLeaders: "No leader accounts assigned yet.",
+      noVolunteers: "No volunteers currently assigned to this lane.",
+    },
+  },
+  settings: {
+    kicker: "Owner controls",
+    title: "Tune the church-wide operating layer.",
+    description:
+      "These settings shape the member intake language, support contacts, billing snapshot, and operations posture across the app.",
+    metrics: {
+      plan: "Plan",
+      teamCount: "Team count",
+      emailMode: "Email mode",
+      sentEmails: "Sent emails",
+    },
+    sections: {
+      churchProfile: {
+        eyebrow: "Church profile",
+        title: "Member-facing and billing settings",
+        body:
+          "Update the name, support contacts, intake confirmation text, and billing posture that appear across the product.",
+      },
+      emailDelivery: {
+        eyebrow: "Email delivery",
+        title: "Provider-ready transactional email",
+        body:
+          "Sender details live here. Provider secrets stay in environment variables, not in the database.",
+      },
+      operationalSnapshot: {
+        eyebrow: "Operational snapshot",
+        title: "Current system posture",
+        body:
+          "A quick owner view of the live data store and the operational load currently moving through the app.",
+      },
+      emailPosture: {
+        eyebrow: "Email posture",
+        title: "Delivery readiness and outbox health",
+        body:
+          "Log-only mode is safe for local rehearsal. Live delivery needs both a valid sender address and the Resend API key in the host environment.",
+      },
+      liveExperience: {
+        eyebrow: "Live experience",
+        title: "How members experience the system",
+        body:
+          "These are the values that shape the public request flow and ongoing communication expectations.",
+      },
+      deliveryTest: {
+        eyebrow: "Delivery test",
+        title: "Queue a test email",
+        body:
+          "This sends a branded test through the current mode. In log-only mode it still lands in the outbox so you can review the rendered message.",
+      },
+      outbox: {
+        eyebrow: "Outbox",
+        title: "Recent email activity",
+        body:
+          "Every delivery attempt is recorded here, even when live sending is turned off.",
+      },
+    },
+    fields: {
+      churchName: "Church name",
+      campusName: "Campus name",
+      supportEmail: "Support email",
+      supportPhone: "Support phone",
+      primaryTimezone: "Primary timezone",
+      intakeConfirmationText: "Intake confirmation text",
+      emergencyBanner: "Emergency banner",
+      planName: "Plan name",
+      seatAllowance: "Seat allowance",
+      billingContactEmail: "Billing contact email",
+      nextRenewal: "Next renewal",
+      notificationChannels: "Notification channels",
+      backupExpectation: "Backup expectation",
+      deliveryMode: "Delivery mode",
+      provider: "Provider",
+      fromName: "From name",
+      fromAddress: "From address",
+      replyToAddress: "Reply-to address",
+      subjectPrefix: "Subject prefix",
+      recipientEmail: "Recipient email",
+      optionalNote: "Optional note",
+    },
+    options: {
+      logOnly: "Log only (capture emails without sending)",
+      resend: "Resend API (live delivery)",
+    },
+    placeholders: {
+      notificationChannels: "Phone follow-up, Text updates, In-person visit",
+      fromName: "Grace Community Church Care Team",
+      fromAddress: "care@yourchurch.org",
+      replyToAddress: "care@yourchurch.org",
+      subjectPrefix: "Grace Community Church",
+      recipientEmail: "you@example.com",
+      testNote: "This is a test of the Church Care OS email delivery setup.",
+    },
+    buttons: {
+      saveSettings: "Save settings",
+      savingSettings: "Saving settings...",
+      sendTestEmail: "Send test email",
+      queueingTest: "Queueing test...",
+    },
+    snapshot: {
+      databasePath: "Database path",
+      households: "Households",
+      openRequests: "Open requests",
+      auditEvents: "Audit events",
+      mode: "Mode",
+      provider: "Provider",
+      apiKeyConfigured: "API key configured",
+      appBaseUrlConfigured: "App base URL configured",
+      queued: "Queued",
+      loggedOnly: "Logged only",
+      sent: "Sent",
+      failed: "Failed",
+      currentConfirmationText: "Current confirmation text",
+      currentEmergencyBanner: "Current emergency banner",
+      currentContactChannels: "Current contact channels",
+      noOutboxActivity: "No outbox activity yet",
+      noOutboxActivityBody:
+        "Workflow and test emails will appear here once the system starts queueing them.",
+    },
+  },
+  notifications: {
+    kicker: "Private inbox",
+    title: "Notifications that keep care moving without widening access.",
+    description:
+      "This feed reflects only what belongs to your role and your account. New requests, routed tasks, password changes, and pastoral escalations arrive here with just enough context to act safely.",
+    metrics: {
+      unread: "Unread",
+      total: "Total",
+      role: "Role",
+    },
+    markAllRead: "Mark all as read",
+    updating: "Updating...",
+    backToWorkspace: "Back to workspace",
+    panels: {
+      unreadTitle: "Needs your attention",
+      unreadEyebrow: (count) => `Unread (${count})`,
+      unreadEmpty:
+        "You are all caught up. New care events will appear here as they happen.",
+      readTitle: "Recent activity",
+      readEyebrow: (count) => `Read (${count})`,
+      readEmpty: "Read items will settle here after you open or mark them.",
+    },
+    open: "Open",
+    opening: "Opening...",
+    markAsRead: "Mark as read",
+    saving: "Saving...",
+  },
+  audit: {
+    kicker: "Oversight",
+    title: "Audit trail and operations snapshot",
+    description:
+      "Sensitive care work needs a visible trail. This log captures auth and workflow mutations made inside the product.",
+    metrics: {
+      households: "Households",
+      openRequests: "Open requests",
+      auditEvents: "Audit events",
+    },
+    databaseLocation: "Database location",
+    details: {
+      actor: "Actor",
+      role: "Role",
+    },
+  },
+  permissions: {
+    kicker: "Permission matrix",
+    title: "The privacy model is visible in the UI, not hidden in policy.",
+    description:
+      "This table mirrors the access logic behind the care product. It makes two boundaries explicit: volunteers only see assigned work, and the pastor-only at-risk list never appears in general task views.",
+    action: "Action",
   },
 };
 
@@ -639,4 +1248,44 @@ export function translateUrgencyOption(value, language, fallback) {
 export function translateRoleLabel(role, language) {
   const copy = getCopy(language);
   return copy.layout.roleLabels[role] || role;
+}
+
+export function translateStage(value, language) {
+  const copy = getCopy(language);
+  return copy.common.stages[value] || value;
+}
+
+export function translateRisk(value, language) {
+  const copy = getCopy(language);
+  return copy.common.risks[value] || value;
+}
+
+export function translateRequestStatus(value, language) {
+  const copy = getCopy(language);
+  return copy.common.requestStatuses[value] || value;
+}
+
+export function translateTimelineKind(value, language) {
+  const copy = getCopy(language);
+  return copy.common.timelineKinds[value] || value;
+}
+
+export function translateRecoveryStatus(value, language) {
+  const copy = getCopy(language);
+  return copy.common.recoveryStatuses[value] || value;
+}
+
+export function translateOutboxStatus(value, language) {
+  const copy = getCopy(language);
+  return copy.common.outboxStatuses[value] || value;
+}
+
+export function translateNotificationKind(value, language) {
+  const copy = getCopy(language);
+  return copy.common.notificationKinds[value] || value;
+}
+
+export function translatePermissionAccess(value, language) {
+  const copy = getCopy(language);
+  return copy.common.permissionAccess[value] || value;
 }

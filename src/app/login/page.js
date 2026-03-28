@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/login-form";
 import { getAppPreferences } from "@/lib/app-preferences-server";
-import { getCurrentUser, getRoleLabel, getUserLandingPage } from "@/lib/auth";
-import { getCopy } from "@/lib/i18n";
+import { getCurrentUser, getUserLandingPage } from "@/lib/auth";
+import { getCopy, translateRoleLabel } from "@/lib/i18n";
 import { demoAuthUsers } from "@/lib/policies";
 
 export const metadata = {
@@ -82,7 +82,9 @@ export default async function LoginPage() {
                 className="rounded-[1.5rem] border border-line bg-canvas p-5"
               >
                 <p className="text-sm font-semibold text-foreground">{account.name}</p>
-                <p className="mt-2 text-sm text-muted">{getRoleLabel(account.role)}</p>
+                <p className="mt-2 text-sm text-muted">
+                  {translateRoleLabel(account.role, preferences.language)}
+                </p>
                 <p className="mt-4 text-sm leading-7 text-foreground">
                   {account.email}
                 </p>

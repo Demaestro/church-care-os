@@ -2,10 +2,12 @@ import { saveChurchSettings, sendTestEmail } from "@/app/actions";
 import { FlashBanner } from "@/components/flash-banner";
 import { SubmitButton } from "@/components/submit-button";
 import { requireCurrentUser } from "@/lib/auth";
-import { supportedTimezones } from "@/lib/organization-defaults";
+import { getAppPreferences } from "@/lib/app-preferences-server";
 import { toDateTimeLocalValue } from "@/lib/care-format";
 import { getOperationsSnapshot } from "@/lib/care-store";
 import { getEmailDeliverySnapshot, listEmailOutbox } from "@/lib/email-service";
+import { getCopy, translateOutboxStatus } from "@/lib/i18n";
+import { supportedTimezones } from "@/lib/organization-defaults";
 import { getChurchSettings, listMinistryTeams } from "@/lib/organization-store";
 
 export const metadata = {
@@ -15,6 +17,9 @@ export const metadata = {
 };
 
 export default async function SettingsPage({ searchParams }) {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
+  const pageCopy = copy.settings;
   await requireCurrentUser(["owner"]);
   const params = await searchParams;
   const [settings, ops, teams] = await Promise.all([
@@ -33,30 +38,32 @@ export default async function SettingsPage({ searchParams }) {
         <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-4xl">
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-              Owner controls
+              {pageCopy.kicker}
             </p>
             <h1 className="mt-4 text-5xl leading-none tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-6xl">
-              Tune the church-wide operating layer.
+              {pageCopy.title}
             </h1>
-            <p className="mt-5 text-lg leading-8 text-muted">
-              These settings shape the member intake language, support contacts,
-              billing snapshot, and operations posture across the app.
-            </p>
+            <p className="mt-5 text-lg leading-8 text-muted">{pageCopy.description}</p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:min-w-[28rem]">
-            <MetricCard label="Plan" value={settings?.planName || "Not set"} />
-            <MetricCard label="Team count" value={teams.length} />
-            <MetricCard label="Email mode" value={settings?.emailDeliveryMode || "log-only"} />
+            <MetricCard label={pageCopy.metrics.plan} value={settings?.planName || copy.common.notSet} />
+            <MetricCard label={pageCopy.metrics.teamCount} value={teams.length} />
             <MetricCard
-              label="Sent emails"
-              value={emailSnapshot.sentCount}
+              label={pageCopy.metrics.emailMode}
+              value={settings?.emailDeliveryMode || "log-only"}
             />
+            <MetricCard label={pageCopy.metrics.sentEmails} value={emailSnapshot.sentCount} />
           </div>
         </div>
 
         <div className="mt-6">
-          <FlashBanner notice={notice} error={error} />
+          <FlashBanner
+            notice={notice}
+            error={error}
+            noticeTitle={copy.common.flashNotice}
+            errorTitle={copy.common.flashError}
+          />
         </div>
       </section>
 
@@ -66,25 +73,33 @@ export default async function SettingsPage({ searchParams }) {
           className="surface-card rounded-[1.8rem] border border-line bg-paper p-6"
         >
           <SectionHeading
-            eyebrow="Church profile"
-            title="Member-facing and billing settings"
-            body="Update the name, support contacts, intake confirmation text, and billing posture that appear across the product."
+            eyebrow={pageCopy.sections.churchProfile.eyebrow}
+            title={pageCopy.sections.churchProfile.title}
+            body={pageCopy.sections.churchProfile.body}
           />
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <Field label="Church name" name="churchName" defaultValue={settings?.churchName} />
-            <Field label="Campus name" name="campusName" defaultValue={settings?.campusName} />
+            <Field
+              label={pageCopy.fields.churchName}
+              name="churchName"
+              defaultValue={settings?.churchName}
+            />
+            <Field
+              label={pageCopy.fields.campusName}
+              name="campusName"
+              defaultValue={settings?.campusName}
+            />
           </div>
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <Field
-              label="Support email"
+              label={pageCopy.fields.supportEmail}
               name="supportEmail"
               type="email"
               defaultValue={settings?.supportEmail}
             />
             <Field
-              label="Support phone"
+              label={pageCopy.fields.supportPhone}
               name="supportPhone"
               defaultValue={settings?.supportPhone}
             />
@@ -92,7 +107,7 @@ export default async function SettingsPage({ searchParams }) {
 
           <div className="mt-4">
             <SelectField
-              label="Primary timezone"
+              label={pageCopy.fields.primaryTimezone}
               name="timezone"
               defaultValue={settings?.timezone}
               options={supportedTimezones.map((timezone) => ({
@@ -104,21 +119,25 @@ export default async function SettingsPage({ searchParams }) {
 
           <div className="mt-6 space-y-4">
             <TextAreaField
-              label="Intake confirmation text"
+              label={pageCopy.fields.intakeConfirmationText}
               name="intakeConfirmationText"
               defaultValue={settings?.intakeConfirmationText}
             />
             <TextAreaField
-              label="Emergency banner"
+              label={pageCopy.fields.emergencyBanner}
               name="emergencyBanner"
               defaultValue={settings?.emergencyBanner}
             />
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <Field label="Plan name" name="planName" defaultValue={settings?.planName} />
             <Field
-              label="Seat allowance"
+              label={pageCopy.fields.planName}
+              name="planName"
+              defaultValue={settings?.planName}
+            />
+            <Field
+              label={pageCopy.fields.seatAllowance}
               name="monthlySeatAllowance"
               defaultValue={settings?.monthlySeatAllowance}
             />
@@ -126,13 +145,13 @@ export default async function SettingsPage({ searchParams }) {
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <Field
-              label="Billing contact email"
+              label={pageCopy.fields.billingContactEmail}
               name="billingContactEmail"
               type="email"
               defaultValue={settings?.billingContactEmail}
             />
             <Field
-              label="Next renewal"
+              label={pageCopy.fields.nextRenewal}
               name="nextRenewalDate"
               type="datetime-local"
               defaultValue={toDateTimeLocalValue(settings?.nextRenewalDate)}
@@ -141,13 +160,13 @@ export default async function SettingsPage({ searchParams }) {
 
           <div className="mt-6 space-y-4">
             <Field
-              label="Notification channels"
+              label={pageCopy.fields.notificationChannels}
               name="notificationChannels"
               defaultValue={settings?.notificationChannels?.join(", ")}
-              placeholder="Phone follow-up, Text updates, In-person visit"
+              placeholder={pageCopy.placeholders.notificationChannels}
             />
             <TextAreaField
-              label="Backup expectation"
+              label={pageCopy.fields.backupExpectation}
               name="backupExpectation"
               defaultValue={settings?.backupExpectation}
             />
@@ -155,29 +174,29 @@ export default async function SettingsPage({ searchParams }) {
 
           <div className="mt-8 border-t border-line pt-6">
             <SectionHeading
-              eyebrow="Email delivery"
-              title="Provider-ready transactional email"
-              body="Sender details live here. Provider secrets stay in environment variables, not in the database."
+              eyebrow={pageCopy.sections.emailDelivery.eyebrow}
+              title={pageCopy.sections.emailDelivery.title}
+              body={pageCopy.sections.emailDelivery.body}
             />
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <SelectField
-                label="Delivery mode"
+                label={pageCopy.fields.deliveryMode}
                 name="emailDeliveryMode"
                 defaultValue={settings?.emailDeliveryMode}
                 options={[
                   {
                     value: "log-only",
-                    label: "Log only (capture emails without sending)",
+                    label: pageCopy.options.logOnly,
                   },
                   {
                     value: "resend",
-                    label: "Resend API (live delivery)",
+                    label: pageCopy.options.resend,
                   },
                 ]}
               />
               <SelectField
-                label="Provider"
+                label={pageCopy.fields.provider}
                 name="emailProvider"
                 defaultValue={settings?.emailProvider}
                 options={[
@@ -191,41 +210,41 @@ export default async function SettingsPage({ searchParams }) {
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <Field
-                label="From name"
+                label={pageCopy.fields.fromName}
                 name="emailFromName"
                 defaultValue={settings?.emailFromName}
-                placeholder="Grace Community Church Care Team"
+                placeholder={pageCopy.placeholders.fromName}
               />
               <Field
-                label="From address"
+                label={pageCopy.fields.fromAddress}
                 name="emailFromAddress"
                 type="email"
                 defaultValue={settings?.emailFromAddress}
-                placeholder="care@yourchurch.org"
+                placeholder={pageCopy.placeholders.fromAddress}
               />
             </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <Field
-                label="Reply-to address"
+                label={pageCopy.fields.replyToAddress}
                 name="emailReplyTo"
                 type="email"
                 defaultValue={settings?.emailReplyTo}
-                placeholder="care@yourchurch.org"
+                placeholder={pageCopy.placeholders.replyToAddress}
               />
               <Field
-                label="Subject prefix"
+                label={pageCopy.fields.subjectPrefix}
                 name="emailSubjectPrefix"
                 defaultValue={settings?.emailSubjectPrefix}
-                placeholder="Grace Community Church"
+                placeholder={pageCopy.placeholders.subjectPrefix}
               />
             </div>
           </div>
 
           <div className="mt-6">
             <SubmitButton
-              idleLabel="Save settings"
-              pendingLabel="Saving settings..."
+              idleLabel={pageCopy.buttons.saveSettings}
+              pendingLabel={pageCopy.buttons.savingSettings}
               className="inline-flex items-center rounded-[1rem] bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
             />
           </div>
@@ -234,70 +253,70 @@ export default async function SettingsPage({ searchParams }) {
         <div className="space-y-6">
           <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
             <SectionHeading
-              eyebrow="Operational snapshot"
-              title="Current system posture"
-              body="A quick owner view of the live data store and the operational load currently moving through the app."
+              eyebrow={pageCopy.sections.operationalSnapshot.eyebrow}
+              title={pageCopy.sections.operationalSnapshot.title}
+              body={pageCopy.sections.operationalSnapshot.body}
             />
 
             <div className="mt-6 grid gap-4">
-              <SnapshotItem label="Database path" value={ops.databasePath} compact />
-              <SnapshotItem label="Households" value={ops.householdCount} />
-              <SnapshotItem label="Open requests" value={ops.openRequestCount} />
-              <SnapshotItem label="Audit events" value={ops.auditLogCount} />
+              <SnapshotItem label={pageCopy.snapshot.databasePath} value={ops.databasePath} compact />
+              <SnapshotItem label={pageCopy.snapshot.households} value={ops.householdCount} />
+              <SnapshotItem label={pageCopy.snapshot.openRequests} value={ops.openRequestCount} />
+              <SnapshotItem label={pageCopy.snapshot.auditEvents} value={ops.auditLogCount} />
             </div>
           </article>
 
           <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
             <SectionHeading
-              eyebrow="Email posture"
-              title="Delivery readiness and outbox health"
-              body="Log-only mode is safe for local rehearsal. Live delivery needs both a valid sender address and the Resend API key in the host environment."
+              eyebrow={pageCopy.sections.emailPosture.eyebrow}
+              title={pageCopy.sections.emailPosture.title}
+              body={pageCopy.sections.emailPosture.body}
             />
 
             <div className="mt-6 grid gap-4">
-              <SnapshotItem label="Mode" value={emailSnapshot.mode} />
-              <SnapshotItem label="Provider" value={emailSnapshot.provider} />
+              <SnapshotItem label={pageCopy.snapshot.mode} value={emailSnapshot.mode} />
+              <SnapshotItem label={pageCopy.snapshot.provider} value={emailSnapshot.provider} />
               <SnapshotItem
-                label="API key configured"
+                label={pageCopy.snapshot.apiKeyConfigured}
                 value={
                   emailSnapshot.mode === "log-only"
-                    ? "Not needed in log-only mode"
+                    ? copy.common.notNeededInLogOnlyMode
                     : emailSnapshot.apiKeyConfigured
-                      ? "Yes"
-                      : "No"
+                      ? copy.common.yes
+                      : copy.common.no
                 }
               />
               <SnapshotItem
-                label="App base URL configured"
-                value={emailSnapshot.appBaseUrlConfigured ? "Yes" : "No"}
+                label={pageCopy.snapshot.appBaseUrlConfigured}
+                value={emailSnapshot.appBaseUrlConfigured ? copy.common.yes : copy.common.no}
               />
-              <SnapshotItem label="Queued" value={emailSnapshot.queuedCount} />
-              <SnapshotItem label="Logged only" value={emailSnapshot.loggedCount} />
-              <SnapshotItem label="Sent" value={emailSnapshot.sentCount} />
-              <SnapshotItem label="Failed" value={emailSnapshot.failedCount} />
+              <SnapshotItem label={pageCopy.snapshot.queued} value={emailSnapshot.queuedCount} />
+              <SnapshotItem label={pageCopy.snapshot.loggedOnly} value={emailSnapshot.loggedCount} />
+              <SnapshotItem label={pageCopy.snapshot.sent} value={emailSnapshot.sentCount} />
+              <SnapshotItem label={pageCopy.snapshot.failed} value={emailSnapshot.failedCount} />
             </div>
           </article>
 
           <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
             <SectionHeading
-              eyebrow="Live experience"
-              title="How members experience the system"
-              body="These are the values that shape the public request flow and ongoing communication expectations."
+              eyebrow={pageCopy.sections.liveExperience.eyebrow}
+              title={pageCopy.sections.liveExperience.title}
+              body={pageCopy.sections.liveExperience.body}
             />
 
             <div className="mt-6 space-y-4">
               <PreviewPanel
-                title="Current confirmation text"
+                title={pageCopy.snapshot.currentConfirmationText}
                 body={settings?.intakeConfirmationText}
               />
               <PreviewPanel
-                title="Current emergency banner"
+                title={pageCopy.snapshot.currentEmergencyBanner}
                 body={settings?.emergencyBanner}
               />
               <PreviewPanel
-                title="Current contact channels"
+                title={pageCopy.snapshot.currentContactChannels}
                 body={
-                  (settings?.notificationChannels || []).join(", ") || "No channels listed"
+                  (settings?.notificationChannels || []).join(", ") || copy.common.noChannelsListed
                 }
               />
             </div>
@@ -305,27 +324,27 @@ export default async function SettingsPage({ searchParams }) {
 
           <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
             <SectionHeading
-              eyebrow="Delivery test"
-              title="Queue a test email"
-              body="This sends a branded test through the current mode. In log-only mode it still lands in the outbox so you can review the rendered message."
+              eyebrow={pageCopy.sections.deliveryTest.eyebrow}
+              title={pageCopy.sections.deliveryTest.title}
+              body={pageCopy.sections.deliveryTest.body}
             />
 
             <form action={sendTestEmail} className="mt-6 space-y-4">
               <Field
-                label="Recipient email"
+                label={pageCopy.fields.recipientEmail}
                 name="email"
                 type="email"
                 defaultValue={settings?.billingContactEmail || settings?.supportEmail}
-                placeholder="you@example.com"
+                placeholder={pageCopy.placeholders.recipientEmail}
               />
               <TextAreaField
-                label="Optional note"
+                label={pageCopy.fields.optionalNote}
                 name="note"
-                defaultValue="This is a test of the Church Care OS email delivery setup."
+                defaultValue={pageCopy.placeholders.testNote}
               />
               <SubmitButton
-                idleLabel="Send test email"
-                pendingLabel="Queueing test..."
+                idleLabel={pageCopy.buttons.sendTestEmail}
+                pendingLabel={pageCopy.buttons.queueingTest}
                 className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
               />
             </form>
@@ -333,16 +352,16 @@ export default async function SettingsPage({ searchParams }) {
 
           <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
             <SectionHeading
-              eyebrow="Outbox"
-              title="Recent email activity"
-              body="Every delivery attempt is recorded here, even when live sending is turned off."
+              eyebrow={pageCopy.sections.outbox.eyebrow}
+              title={pageCopy.sections.outbox.title}
+              body={pageCopy.sections.outbox.body}
             />
 
             <div className="mt-6 space-y-4">
               {outbox.length === 0 ? (
                 <PreviewPanel
-                  title="No outbox activity yet"
-                  body="Workflow and test emails will appear here once the system starts queueing them."
+                  title={pageCopy.snapshot.noOutboxActivity}
+                  body={pageCopy.snapshot.noOutboxActivityBody}
                 />
               ) : (
                 outbox.map((entry) => (
@@ -359,17 +378,17 @@ export default async function SettingsPage({ searchParams }) {
                           {entry.recipientEmail}
                         </p>
                       </div>
-                      <OutboxStatusPill status={entry.status} />
+                      <OutboxStatusPill status={entry.status} language={preferences.language} />
                     </div>
                     <div className="mt-3 grid gap-2 text-sm text-muted sm:grid-cols-2">
-                      <p>Template: {entry.templateKey}</p>
-                      <p>Provider: {entry.provider}</p>
-                      <p>Created: {entry.createdLabel}</p>
+                      <p>{copy.common.labels.template}: {entry.templateKey}</p>
+                      <p>{copy.common.labels.provider}: {entry.provider}</p>
+                      <p>{copy.common.labels.created}: {entry.createdLabel}</p>
                       <p>
-                        Last attempt:{" "}
+                        {copy.common.labels.lastAttempt}:{" "}
                         {entry.attemptedLabel !== "No time set"
                           ? entry.attemptedLabel
-                          : "Not attempted yet"}
+                          : copy.common.notAttemptedYet}
                       </p>
                     </div>
                     {entry.errorMessage ? (
@@ -479,7 +498,7 @@ function PreviewPanel({ title, body }) {
   );
 }
 
-function OutboxStatusPill({ status }) {
+function OutboxStatusPill({ status, language }) {
   const className =
     status === "sent"
       ? "border border-[rgba(73,106,77,0.16)] bg-[rgba(73,106,77,0.08)] text-moss"
@@ -491,7 +510,7 @@ function OutboxStatusPill({ status }) {
 
   return (
     <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${className}`}>
-      {status}
+      {translateOutboxStatus(status, language)}
     </span>
   );
 }

@@ -1,4 +1,9 @@
-export function FlashBanner({ notice = "", error = "" }) {
+export function FlashBanner({
+  notice = "",
+  error = "",
+  noticeTitle = "Saved",
+  errorTitle = "Needs attention",
+}) {
   const message = error || notice;
 
   if (!message) {
@@ -15,9 +20,7 @@ export function FlashBanner({ notice = "", error = "" }) {
           : "border-[rgba(73,106,77,0.16)] bg-[rgba(73,106,77,0.08)] text-moss"
       }`}
     >
-      <p className="font-semibold">
-        {isError ? "Needs attention" : "Saved"}
-      </p>
+      <p className="font-semibold">{isError ? errorTitle : noticeTitle}</p>
       <p className="mt-1">{message}</p>
     </div>
   );

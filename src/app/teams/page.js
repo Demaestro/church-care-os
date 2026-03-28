@@ -2,6 +2,8 @@ import { createMinistryTeam, updateMinistryTeam } from "@/app/actions";
 import { FlashBanner } from "@/components/flash-banner";
 import { SubmitButton } from "@/components/submit-button";
 import { requireCurrentUser } from "@/lib/auth";
+import { getAppPreferences } from "@/lib/app-preferences-server";
+import { getCopy } from "@/lib/i18n";
 import { listMinistryTeams } from "@/lib/organization-store";
 
 export const metadata = {
@@ -11,6 +13,9 @@ export const metadata = {
 };
 
 export default async function TeamsPage({ searchParams }) {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
+  const pageCopy = copy.teams;
   await requireCurrentUser(["pastor", "owner"]);
   const params = await searchParams;
   const teams = listMinistryTeams();
@@ -24,73 +29,88 @@ export default async function TeamsPage({ searchParams }) {
         <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-4xl">
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-              Ministry routing
+              {pageCopy.kicker}
             </p>
             <h1 className="mt-4 text-5xl leading-none tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-6xl">
-              Shape the lanes behind care handoffs.
+              {pageCopy.title}
             </h1>
             <p className="mt-5 text-lg leading-8 text-muted">
-              Every routed case depends on clear lane ownership. Manage the teams,
-              capabilities, and active volunteer surface that the rest of the app
-              relies on.
+              {pageCopy.description}
             </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3 xl:min-w-[30rem]">
-            <MetricCard label="Active teams" value={activeTeams.length} />
+            <MetricCard label={pageCopy.metrics.activeTeams} value={activeTeams.length} />
             <MetricCard
-              label="Configured volunteers"
+              label={pageCopy.metrics.configuredVolunteers}
               value={teams.reduce((sum, team) => sum + team.volunteerCount, 0)}
             />
             <MetricCard
-              label="Open routed cases"
+              label={pageCopy.metrics.openRoutedCases}
               value={teams.reduce((sum, team) => sum + team.openRequestCount, 0)}
             />
           </div>
         </div>
 
         <div className="mt-6">
-          <FlashBanner notice={notice} error={error} />
+          <FlashBanner
+            notice={notice}
+            error={error}
+            noticeTitle={copy.common.flashNotice}
+            errorTitle={copy.common.flashError}
+          />
         </div>
       </section>
 
       <section className="mt-8 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
           <SectionHeading
-            eyebrow="Create lane"
-            title="Add a ministry team"
-            body="Create a new lane when a type of care needs its own owner, capabilities, and volunteer capacity."
+            eyebrow={pageCopy.create.eyebrow}
+            title={pageCopy.create.title}
+            body={pageCopy.create.body}
           />
 
           <form action={createMinistryTeam} className="mt-6 space-y-4">
-            <Field label="Team name" name="name" placeholder="Prayer & encouragement team" />
-            <Field label="Lane name" name="lane" placeholder="Prayer & encouragement lane" />
-            <Field label="Lead name" name="leadName" placeholder="Pastor Emmanuel" />
             <Field
-              label="Contact email"
+              label={pageCopy.fields.teamName}
+              name="name"
+              placeholder={pageCopy.placeholders.teamName}
+            />
+            <Field
+              label={pageCopy.fields.laneName}
+              name="lane"
+              placeholder={pageCopy.placeholders.laneName}
+            />
+            <Field
+              label={pageCopy.fields.leadName}
+              name="leadName"
+              placeholder={pageCopy.placeholders.leadName}
+            />
+            <Field
+              label={pageCopy.fields.contactEmail}
               name="contactEmail"
               type="email"
-              placeholder="care@gracecommunity.church"
+              placeholder={pageCopy.placeholders.contactEmail}
             />
             <TextAreaField
-              label="Description"
+              label={pageCopy.fields.description}
               name="description"
-              placeholder="Describe what kind of care this lane should handle."
+              placeholder={pageCopy.placeholders.description}
             />
             <Field
-              label="Capabilities"
+              label={pageCopy.fields.capabilities}
               name="capabilities"
-              placeholder="Prayer, Encouragement, Phone follow-up"
+              placeholder={pageCopy.placeholders.capabilities}
             />
             <ToggleField
-              label="Team is active"
+              label={pageCopy.fields.teamIsActive}
               name="active"
               defaultChecked
-              detail="Inactive teams stay visible in the configuration list but no longer represent live routing capacity."
+              detail={pageCopy.fields.teamIsActiveDetail}
             />
             <SubmitButton
-              idleLabel="Create ministry team"
-              pendingLabel="Creating team..."
+              idleLabel={pageCopy.buttons.create}
+              pendingLabel={pageCopy.buttons.creating}
               className="inline-flex items-center rounded-[1rem] bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
             />
           </form>
@@ -119,7 +139,7 @@ export default async function TeamsPage({ searchParams }) {
                           : "border border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)] text-clay"
                       }`}
                     >
-                      {team.active ? "Active" : "Inactive"}
+                      {team.active ? copy.common.active : copy.common.inactive}
                     </span>
                     {team.capabilities.map((capability) => (
                       <span
@@ -133,26 +153,26 @@ export default async function TeamsPage({ searchParams }) {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <MetricCard label="Leaders" value={team.leaderCount} />
-                  <MetricCard label="Volunteers" value={team.volunteerCount} />
-                  <MetricCard label="Open cases" value={team.openRequestCount} />
-                  <MetricCard label="Assigned tasks" value={team.assignedTaskCount} />
+                  <MetricCard label={pageCopy.cards.leaders} value={team.leaderCount} />
+                  <MetricCard label={pageCopy.cards.volunteers} value={team.volunteerCount} />
+                  <MetricCard label={pageCopy.cards.openCases} value={team.openRequestCount} />
+                  <MetricCard label={pageCopy.cards.assignedTasks} value={team.assignedTaskCount} />
                 </div>
               </div>
 
               <div className="mt-6 grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
                 <div className="space-y-4 rounded-[1.35rem] border border-line bg-canvas p-5">
                   <InfoList
-                    title="Lane leaders"
+                    title={pageCopy.cards.laneLeaders}
                     items={team.leaders.map((leader) => leader.name)}
-                    emptyLabel="No leader accounts assigned yet."
+                    emptyLabel={pageCopy.cards.noLeaders}
                   />
                   <InfoList
-                    title="Volunteer roster"
+                    title={pageCopy.cards.volunteerRoster}
                     items={team.volunteers.map(
                       (volunteer) => volunteer.volunteerName || volunteer.name
                     )}
-                    emptyLabel="No volunteers currently assigned to this lane."
+                    emptyLabel={pageCopy.cards.noVolunteers}
                   />
                 </div>
 
@@ -161,37 +181,37 @@ export default async function TeamsPage({ searchParams }) {
                   className="space-y-4 rounded-[1.35rem] border border-line bg-canvas p-5"
                 >
                   <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="Team name" name="name" defaultValue={team.name} />
-                    <Field label="Lane name" name="lane" defaultValue={team.lane} />
+                    <Field label={pageCopy.fields.teamName} name="name" defaultValue={team.name} />
+                    <Field label={pageCopy.fields.laneName} name="lane" defaultValue={team.lane} />
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="Lead name" name="leadName" defaultValue={team.leadName} />
+                    <Field label={pageCopy.fields.leadName} name="leadName" defaultValue={team.leadName} />
                     <Field
-                      label="Contact email"
+                      label={pageCopy.fields.contactEmail}
                       name="contactEmail"
                       type="email"
                       defaultValue={team.contactEmail}
                     />
                   </div>
                   <TextAreaField
-                    label="Description"
+                    label={pageCopy.fields.description}
                     name="description"
                     defaultValue={team.description}
                   />
                   <Field
-                    label="Capabilities"
+                    label={pageCopy.fields.capabilities}
                     name="capabilities"
                     defaultValue={team.capabilities.join(", ")}
                   />
                   <ToggleField
-                    label="Team is active"
+                    label={pageCopy.fields.teamIsActive}
                     name="active"
                     defaultChecked={team.active}
-                    detail={`Last updated ${team.updatedLabel}.`}
+                    detail={pageCopy.fields.updatedDetail(team.updatedLabel)}
                   />
                   <SubmitButton
-                    idleLabel="Save team changes"
-                    pendingLabel="Saving team..."
+                    idleLabel={pageCopy.buttons.save}
+                    pendingLabel={pageCopy.buttons.saving}
                     className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
                   />
                 </form>

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { requireCurrentUser } from "@/lib/auth";
+import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getHouseholds } from "@/lib/care-store";
+import { getCopy, translateRisk, translateStage } from "@/lib/i18n";
 
 const toneClasses = {
   urgent: "border-[rgba(184,101,76,0.22)] bg-[rgba(184,101,76,0.10)] text-clay",
@@ -15,8 +17,11 @@ export const metadata = {
 };
 
 export default async function HouseholdsPage() {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
   await requireCurrentUser(["leader", "pastor", "owner"]);
   const households = await getHouseholds();
+  const pageCopy = copy.households;
 
   const urgentCount = households.filter((household) => household.risk === "urgent").length;
   const watchCount = households.filter((household) => household.risk === "watch").length;
@@ -30,14 +35,13 @@ export default async function HouseholdsPage() {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-              Household board
+              {pageCopy.kicker}
             </p>
             <h1 className="mt-4 text-5xl leading-none tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-6xl">
-              A live map of the people already in your care orbit.
+              {pageCopy.title}
             </h1>
             <p className="mt-5 text-lg leading-8 text-muted">
-              Each card now reads from the shared store, links into a household
-              timeline, and reflects the latest request intake and note activity.
+              {pageCopy.description}
             </p>
           </div>
 
@@ -46,32 +50,32 @@ export default async function HouseholdsPage() {
               href="/"
               className="inline-flex w-fit items-center rounded-full border border-line bg-canvas px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#ece1d1]"
             >
-              Back to dashboard
+              {pageCopy.backToDashboard}
             </Link>
             <Link
               href="/requests/new"
               className="inline-flex w-fit items-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f]"
             >
-              Log new request
+              {pageCopy.logNewRequest}
             </Link>
           </div>
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           <SummaryCard
-            label="Open households"
+            label={pageCopy.summary.openHouseholds}
             value={String(households.length).padStart(2, "0")}
-            detail="Every visible household has a timeline and next touchpoint behind it."
+            detail={pageCopy.summary.openHouseholdsDetail}
           />
           <SummaryCard
-            label="Urgent follow-up"
+            label={pageCopy.summary.urgentFollowUp}
             value={String(urgentCount).padStart(2, "0")}
-            detail="These households need movement today from staff or ministry leads."
+            detail={pageCopy.summary.urgentFollowUpDetail}
           />
           <SummaryCard
-            label="Needs assignment"
+            label={pageCopy.summary.needsAssignment}
             value={String(unassignedCount).padStart(2, "0")}
-            detail="Requests waiting on a named team, lead, or volunteer match."
+            detail={pageCopy.summary.needsAssignmentDetail}
           />
         </div>
       </section>
@@ -79,21 +83,21 @@ export default async function HouseholdsPage() {
       <section className="mt-10 grid gap-4 md:grid-cols-3">
         <FilterCard
           tone="urgent"
-          title="Urgent"
+          title={pageCopy.filters.urgent.title}
           count={urgentCount}
-          description="Immediate touchpoints, counseling, or rapid practical support."
+          description={pageCopy.filters.urgent.description}
         />
         <FilterCard
           tone="watch"
-          title="Watch"
+          title={pageCopy.filters.watch.title}
           count={watchCount}
-          description="Healthy momentum, but the team should keep a close eye on the next step."
+          description={pageCopy.filters.watch.description}
         />
         <FilterCard
           tone="steady"
-          title="Steady"
+          title={pageCopy.filters.steady.title}
           count={households.length - urgentCount - watchCount}
-          description="Progress is moving; the main need is consistent follow-through."
+          description={pageCopy.filters.steady.description}
         />
       </section>
 
@@ -101,15 +105,14 @@ export default async function HouseholdsPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-              Active households
+              {pageCopy.activeKicker}
             </p>
             <h2 className="mt-3 text-4xl tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-5xl">
-              Scan for risk, ownership, request load, and the next concrete move.
+              {pageCopy.activeTitle}
             </h2>
           </div>
           <p className="max-w-xl text-base leading-8 text-muted">
-            Open a household to update its snapshot, log notes, and close related
-            requests without leaving the care workflow.
+            {pageCopy.activeBody}
           </p>
         </div>
 
@@ -122,7 +125,7 @@ export default async function HouseholdsPage() {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-sm uppercase tracking-[0.2em] text-muted">
-                    {household.stage}
+                    {translateStage(household.stage, preferences.language)}
                   </p>
                   <h3 className="mt-2 text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
                     {household.name}
@@ -132,7 +135,7 @@ export default async function HouseholdsPage() {
                 <span
                   className={`inline-flex w-fit rounded-full border px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] ${toneClasses[household.risk]}`}
                 >
-                  {household.risk}
+                  {translateRisk(household.risk, preferences.language)}
                 </span>
               </div>
 
@@ -141,17 +144,17 @@ export default async function HouseholdsPage() {
               </p>
 
               <div className="mt-6 grid gap-4 text-sm text-muted sm:grid-cols-2">
-                <DetailItem label="Owner" value={household.owner} />
+                <DetailItem label={pageCopy.details.owner} value={household.owner} />
                 <DetailItem
-                  label="Next touchpoint"
+                  label={pageCopy.details.nextTouchpoint}
                   value={household.nextTouchpointLabel}
                 />
                 <DetailItem
-                  label="Last touchpoint"
+                  label={pageCopy.details.lastTouchpoint}
                   value={household.lastTouchpointLabel}
                 />
                 <DetailItem
-                  label="Open requests"
+                  label={pageCopy.details.openRequests}
                   value={String(household.openRequestCount).padStart(2, "0")}
                 />
               </div>
@@ -172,13 +175,13 @@ export default async function HouseholdsPage() {
                   href={`/households/${household.slug}`}
                   className="inline-flex w-fit items-center rounded-full border border-line bg-canvas px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-[#ece1d1]"
                 >
-                  Open timeline
+                  {pageCopy.openTimeline}
                 </Link>
                 <Link
                   href="/requests/new"
                   className="inline-flex w-fit items-center rounded-full border border-line bg-transparent px-4 py-2 text-sm font-semibold text-muted transition hover:bg-[#f4ebdc] hover:text-foreground"
                 >
-                  Add request
+                  {pageCopy.addRequest}
                 </Link>
               </div>
             </article>

@@ -6,8 +6,11 @@ import {
 } from "@/app/actions";
 import { FlashBanner } from "@/components/flash-banner";
 import { SubmitButton } from "@/components/submit-button";
-import { getRoleLabel, requireCurrentUser } from "@/lib/auth";
+import { requireCurrentUser } from "@/lib/auth";
+import { getAppPreferences } from "@/lib/app-preferences-server";
+import { getLocaleTag } from "@/lib/app-preferences";
 import { listUsers } from "@/lib/auth-store";
+import { getCopy, translateRecoveryStatus, translateRoleLabel } from "@/lib/i18n";
 import { listMinistryTeams, listRecoveryRequests } from "@/lib/organization-store";
 import { internalRoleOptions } from "@/lib/policies";
 
@@ -18,6 +21,10 @@ export const metadata = {
 };
 
 export default async function AdminUsersPage({ searchParams }) {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
+  const pageCopy = copy.people;
+  const localeTag = getLocaleTag(preferences.language);
   const currentUser = await requireCurrentUser(["pastor", "owner"]);
   const params = await searchParams;
   const users = listUsers();
@@ -31,6 +38,10 @@ export default async function AdminUsersPage({ searchParams }) {
       : internalRoleOptions.filter((option) =>
           ["leader", "volunteer"].includes(option.value)
         );
+  const localizedRoleOptions = roleOptions.map((option) => ({
+    ...option,
+    label: translateRoleLabel(option.value, preferences.language),
+  }));
   const laneSuggestions = Array.from(
     new Set(teams.map((team) => team.lane).filter(Boolean))
   ).sort((first, second) => first.localeCompare(second));
@@ -45,34 +56,40 @@ export default async function AdminUsersPage({ searchParams }) {
         <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-4xl">
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-              Access control
+              {pageCopy.kicker}
             </p>
             <h1 className="mt-4 text-5xl leading-none tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-6xl">
-              People, roles, and recovery oversight.
+              {pageCopy.title}
             </h1>
             <p className="mt-5 text-lg leading-8 text-muted">
-              Manage who can enter internal care workflows, what lane they operate
-              inside, and how account recovery gets handled with pastoral care
-              rather than guesswork.
+              {pageCopy.description}
             </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:min-w-[26rem]">
-            <MetricCard label="Active accounts" value={activeUsers.length} />
-            <MetricCard label="Open recovery requests" value={openRecoveryRequests.length} />
+            <MetricCard label={pageCopy.metrics.activeAccounts} value={activeUsers.length} />
             <MetricCard
-              label="Volunteers"
+              label={pageCopy.metrics.openRecoveryRequests}
+              value={openRecoveryRequests.length}
+            />
+            <MetricCard
+              label={pageCopy.metrics.volunteers}
               value={users.filter((user) => user.role === "volunteer" && user.active).length}
             />
             <MetricCard
-              label="Leaders"
+              label={pageCopy.metrics.leaders}
               value={users.filter((user) => user.role === "leader" && user.active).length}
             />
           </div>
         </div>
 
         <div className="mt-6">
-          <FlashBanner notice={notice} error={error} />
+          <FlashBanner
+            notice={notice}
+            error={error}
+            noticeTitle={copy.common.flashNotice}
+            errorTitle={copy.common.flashError}
+          />
         </div>
       </section>
 
@@ -85,56 +102,64 @@ export default async function AdminUsersPage({ searchParams }) {
       <section className="mt-8 grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
           <SectionHeading
-            eyebrow="Create account"
-            title="Add an internal care user"
-            body="Create owner, pastor, leader, or volunteer accounts from one place. Pastors can create leaders and volunteers; owners can create any role."
+            eyebrow={pageCopy.createAccount.eyebrow}
+            title={pageCopy.createAccount.title}
+            body={pageCopy.createAccount.body}
           />
 
           <form action={createUserAccount} className="mt-6 space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Full name" name="name" placeholder="Sister Ngozi Okafor" />
               <Field
-                label="Email"
+                label={pageCopy.fields.fullName}
+                name="name"
+                placeholder={pageCopy.placeholders.fullName}
+              />
+              <Field
+                label={pageCopy.fields.email}
                 name="email"
                 type="email"
-                placeholder="ngozi@gracecommunity.church"
+                placeholder={pageCopy.placeholders.email}
               />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <SelectField label="Role" name="role" options={roleOptions} />
+              <SelectField
+                label={pageCopy.fields.role}
+                name="role"
+                options={localizedRoleOptions}
+              />
               <Field
-                label="Lane or team lane"
+                label={pageCopy.fields.lane}
                 name="lane"
-                placeholder="Mercy & welfare lane"
+                placeholder={pageCopy.placeholders.lane}
                 list="lane-options"
               />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <Field
-                label="Volunteer display name"
+                label={pageCopy.fields.volunteerDisplayName}
                 name="volunteerName"
-                placeholder="Shown in volunteer task view"
+                placeholder={pageCopy.placeholders.volunteerDisplayName}
               />
               <Field
-                label="Temporary password"
+                label={pageCopy.fields.temporaryPassword}
                 name="password"
                 type="password"
-                placeholder="Create a strong password"
+                placeholder={pageCopy.placeholders.temporaryPassword}
               />
             </div>
 
             <ToggleField
-              label="Activate immediately"
+              label={pageCopy.fields.activateImmediately}
               name="active"
               defaultChecked
-              detail="Turn this off only if you want to create the profile before access goes live."
+              detail={pageCopy.fields.activateImmediatelyDetail}
             />
 
             <SubmitButton
-              idleLabel="Create account"
-              pendingLabel="Creating account..."
+              idleLabel={pageCopy.createButton}
+              pendingLabel={pageCopy.creatingButton}
               className="inline-flex items-center justify-center rounded-[1rem] bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
             />
           </form>
@@ -142,14 +167,14 @@ export default async function AdminUsersPage({ searchParams }) {
 
         <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
           <SectionHeading
-            eyebrow="Recovery queue"
-            title="Handle password recovery manually"
-            body="Requests from the public recovery form land here for review. Reset a password only after you have verified the requester."
+            eyebrow={pageCopy.recovery.eyebrow}
+            title={pageCopy.recovery.title}
+            body={pageCopy.recovery.body}
           />
 
           <div className="mt-6 space-y-4">
             {recoveryRequests.length === 0 ? (
-              <EmptyCard body="No recovery requests have been submitted yet." />
+              <EmptyCard body={pageCopy.recovery.none} />
             ) : (
               recoveryRequests.map((request) => {
                 const matchedUser = users.find((user) => user.email === request.email);
@@ -164,19 +189,19 @@ export default async function AdminUsersPage({ searchParams }) {
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <p className="text-sm font-semibold text-foreground">
-                          {request.requesterName || "Recovery request"}
+                          {request.requesterName || pageCopy.recovery.recoveryRequest}
                         </p>
                         <p className="mt-1 text-sm leading-7 text-muted">{request.email}</p>
                       </div>
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getRecoveryStatusClass(request.status)}`}
                       >
-                        {request.status}
+                        {translateRecoveryStatus(request.status, preferences.language)}
                       </span>
                     </div>
 
                     <p className="mt-3 text-sm text-muted">
-                      Requested {request.requestedLabel}
+                      {pageCopy.recovery.requested} {request.requestedLabel}
                     </p>
 
                     {request.note ? (
@@ -185,12 +210,15 @@ export default async function AdminUsersPage({ searchParams }) {
 
                     <div className="mt-4 rounded-[1rem] border border-line bg-paper p-4">
                       <p className="text-xs uppercase tracking-[0.18em] text-muted">
-                        Matched account
+                        {pageCopy.recovery.matchedAccount}
                       </p>
                       <p className="mt-2 text-sm leading-7 text-foreground">
                         {matchedUser
-                          ? `${matchedUser.name} - ${getRoleLabel(matchedUser.role)}`
-                          : "No internal account matches this email yet."}
+                          ? `${matchedUser.name} - ${translateRoleLabel(
+                              matchedUser.role,
+                              preferences.language
+                            )}`
+                          : pageCopy.recovery.noMatchedAccount}
                       </p>
                     </div>
 
@@ -201,20 +229,20 @@ export default async function AdminUsersPage({ searchParams }) {
                       >
                         <input type="hidden" name="recoveryRequestId" value={request.id} />
                         <Field
-                          label="New password"
+                          label={pageCopy.fields.newPassword}
                           name="password"
                           type="password"
-                          placeholder="Set a new temporary password"
+                          placeholder={pageCopy.placeholders.newPassword}
                         />
                         <Field
-                          label="Resolution note"
+                          label={pageCopy.fields.resolutionNote}
                           name="resolutionNote"
-                          placeholder="Verified identity by phone and issued a temporary password."
+                          placeholder={pageCopy.placeholders.verificationNote}
                           defaultValue={`Password reset issued for ${matchedUser.email}.`}
                         />
                         <SubmitButton
-                          idleLabel="Reset password and resolve"
-                          pendingLabel="Resetting password..."
+                          idleLabel={pageCopy.recovery.resetAndResolve}
+                          pendingLabel={pageCopy.recovery.resetting}
                           className="inline-flex items-center rounded-[1rem] bg-foreground px-4 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
                         />
                       </form>
@@ -226,25 +254,34 @@ export default async function AdminUsersPage({ searchParams }) {
                     >
                       <div className="grid gap-3 md:grid-cols-[0.42fr_0.58fr]">
                         <SelectField
-                          label="Status"
+                          label={pageCopy.fields.status}
                           name="status"
                           defaultValue={request.status}
                           options={[
-                            { value: "resolved", label: "Resolved" },
-                            { value: "dismissed", label: "Dismissed" },
-                            { value: "issued", label: "Password issued" },
+                            {
+                              value: "resolved",
+                              label: pageCopy.recovery.statusOptions.resolved,
+                            },
+                            {
+                              value: "dismissed",
+                              label: pageCopy.recovery.statusOptions.dismissed,
+                            },
+                            {
+                              value: "issued",
+                              label: pageCopy.recovery.statusOptions.issued,
+                            },
                           ]}
                         />
                         <Field
-                          label="Admin note"
+                          label={pageCopy.fields.adminNote}
                           name="resolutionNote"
-                          placeholder="Record what was verified or why this was closed."
+                          placeholder={pageCopy.placeholders.resolutionNote}
                           defaultValue={request.resolutionNote}
                         />
                       </div>
                       <SubmitButton
-                        idleLabel="Update request"
-                        pendingLabel="Updating..."
+                        idleLabel={pageCopy.recovery.updateRequest}
+                        pendingLabel={pageCopy.recovery.updating}
                         className="inline-flex items-center rounded-[1rem] border border-line bg-canvas px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#ece1d1] disabled:cursor-not-allowed disabled:opacity-70"
                       />
                     </form>
@@ -258,9 +295,9 @@ export default async function AdminUsersPage({ searchParams }) {
 
       <section className="mt-8 space-y-4">
         <SectionHeading
-          eyebrow="Directory"
-          title="Review each internal account"
-          body="Every account card below can be adjusted in place. Owners can manage every role. Pastors can manage leaders and volunteers."
+          eyebrow={pageCopy.directory.eyebrow}
+          title={pageCopy.directory.title}
+          body={pageCopy.directory.body}
         />
 
         {users.map((account) => {
@@ -278,8 +315,8 @@ export default async function AdminUsersPage({ searchParams }) {
                   </p>
                   <p className="mt-2 text-sm leading-7 text-muted">{account.email}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <RolePill role={account.role} />
-                    <StatusPill active={account.active} />
+                    <RolePill role={account.role} language={preferences.language} />
+                    <StatusPill active={account.active} copy={copy} />
                     {account.lane ? (
                       <span className="rounded-full border border-line bg-canvas px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted">
                         {account.lane}
@@ -289,7 +326,8 @@ export default async function AdminUsersPage({ searchParams }) {
                 </div>
 
                 <div className="rounded-[1rem] bg-canvas px-4 py-3 text-sm leading-7 text-muted">
-                  Created {new Date(account.createdAt).toLocaleDateString("en-GB")}
+                  {pageCopy.directory.createdOn}{" "}
+                  {new Date(account.createdAt).toLocaleDateString(localeTag)}
                 </div>
               </div>
 
@@ -300,9 +338,13 @@ export default async function AdminUsersPage({ searchParams }) {
                     className="space-y-4 rounded-[1.35rem] border border-line bg-canvas p-5"
                   >
                     <div className="grid gap-4 md:grid-cols-2">
-                      <Field label="Full name" name="name" defaultValue={account.name} />
                       <Field
-                        label="Email"
+                        label={pageCopy.fields.fullName}
+                        name="name"
+                        defaultValue={account.name}
+                      />
+                      <Field
+                        label={pageCopy.fields.email}
                         name="email"
                         type="email"
                         defaultValue={account.email}
@@ -311,37 +353,37 @@ export default async function AdminUsersPage({ searchParams }) {
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <SelectField
-                        label="Role"
+                        label={pageCopy.fields.role}
                         name="role"
                         defaultValue={account.role}
-                        options={roleOptions}
+                        options={localizedRoleOptions}
                       />
                       <Field
-                        label="Lane"
+                        label={pageCopy.fields.lane}
                         name="lane"
                         defaultValue={account.lane}
-                        placeholder="Mercy & welfare lane"
+                        placeholder={pageCopy.placeholders.lane}
                         list="lane-options"
                       />
                     </div>
 
                     <Field
-                      label="Volunteer display name"
+                      label={pageCopy.fields.volunteerDisplayName}
                       name="volunteerName"
                       defaultValue={account.volunteerName}
-                      placeholder="Only needed for volunteer accounts"
+                      placeholder={pageCopy.placeholders.volunteerDisplayNameNeeded}
                     />
 
                     <ToggleField
-                      label="Account is active"
+                      label={pageCopy.fields.accountIsActive}
                       name="active"
                       defaultChecked={account.active}
-                      detail="Inactive users remain in the database but cannot sign in."
+                      detail={pageCopy.fields.accountIsActiveDetail}
                     />
 
                     <SubmitButton
-                      idleLabel="Save access changes"
-                      pendingLabel="Saving changes..."
+                      idleLabel={pageCopy.directory.saveAccessChanges}
+                      pendingLabel={pageCopy.directory.savingChanges}
                       className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
                     />
                   </form>
@@ -351,21 +393,20 @@ export default async function AdminUsersPage({ searchParams }) {
                     className="space-y-4 rounded-[1.35rem] border border-line bg-canvas p-5"
                   >
                     <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
-                      Password reset
+                      {pageCopy.fields.passwordReset}
                     </p>
                     <p className="text-sm leading-7 text-muted">
-                      Issue a new temporary password when the team member has been
-                      verified offline.
+                      {pageCopy.fields.passwordResetBody}
                     </p>
                     <Field
-                      label="New password"
+                      label={pageCopy.fields.newPassword}
                       name="password"
                       type="password"
-                      placeholder="Set a new password"
+                      placeholder={pageCopy.placeholders.newPassword}
                     />
                     <SubmitButton
-                      idleLabel="Set new password"
-                      pendingLabel="Updating password..."
+                      idleLabel={pageCopy.directory.setNewPassword}
+                      pendingLabel={pageCopy.directory.updatingPassword}
                       className="inline-flex items-center rounded-[1rem] bg-foreground px-4 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
                     />
                   </form>
@@ -373,8 +414,7 @@ export default async function AdminUsersPage({ searchParams }) {
               ) : (
                 <div className="mt-6 rounded-[1.35rem] border border-line bg-canvas p-5">
                   <p className="text-sm leading-7 text-muted">
-                    This account is visible for oversight, but only an owner can
-                    manage users at this role level.
+                    {pageCopy.directory.oversightOnly}
                   </p>
                 </div>
               )}
@@ -482,15 +522,15 @@ function ToggleField({ label, name, detail, defaultChecked }) {
   );
 }
 
-function RolePill({ role }) {
+function RolePill({ role, language }) {
   return (
     <span className="rounded-full border border-[rgba(73,106,77,0.16)] bg-[rgba(73,106,77,0.08)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-moss">
-      {getRoleLabel(role)}
+      {translateRoleLabel(role, language)}
     </span>
   );
 }
 
-function StatusPill({ active }) {
+function StatusPill({ active, copy }) {
   return (
     <span
       className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${
@@ -499,7 +539,7 @@ function StatusPill({ active }) {
           : "border border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)] text-clay"
       }`}
     >
-      {active ? "Active" : "Inactive"}
+      {active ? copy.common.active : copy.common.inactive}
     </span>
   );
 }

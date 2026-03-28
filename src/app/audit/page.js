@@ -1,5 +1,7 @@
-import { getRoleLabel, requireCurrentUser } from "@/lib/auth";
+import { requireCurrentUser } from "@/lib/auth";
+import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getOperationsSnapshot, listAuditLogs } from "@/lib/care-store";
+import { getCopy, translateRoleLabel } from "@/lib/i18n";
 
 export const metadata = {
   title: "Audit Log",
@@ -7,35 +9,37 @@ export const metadata = {
 };
 
 export default async function AuditPage() {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
   await requireCurrentUser(["pastor", "owner"]);
   const entries = listAuditLogs();
   const ops = getOperationsSnapshot();
+  const pageCopy = copy.audit;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10 pb-16 lg:px-10 lg:py-14">
       <section className="surface-card rounded-[2rem] border border-line bg-paper p-8 lg:p-10">
         <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-          Oversight
+          {pageCopy.kicker}
         </p>
         <h1 className="mt-4 text-5xl leading-none tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-6xl">
-          Audit trail and operations snapshot
+          {pageCopy.title}
         </h1>
         <p className="mt-5 max-w-3xl text-lg leading-8 text-muted">
-          Sensitive care work needs a visible trail. This log captures auth and
-          workflow mutations made inside the product.
+          {pageCopy.description}
         </p>
 
         <div className="mt-8 grid gap-4 md:grid-cols-3">
-          <MetricCard label="Households" value={ops.householdCount} />
-          <MetricCard label="Open requests" value={ops.openRequestCount} />
-          <MetricCard label="Audit events" value={ops.auditLogCount} />
+          <MetricCard label={pageCopy.metrics.households} value={ops.householdCount} />
+          <MetricCard label={pageCopy.metrics.openRequests} value={ops.openRequestCount} />
+          <MetricCard label={pageCopy.metrics.auditEvents} value={ops.auditLogCount} />
         </div>
       </section>
 
       <section className="mt-8 surface-card rounded-[2rem] border border-line bg-paper p-8">
         <div className="rounded-[1.5rem] bg-canvas p-5">
           <p className="text-xs uppercase tracking-[0.18em] text-muted">
-            Database location
+            {pageCopy.databaseLocation}
           </p>
           <p className="mt-2 break-all text-sm leading-7 text-foreground">
             {ops.databasePath}
@@ -61,8 +65,11 @@ export default async function AuditPage() {
               </div>
 
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <DetailItem label="Actor" value={entry.actorName} />
-                <DetailItem label="Role" value={getRoleLabel(entry.actorRole)} />
+                <DetailItem label={pageCopy.details.actor} value={entry.actorName} />
+                <DetailItem
+                  label={pageCopy.details.role}
+                  value={translateRoleLabel(entry.actorRole, preferences.language)}
+                />
               </div>
             </article>
           ))}
