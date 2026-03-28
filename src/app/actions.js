@@ -8,20 +8,48 @@ import {
   getUserLandingPage,
   requireCurrentUser,
 } from "@/lib/auth";
+import {
+  createUserEntry,
+  findUserById,
+  setUserPasswordEntry,
+  toggleUserActiveEntry,
+  updateUserEntry,
+} from "@/lib/auth-store";
 import { createSession, destroySession } from "@/lib/session";
 import {
   addHouseholdNoteEntry,
   addVolunteerTaskNoteEntry,
+  declineVolunteerTaskEntry,
   assignRequestVolunteerEntry,
   closeCareRequestEntry,
   completeVolunteerTaskEntry,
   consumeRateLimit,
   createCareRequestEntry,
   escalateRequestToPastorEntry,
+  getMemberRequestStatusByTrackingCode,
   recordAuditLog,
   updateHouseholdSnapshotEntry,
   acceptVolunteerTaskEntry,
 } from "@/lib/care-store";
+import {
+  createNotifications,
+  markAllNotificationsReadEntry,
+  markNotificationReadEntry,
+} from "@/lib/notifications-store";
+import {
+  isValidEmailAddress,
+  sendEmailToAddress,
+  sendEmailToRoles,
+  sendEmailToVolunteer,
+} from "@/lib/email-service";
+import {
+  createMinistryTeamEntry,
+  createRecoveryRequestEntry,
+  getChurchSettings,
+  resolveRecoveryRequestEntry,
+  updateChurchSettingsEntry,
+  updateMinistryTeamEntry,
+} from "@/lib/organization-store";
 
 function getString(formData, key) {
   const value = formData.get(key);
@@ -30,6 +58,92 @@ function getString(formData, key) {
 
 function getBoolean(formData, key) {
   return formData.get(key) === "on";
+}
+
+function splitList(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function buildPathWithParams(path, values = {}) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value));
+    }
+  }
+
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+function redirectWithNotice(path, notice, values = {}) {
+  redirect(buildPathWithParams(path, { ...values, notice }));
+}
+
+function redirectWithError(path, error, values = {}) {
+  redirect(buildPathWithParams(path, { ...values, error }));
+}
+
+function getActionErrorMessage(error, fallback) {
+  const message = error instanceof Error ? error.message : "";
+
+  if (message.includes("UNIQUE constraint failed: users.email")) {
+    return "That email address is already tied to another account.";
+  }
+
+  if (message.includes("UNIQUE constraint failed: teams.name")) {
+    return "A ministry team with that name already exists.";
+  }
+
+  if (message.includes("UNIQUE constraint failed: teams.lane")) {
+    return "That lane name is already being used by another team.";
+  }
+
+  return message || fallback;
+}
+
+function buildHouseholdHref(householdSlug) {
+  return householdSlug ? `/households/${householdSlug}` : "/";
+}
+
+function buildMemberStatusPath(trackingCode) {
+  return trackingCode
+    ? `/requests/status?code=${encodeURIComponent(trackingCode)}`
+    : "/requests/status";
+}
+
+function notifyRoles(roles, input) {
+  createNotifications({
+    roles,
+    ...input,
+  });
+}
+
+function notifyVolunteer(volunteerName, input) {
+  createNotifications({
+    volunteerName,
+    ...input,
+  });
+}
+
+async function emailRoles(roles, templateKey, context, options = {}) {
+  await sendEmailToRoles(roles, templateKey, context, options);
+}
+
+async function emailVolunteer(volunteerName, templateKey, context, options = {}) {
+  await sendEmailToVolunteer(volunteerName, templateKey, context, options);
+}
+
+async function emailAddress(email, templateKey, context, options = {}) {
+  await sendEmailToAddress(email, templateKey, context, options);
 }
 
 function buildVolunteerRedirect(volunteerName, tab = "assigned") {
@@ -92,11 +206,18 @@ function resolveResponseWindow(windowValue) {
 
 function revalidateCarePaths(householdSlug = "") {
   revalidatePath("/");
+  revalidatePath("/teams");
+  revalidatePath("/admin/users");
+  revalidatePath("/reports");
+  revalidatePath("/settings");
+  revalidatePath("/notifications");
   revalidatePath("/leader");
   revalidatePath("/households");
   revalidatePath("/volunteer");
   revalidatePath("/audit");
   revalidatePath("/requests/new");
+  revalidatePath("/requests/status");
+  revalidatePath("/account-recovery");
 
   if (householdSlug) {
     revalidatePath(`/households/${householdSlug}`);
@@ -126,6 +247,29 @@ async function getRequestFingerprint() {
 
 function resolveVolunteerIdentity(user) {
   return user.volunteerName || user.name;
+}
+
+function canManageRole(actorRole, role) {
+  if (actorRole === "owner") {
+    return true;
+  }
+
+  if (actorRole === "pastor") {
+    return ["leader", "volunteer"].includes(role);
+  }
+
+  return false;
+}
+
+function assertUserManagement(actor, targetUser, nextRole = targetUser?.role) {
+  const currentRole = targetUser?.role || nextRole;
+  if (!canManageRole(actor.role, currentRole) || !canManageRole(actor.role, nextRole)) {
+    throw new Error("You do not have permission to manage that account.");
+  }
+
+  if (targetUser?.id === actor.id && nextRole !== actor.role) {
+    throw new Error("You cannot change your own role from this screen.");
+  }
 }
 
 export async function login(prevState, formData) {
@@ -196,6 +340,8 @@ export async function createCareRequest(prevState, formData) {
   const markSensitive = getBoolean(formData, "markSensitive");
   const allowContact = getBoolean(formData, "allowContact");
   const submittedBy = getString(formData, "submittedBy");
+  const rawContactEmail = normalizeEmail(getString(formData, "contactEmail"));
+  const contactEmail = allowContact ? rawContactEmail : "";
   const preferredContact = getString(formData, "preferredContact");
   const summary = getString(formData, "summary");
   const need = getString(formData, "need");
@@ -215,12 +361,21 @@ export async function createCareRequest(prevState, formData) {
     keepNamePrivate,
     markSensitive,
     allowContact,
+    contactEmail: rawContactEmail,
   };
+  const settings = getChurchSettings();
+  const confirmationMessage =
+    settings?.intakeConfirmationText ||
+    "Your request has been received. A pastor or assigned care leader will review it and follow up using the contact method you provided.";
 
   const errors = {};
 
   if (!need) {
     errors.need = "Describe the kind of care that would help most right now.";
+  }
+
+  if (allowContact && rawContactEmail && !isValidEmailAddress(rawContactEmail)) {
+    errors.contactEmail = "Enter a valid email address for updates or leave it blank.";
   }
 
   if (Object.keys(errors).length > 0) {
@@ -234,11 +389,11 @@ export async function createCareRequest(prevState, formData) {
 
   if (honeypot) {
     return {
-      message:
-        "Your request has been received. A pastor or assigned care leader will review it and follow up using the contact method you provided.",
+      message: confirmationMessage,
       errors: {},
       values: {},
       submitted: true,
+      trackingCode: "",
     };
   }
 
@@ -261,13 +416,15 @@ export async function createCareRequest(prevState, formData) {
     `Private care request ${anonymousSuffix}`;
   const safePreferredContact =
     preferredContact ||
+    (contactEmail ? `Email ${contactEmail}` : "") ||
     (allowContact ? "Follow up through church office" : "No direct contact requested");
   const safeSummary =
     summary || "Member asked for support and chose to share more detail later.";
 
-  const householdSlug = await createCareRequestEntry({
+  const { householdSlug, trackingCode } = await createCareRequestEntry({
     householdName: safeHouseholdName,
     submittedBy: safeSubmittedBy,
+    contactEmail,
     preferredContact: safePreferredContact,
     requestFor: values.requestFor,
     need,
@@ -288,25 +445,79 @@ export async function createCareRequest(prevState, formData) {
     actorName: "Public intake",
     actorRole: "public",
     action: "care.request_created",
-    targetType: "household",
-    targetId: householdSlug,
+    targetType: "request",
+    targetId: trackingCode,
     summary: `New care request submitted for ${safeHouseholdName}.`,
     metadata: {
+      householdSlug,
+      trackingCode,
       privacyLevel,
       allowContact,
       keepNamePrivate,
       markSensitive,
     },
   });
+  notifyRoles(["pastor", "owner"], {
+    kind: "care-request",
+    title: "New care request submitted",
+    body: `${safeHouseholdName} submitted a ${need.toLowerCase()} request. Tracking code ${trackingCode}.`,
+    href: buildHouseholdHref(householdSlug),
+    metadata: {
+      trackingCode,
+      householdSlug,
+      need,
+    },
+  });
+  await emailRoles(
+    ["pastor", "owner"],
+    "care-request-alert",
+    {
+      householdName: safeHouseholdName,
+      need,
+      summary: safeSummary,
+      trackingCode,
+      householdPath: buildHouseholdHref(householdSlug),
+    },
+    {
+      metadata: {
+        trackingCode,
+        householdSlug,
+      },
+    }
+  );
+
+  if (allowContact && contactEmail) {
+    await emailAddress(
+      contactEmail,
+      "request-received",
+      {
+        trackingCode,
+        need,
+        allowContact,
+        privacyLabel:
+          privacyLevel === "pastors-only"
+            ? "Visible only to pastor until they choose the next safe handoff."
+            : "Visible to pastor and assigned care leads.",
+        statusPath: buildMemberStatusPath(trackingCode),
+      },
+      {
+        recipientName: safeSubmittedBy,
+        metadata: {
+          trackingCode,
+          householdSlug,
+        },
+      }
+    );
+  }
 
   revalidateCarePaths(householdSlug);
 
   return {
-    message:
-      "Your request has been received. A pastor or assigned care leader will review it and follow up using the contact method you provided.",
+    message: confirmationMessage,
     errors: {},
     values: {},
     submitted: true,
+    trackingCode,
   };
 }
 
@@ -381,12 +592,19 @@ export async function closeCareRequest(requestId, householdSlug) {
 export async function assignRequestVolunteer(requestId, householdSlug, formData) {
   const user = await requireCurrentUser(["leader", "pastor", "owner"]);
   const volunteerName = getString(formData, "volunteerName");
+  const householdName = getString(formData, "householdName") || "Care household";
+  const need = getString(formData, "need") || "Care follow-up";
+  const volunteerBrief =
+    getString(formData, "volunteerBrief") ||
+    "Follow the leader brief and route questions back to the care lead.";
+  const laneOwner =
+    getString(formData, "laneOwner") || user.lane || "Mercy & welfare lane";
 
   await assignRequestVolunteerEntry(requestId, householdSlug, {
     volunteerName,
-    volunteerBrief: getString(formData, "volunteerBrief"),
+    volunteerBrief,
     assignedBy: user.name,
-    laneOwner: getString(formData, "laneOwner") || user.lane || "Mercy & welfare lane",
+    laneOwner,
   });
 
   recordAuditLog({
@@ -399,6 +617,35 @@ export async function assignRequestVolunteer(requestId, householdSlug, formData)
       volunteerName,
     },
   });
+  notifyVolunteer(volunteerName, {
+    kind: "task",
+    title: "New care task assigned",
+    body: `${user.name} routed a care follow-up to you in ${laneOwner}.`,
+    href: buildVolunteerRedirect(volunteerName),
+    metadata: {
+      requestId,
+      householdSlug,
+      volunteerBrief,
+    },
+  });
+  await emailVolunteer(
+    volunteerName,
+    "task-assigned",
+    {
+      householdName,
+      need,
+      laneOwner,
+      assignedBy: user.name,
+      volunteerBrief,
+      volunteerPath: buildVolunteerRedirect(volunteerName),
+    },
+    {
+      metadata: {
+        requestId,
+        householdSlug,
+      },
+    }
+  );
 
   revalidateCarePaths(householdSlug);
   redirect("/leader");
@@ -407,6 +654,8 @@ export async function assignRequestVolunteer(requestId, householdSlug, formData)
 export async function escalateRequestToPastor(requestId, householdSlug, formData) {
   const user = await requireCurrentUser(["leader", "pastor", "owner"]);
   const reason = getString(formData, "reason");
+  const householdName = getString(formData, "householdName") || "Care household";
+  const need = getString(formData, "need") || "Care follow-up";
 
   await escalateRequestToPastorEntry(requestId, householdSlug, {
     reason,
@@ -424,6 +673,34 @@ export async function escalateRequestToPastor(requestId, householdSlug, formData
       reason,
     },
   });
+  notifyRoles(["pastor", "owner"], {
+    kind: "escalation",
+    title: "Request escalated to pastor",
+    body: `${user.name} escalated a request for renewed pastoral review. ${reason}`,
+    href: buildHouseholdHref(householdSlug),
+    metadata: {
+      requestId,
+      householdSlug,
+      reason,
+    },
+  });
+  await emailRoles(
+    ["pastor", "owner"],
+    "request-escalated",
+    {
+      householdName,
+      need,
+      reason,
+      escalatedBy: user.name,
+      householdPath: buildHouseholdHref(householdSlug),
+    },
+    {
+      metadata: {
+        requestId,
+        householdSlug,
+      },
+    }
+  );
 
   revalidateCarePaths(householdSlug);
   redirect("/leader");
@@ -446,6 +723,68 @@ export async function acceptVolunteerTask(requestId, householdSlug, volunteerNam
     targetId: requestId,
     summary: `${user.name} accepted a volunteer task.`,
   });
+  notifyRoles(["leader", "pastor", "owner"], {
+    kind: "task",
+    title: "Volunteer accepted a task",
+    body: `${user.name} accepted an assigned care follow-up.`,
+    href: buildHouseholdHref(householdSlug),
+    metadata: {
+      requestId,
+      householdSlug,
+      volunteerName: actorVolunteerName,
+    },
+  });
+
+  revalidateCarePaths(householdSlug);
+  redirect(buildVolunteerRedirect(actorVolunteerName));
+}
+
+export async function declineVolunteerTask(
+  requestId,
+  householdSlug,
+  volunteerName,
+  formData
+) {
+  const user = await requireCurrentUser(["volunteer"]);
+  const actorVolunteerName = resolveVolunteerIdentity(user);
+  const reason = getString(formData, "reason");
+
+  if (!reason) {
+    redirect(buildVolunteerRedirect(actorVolunteerName));
+  }
+
+  if (volunteerName !== actorVolunteerName) {
+    redirect(buildVolunteerRedirect(actorVolunteerName));
+  }
+
+  await declineVolunteerTaskEntry(requestId, householdSlug, {
+    volunteerName: actorVolunteerName,
+    reason,
+    laneOwner: user.lane || "Ministry leader",
+  });
+
+  recordAuditLog({
+    ...buildActorLog(user),
+    action: "care.volunteer_task_declined",
+    targetType: "request",
+    targetId: requestId,
+    summary: `${user.name} declined a volunteer task for re-routing.`,
+    metadata: {
+      reason,
+    },
+  });
+  notifyRoles(["leader", "pastor", "owner"], {
+    kind: "task",
+    title: "Volunteer declined a task",
+    body: `${user.name} asked for a care task to be re-routed. Reason: ${reason}`,
+    href: buildHouseholdHref(householdSlug),
+    metadata: {
+      requestId,
+      householdSlug,
+      volunteerName: actorVolunteerName,
+      reason,
+    },
+  });
 
   revalidateCarePaths(householdSlug);
   redirect(buildVolunteerRedirect(actorVolunteerName));
@@ -467,6 +806,17 @@ export async function completeVolunteerTask(requestId, householdSlug, volunteerN
     targetType: "request",
     targetId: requestId,
     summary: `${user.name} completed a volunteer task.`,
+  });
+  notifyRoles(["leader", "pastor", "owner"], {
+    kind: "task",
+    title: "Volunteer completed a task",
+    body: `${user.name} marked a care follow-up complete.`,
+    href: buildHouseholdHref(householdSlug),
+    metadata: {
+      requestId,
+      householdSlug,
+      volunteerName: actorVolunteerName,
+    },
   });
 
   revalidateCarePaths(householdSlug);
@@ -503,7 +853,636 @@ export async function addVolunteerTaskNote(
     targetId: requestId,
     summary: `${user.name} added a volunteer note.`,
   });
+  notifyRoles(["leader", "pastor", "owner"], {
+    kind: "task-note",
+    title: "Volunteer added a note",
+    body: `${user.name} added a new note to a care follow-up.`,
+    href: buildHouseholdHref(householdSlug),
+    metadata: {
+      requestId,
+      householdSlug,
+      volunteerName: actorVolunteerName,
+    },
+  });
 
   revalidateCarePaths(householdSlug);
   redirect(buildVolunteerRedirect(actorVolunteerName));
+}
+
+export async function lookupRequestStatus(prevState, formData) {
+  void prevState;
+
+  const trackingCode = getString(formData, "trackingCode").toUpperCase();
+
+  if (!trackingCode) {
+    return {
+      message: "Enter the tracking code from your request confirmation.",
+      errors: {
+        trackingCode: "Tracking code is required.",
+      },
+      lookupCode: "",
+      result: null,
+    };
+  }
+
+  const result = await getMemberRequestStatusByTrackingCode(trackingCode);
+
+  if (!result) {
+    return {
+      message:
+        "We could not find a care request with that code yet. Check the code and try again.",
+      errors: {
+        trackingCode: "No request matched that code.",
+      },
+      lookupCode: trackingCode,
+      result: null,
+    };
+  }
+
+  return {
+    message: "We found your request.",
+    errors: {},
+    lookupCode: trackingCode,
+    result,
+  };
+}
+
+export async function requestAccountRecovery(prevState, formData) {
+  void prevState;
+
+  const email = normalizeEmail(getString(formData, "email"));
+  const requesterName = getString(formData, "requesterName");
+  const note = getString(formData, "note");
+  const honeypot = getString(formData, "website");
+  const errors = {};
+
+  if (!email) {
+    errors.email = "Enter the email address connected to your care account.";
+  } else if (!isValidEmailAddress(email)) {
+    errors.email = "Enter a valid email address.";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return {
+      message: "Please correct the highlighted fields and try again.",
+      errors,
+      values: {
+        email,
+        requesterName,
+        note,
+      },
+      submitted: false,
+    };
+  }
+
+  if (honeypot) {
+    return {
+      message:
+        "We have logged your request. A pastor or care admin will review it and follow up safely.",
+      errors: {},
+      values: {},
+      submitted: true,
+    };
+  }
+
+  const rateLimit = consumeRateLimit(`recovery:${await getRequestFingerprint()}`);
+  if (!rateLimit.allowed) {
+    return {
+      message:
+        "We have received several recovery requests from this connection in a short window. Please wait a bit and try again.",
+      errors: {},
+      values: {
+        email,
+        requesterName,
+        note,
+      },
+      submitted: false,
+    };
+  }
+
+  createRecoveryRequestEntry({
+    email,
+    requesterName,
+    note,
+  });
+
+  recordAuditLog({
+    actorName: requesterName || "Public recovery form",
+    actorRole: "public",
+    action: "auth.recovery_requested",
+    targetType: "recovery_request",
+    targetId: email,
+    summary: `Password recovery requested for ${email}.`,
+  });
+  notifyRoles(["pastor", "owner"], {
+    kind: "recovery-request",
+    title: "Account recovery requested",
+    body: `${requesterName || "A team member"} requested help recovering access for ${email}.`,
+    href: "/admin/users",
+    metadata: {
+      email,
+    },
+  });
+  await emailRoles(
+    ["pastor", "owner"],
+    "recovery-request-alert",
+    {
+      email,
+      requesterName,
+      note,
+    },
+    {
+      metadata: {
+        email,
+      },
+    }
+  );
+  await emailAddress(
+    email,
+    "recovery-request-received",
+    {
+      email,
+    },
+    {
+      recipientName: requesterName,
+      metadata: {
+        email,
+      },
+    }
+  );
+
+  revalidateCarePaths();
+
+  return {
+    message:
+      "We have logged your request. A pastor or care admin will review it and follow up safely.",
+    errors: {},
+    values: {},
+    submitted: true,
+  };
+}
+
+export async function createUserAccount(formData) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const name = getString(formData, "name");
+  const email = normalizeEmail(getString(formData, "email"));
+  const role = getString(formData, "role");
+  const lane = getString(formData, "lane");
+  const password = getString(formData, "password");
+  const volunteerName = getString(formData, "volunteerName") || name;
+  const active = getBoolean(formData, "active");
+
+  if (!name || !email || !role || !password) {
+    redirectWithError("/admin/users", "Complete the required user fields first.");
+  }
+
+  if (!isValidEmailAddress(email)) {
+    redirectWithError("/admin/users", "Enter a valid email address for the new account.");
+  }
+
+  if (password.length < 8) {
+    redirectWithError("/admin/users", "Passwords should be at least 8 characters.");
+  }
+
+  if (!["owner", "pastor", "leader", "volunteer"].includes(role)) {
+    redirectWithError("/admin/users", "Select a valid role for the new account.");
+  }
+
+  try {
+    assertUserManagement(actor, null, role);
+
+    const createdUserId = createUserEntry({
+      name,
+      email,
+      role,
+      lane,
+      password,
+      volunteerName: role === "volunteer" ? volunteerName : "",
+      active,
+    });
+
+    recordAuditLog({
+      ...buildActorLog(actor),
+      action: "admin.user_created",
+      targetType: "user",
+      targetId: email,
+      summary: `${actor.name} created a ${role} account for ${name}.`,
+    });
+
+    createNotifications({
+      userIds: [createdUserId],
+      kind: "account",
+      title: "Your care account is ready",
+      body: `${actor.name} created your ${role} account. Sign in with the temporary password they shared and update it after first use.`,
+      href: getUserLandingPage({ role }),
+      metadata: {
+        email,
+        role,
+      },
+    });
+    await emailAddress(
+      email,
+      "account-created",
+      {
+        email,
+        role,
+        createdBy: actor.name,
+      },
+      {
+        recipientName: name,
+        metadata: {
+          role,
+        },
+      }
+    );
+  } catch (error) {
+    redirectWithError(
+      "/admin/users",
+      getActionErrorMessage(error, "We could not create that user account.")
+    );
+  }
+
+  revalidateCarePaths();
+  redirectWithNotice("/admin/users", `Created a new ${role} account for ${name}.`);
+}
+
+export async function updateUserAccess(userId, formData) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const targetUser = findUserById(userId);
+
+  if (!targetUser) {
+    redirectWithError("/admin/users", "That account no longer exists.");
+  }
+
+  const name = getString(formData, "name");
+  const email = normalizeEmail(getString(formData, "email"));
+  const role = getString(formData, "role");
+  const lane = getString(formData, "lane");
+  const volunteerName = getString(formData, "volunteerName") || name;
+  const active = getBoolean(formData, "active");
+
+  if (!name || !email || !role) {
+    redirectWithError("/admin/users", "Name, email, and role are required.");
+  }
+
+  if (!["owner", "pastor", "leader", "volunteer"].includes(role)) {
+    redirectWithError("/admin/users", "Select a valid role for that account.");
+  }
+
+  if (targetUser.id === actor.id && !active) {
+    redirectWithError("/admin/users", "You cannot deactivate your own account.");
+  }
+
+  try {
+    assertUserManagement(actor, targetUser, role);
+
+    updateUserEntry(userId, {
+      name,
+      email,
+      role,
+      lane,
+      volunteerName: role === "volunteer" ? volunteerName : "",
+      active,
+    });
+
+    recordAuditLog({
+      ...buildActorLog(actor),
+      action: "admin.user_updated",
+      targetType: "user",
+      targetId: userId,
+      summary: `${actor.name} updated access for ${name}.`,
+      metadata: {
+        role,
+        active,
+      },
+    });
+  } catch (error) {
+    redirectWithError(
+      "/admin/users",
+      getActionErrorMessage(error, "We could not update that account.")
+    );
+  }
+
+  revalidateCarePaths();
+  redirectWithNotice("/admin/users", `Updated access for ${name}.`);
+}
+
+export async function resetUserPassword(userId, formData) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const targetUser = findUserById(userId);
+
+  if (!targetUser) {
+    redirectWithError("/admin/users", "That account no longer exists.");
+  }
+
+  const password = getString(formData, "password");
+  const recoveryRequestId = getString(formData, "recoveryRequestId");
+  const resolutionNote = getString(formData, "resolutionNote");
+
+  if (!password) {
+    redirectWithError("/admin/users", "Enter a new password before you reset it.");
+  }
+
+  if (password.length < 8) {
+    redirectWithError("/admin/users", "Passwords should be at least 8 characters.");
+  }
+
+  try {
+    assertUserManagement(actor, targetUser, targetUser.role);
+    setUserPasswordEntry(userId, password);
+
+    if (recoveryRequestId) {
+      resolveRecoveryRequestEntry(recoveryRequestId, {
+        status: "issued",
+        handledBy: actor.name,
+        resolutionNote:
+          resolutionNote || `Password reset issued for ${targetUser.email}.`,
+      });
+    }
+
+    recordAuditLog({
+      ...buildActorLog(actor),
+      action: "admin.user_password_reset",
+      targetType: "user",
+      targetId: userId,
+      summary: `${actor.name} reset the password for ${targetUser.name}.`,
+      metadata: {
+        recoveryRequestId,
+      },
+    });
+
+    createNotifications({
+      userIds: [targetUser.id],
+      kind: "account",
+      title: "Your care password was reset",
+      body: `${actor.name} issued a new password for your care account. Use the password they shared with you the next time you sign in.`,
+      href: getUserLandingPage(targetUser),
+      metadata: {
+        recoveryRequestId,
+      },
+    });
+    await emailAddress(
+      targetUser.email,
+      "password-reset",
+      {
+        email: targetUser.email,
+        handledBy: actor.name,
+      },
+      {
+        recipientName: targetUser.name,
+        metadata: {
+          recoveryRequestId,
+        },
+      }
+    );
+  } catch (error) {
+    redirectWithError(
+      "/admin/users",
+      getActionErrorMessage(error, "We could not reset that password.")
+    );
+  }
+
+  revalidateCarePaths();
+  redirectWithNotice("/admin/users", `Password updated for ${targetUser.name}.`);
+}
+
+export async function markNotificationRead(notificationId, href = "") {
+  const user = await requireCurrentUser(["volunteer", "leader", "pastor", "owner"]);
+
+  markNotificationReadEntry(notificationId, user.id);
+  revalidateCarePaths();
+
+  redirect(href || "/notifications");
+}
+
+export async function markAllNotificationsRead() {
+  const user = await requireCurrentUser(["volunteer", "leader", "pastor", "owner"]);
+
+  markAllNotificationsReadEntry(user.id);
+  revalidateCarePaths();
+
+  redirect("/notifications");
+}
+
+export async function resolveRecoveryRequest(requestId, formData) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const status = getString(formData, "status") || "resolved";
+  const resolutionNote = getString(formData, "resolutionNote");
+
+  try {
+    resolveRecoveryRequestEntry(requestId, {
+      status,
+      handledBy: actor.name,
+      resolutionNote,
+    });
+
+    recordAuditLog({
+      ...buildActorLog(actor),
+      action: "admin.recovery_request_resolved",
+      targetType: "recovery_request",
+      targetId: requestId,
+      summary: `${actor.name} marked a recovery request as ${status}.`,
+    });
+  } catch (error) {
+    redirectWithError(
+      "/admin/users",
+      getActionErrorMessage(error, "We could not update that recovery request.")
+    );
+  }
+
+  revalidateCarePaths();
+  redirectWithNotice("/admin/users", "Recovery request updated.");
+}
+
+export async function createMinistryTeam(formData) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const name = getString(formData, "name");
+  const lane = getString(formData, "lane");
+  const description = getString(formData, "description");
+  const leadName = getString(formData, "leadName") || actor.name;
+  const contactEmail = normalizeEmail(getString(formData, "contactEmail"));
+  const active = getBoolean(formData, "active");
+
+  if (!name || !lane || !description) {
+    redirectWithError("/teams", "Name, lane, and description are required.");
+  }
+
+  try {
+    createMinistryTeamEntry({
+      name,
+      lane,
+      description,
+      leadName,
+      contactEmail,
+      active,
+      capabilities: splitList(getString(formData, "capabilities")),
+    });
+
+    recordAuditLog({
+      ...buildActorLog(actor),
+      action: "admin.team_created",
+      targetType: "team",
+      targetId: lane,
+      summary: `${actor.name} created the ${name}.`,
+    });
+  } catch (error) {
+    redirectWithError(
+      "/teams",
+      getActionErrorMessage(error, "We could not create that ministry team.")
+    );
+  }
+
+  revalidateCarePaths();
+  redirectWithNotice("/teams", `Created the ${name}.`);
+}
+
+export async function updateMinistryTeam(teamId, formData) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const name = getString(formData, "name");
+  const lane = getString(formData, "lane");
+  const description = getString(formData, "description");
+  const leadName = getString(formData, "leadName");
+  const contactEmail = normalizeEmail(getString(formData, "contactEmail"));
+  const active = getBoolean(formData, "active");
+
+  if (!name || !lane || !description || !leadName) {
+    redirectWithError("/teams", "Name, lane, lead, and description are required.");
+  }
+
+  try {
+    updateMinistryTeamEntry(teamId, {
+      name,
+      lane,
+      description,
+      leadName,
+      contactEmail,
+      active,
+      capabilities: splitList(getString(formData, "capabilities")),
+    });
+
+    recordAuditLog({
+      ...buildActorLog(actor),
+      action: "admin.team_updated",
+      targetType: "team",
+      targetId: teamId,
+      summary: `${actor.name} updated the ${name}.`,
+    });
+  } catch (error) {
+    redirectWithError(
+      "/teams",
+      getActionErrorMessage(error, "We could not update that ministry team.")
+    );
+  }
+
+  revalidateCarePaths();
+  redirectWithNotice("/teams", `Updated the ${name}.`);
+}
+
+export async function saveChurchSettings(formData) {
+  const actor = await requireCurrentUser(["owner"]);
+  const supportEmail = normalizeEmail(getString(formData, "supportEmail"));
+  const billingContactEmail = normalizeEmail(getString(formData, "billingContactEmail"));
+  const emailFromAddress = normalizeEmail(getString(formData, "emailFromAddress"));
+  const emailReplyTo = normalizeEmail(getString(formData, "emailReplyTo"));
+
+  if (supportEmail && !isValidEmailAddress(supportEmail)) {
+    redirectWithError("/settings", "Enter a valid support email address.");
+  }
+
+  if (billingContactEmail && !isValidEmailAddress(billingContactEmail)) {
+    redirectWithError("/settings", "Enter a valid billing contact email address.");
+  }
+
+  if (emailFromAddress && !isValidEmailAddress(emailFromAddress)) {
+    redirectWithError("/settings", "Enter a valid sender email address.");
+  }
+
+  if (emailReplyTo && !isValidEmailAddress(emailReplyTo)) {
+    redirectWithError("/settings", "Enter a valid reply-to email address.");
+  }
+
+  try {
+    updateChurchSettingsEntry({
+      churchName: getString(formData, "churchName"),
+      campusName: getString(formData, "campusName"),
+      supportEmail,
+      supportPhone: getString(formData, "supportPhone"),
+      timezone: getString(formData, "timezone"),
+      intakeConfirmationText: getString(formData, "intakeConfirmationText"),
+      emergencyBanner: getString(formData, "emergencyBanner"),
+      planName: getString(formData, "planName"),
+      billingContactEmail,
+      monthlySeatAllowance: getString(formData, "monthlySeatAllowance"),
+      nextRenewalDate: isValidDateTime(getString(formData, "nextRenewalDate"))
+        ? new Date(getString(formData, "nextRenewalDate")).toISOString()
+        : "",
+      backupExpectation: getString(formData, "backupExpectation"),
+      emailDeliveryMode: getString(formData, "emailDeliveryMode"),
+      emailProvider: getString(formData, "emailProvider"),
+      emailFromName: getString(formData, "emailFromName"),
+      emailFromAddress,
+      emailReplyTo,
+      emailSubjectPrefix: getString(formData, "emailSubjectPrefix"),
+      notificationChannels: splitList(getString(formData, "notificationChannels")),
+    });
+
+    recordAuditLog({
+      ...buildActorLog(actor),
+      action: "admin.settings_updated",
+      targetType: "church_settings",
+      targetId: "primary",
+      summary: `${actor.name} updated church settings, billing, and email preferences.`,
+    });
+  } catch (error) {
+    redirectWithError(
+      "/settings",
+      getActionErrorMessage(error, "We could not save the church settings.")
+    );
+  }
+
+  revalidateCarePaths();
+  redirectWithNotice("/settings", "Church settings updated.");
+}
+
+export async function sendTestEmail(formData) {
+  const actor = await requireCurrentUser(["owner"]);
+  const email = normalizeEmail(getString(formData, "email")) || actor.email;
+  const note = getString(formData, "note");
+  const settings = getChurchSettings();
+
+  if (!email || !isValidEmailAddress(email)) {
+    redirectWithError("/settings", "Enter a valid email address for the delivery test.");
+  }
+
+  await emailAddress(
+    email,
+    "test-email",
+    {
+      deliveryMode: settings?.emailDeliveryMode || "log-only",
+      provider: settings?.emailProvider || "resend",
+      note:
+        note ||
+        `${actor.name} triggered this test from the owner settings screen.`,
+    },
+    {
+      recipientName: actor.name,
+      metadata: {
+        requestedBy: actor.id,
+      },
+    }
+  );
+
+  recordAuditLog({
+    ...buildActorLog(actor),
+    action: "admin.email_test_sent",
+    targetType: "email_outbox",
+    targetId: email,
+    summary: `${actor.name} queued a delivery test email for ${email}.`,
+  });
+
+  revalidateCarePaths();
+  redirectWithNotice(
+    "/settings",
+    "Test email queued. Check the outbox panel below for the final delivery status."
+  );
 }

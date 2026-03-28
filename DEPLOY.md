@@ -12,6 +12,19 @@ Church Care OS now stores live care data in a SQLite database file. Every produc
 - Run `npm run db:init` once if you want to bootstrap the SQLite file before first traffic.
 - Move to a real database before attempting multi-instance scale.
 - Run scheduled backups and occasional restore drills.
+- If email is not configured yet, leave the app in `log-only` delivery mode and connect the provider later.
+
+Recommended production env vars:
+
+- `AUTH_SECRET`
+- `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`
+- `CARE_DB_PATH`
+- `HOSTNAME=0.0.0.0`
+- `PORT=3000`
+- `APP_BASE_URL`
+- `BACKUP_DIR` if you want backups outside the default data folder
+- `BACKUP_MAX_AGE_HOURS=26`
+- `RESEND_API_KEY` only when you are ready for live email
 
 ## Render
 
@@ -104,6 +117,23 @@ Suggested VPS flow:
 8. Install `ops/nginx.conf` into your Nginx sites config and replace `care.example.com`.
 9. Start the app with `systemctl enable --now church-care-os`.
 10. Enable the timers and add TLS with LetsEncrypt or your preferred certificate flow.
+
+## Operational validation
+
+After deployment, validate the host with these commands:
+
+```bash
+npm run db:backup
+npm run db:drill
+npm run ops:backup-freshness
+npm run ops:healthcheck
+```
+
+To test a restore manually:
+
+```bash
+npm run db:restore -- --from /absolute/path/to/backup.sqlite
+```
 
 ## Provider choice
 

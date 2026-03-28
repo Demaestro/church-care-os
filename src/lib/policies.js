@@ -13,7 +13,31 @@ export const protectedRouteRoles = {
   volunteer: ["volunteer", "leader", "pastor", "owner"],
   households: ["leader", "pastor", "owner"],
   audit: ["pastor", "owner"],
+  notifications: ["volunteer", "leader", "pastor", "owner"],
+  reports: ["pastor", "owner"],
+  teams: ["pastor", "owner"],
+  users: ["pastor", "owner"],
+  settings: ["owner"],
 };
+
+export const internalRoleOptions = [
+  {
+    value: "owner",
+    label: "Owner",
+  },
+  {
+    value: "pastor",
+    label: "Pastor",
+  },
+  {
+    value: "leader",
+    label: "Leader",
+  },
+  {
+    value: "volunteer",
+    label: "Volunteer",
+  },
+];
 
 export const intakeRateLimit = {
   maxAttempts: 5,

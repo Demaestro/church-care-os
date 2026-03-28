@@ -54,13 +54,14 @@ export function createUserEntry(input) {
   const db = getDatabase();
   const now = new Date().toISOString();
   const passwordHash = hashPassword(input.password);
+  const userId = randomUUID();
 
   db.prepare(`
     INSERT INTO users (
       id, name, email, role, password_hash, lane, volunteer_name, active, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    randomUUID(),
+    userId,
     input.name,
     input.email.trim().toLowerCase(),
     input.role,
@@ -70,6 +71,67 @@ export function createUserEntry(input) {
     input.active === false ? 0 : 1,
     now
   );
+
+  return userId;
+}
+
+export function updateUserEntry(userId, input) {
+  const existing = findUserById(userId);
+  if (!existing) {
+    throw new Error("User not found.");
+  }
+
+  getDatabase()
+    .prepare(`
+      UPDATE users
+      SET
+        name = ?,
+        email = ?,
+        role = ?,
+        lane = ?,
+        volunteer_name = ?,
+        active = ?
+      WHERE id = ?
+    `)
+    .run(
+      input.name ?? existing.name,
+      (input.email ?? existing.email).trim().toLowerCase(),
+      input.role ?? existing.role,
+      input.lane ?? existing.lane ?? null,
+      input.volunteerName ?? existing.volunteerName ?? null,
+      input.active === undefined ? (existing.active ? 1 : 0) : input.active ? 1 : 0,
+      userId
+    );
+}
+
+export function setUserPasswordEntry(userId, password) {
+  const existing = findUserById(userId);
+  if (!existing) {
+    throw new Error("User not found.");
+  }
+
+  getDatabase()
+    .prepare(`
+      UPDATE users
+      SET password_hash = ?
+      WHERE id = ?
+    `)
+    .run(hashPassword(password), userId);
+}
+
+export function toggleUserActiveEntry(userId, active) {
+  const existing = findUserById(userId);
+  if (!existing) {
+    throw new Error("User not found.");
+  }
+
+  getDatabase()
+    .prepare(`
+      UPDATE users
+      SET active = ?
+      WHERE id = ?
+    `)
+    .run(active ? 1 : 0, userId);
 }
 
 function mapUserRow(row) {

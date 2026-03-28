@@ -2,6 +2,7 @@ import Link from "next/link";
 import { VolunteerTaskBoard } from "@/components/volunteer-task-board";
 import { requireCurrentUser } from "@/lib/auth";
 import { getDashboardData } from "@/lib/care-store";
+import { listVolunteerRoster } from "@/lib/organization-store";
 import { leaderPreview, volunteerPreview } from "@/lib/role-previews";
 
 export const metadata = {
@@ -17,18 +18,39 @@ export default async function VolunteerPage({ searchParams }) {
     typeof params?.volunteer === "string" ? params.volunteer : "";
   const requestedTab = typeof params?.tab === "string" ? params.tab : "assigned";
   const { requests } = await getDashboardData();
-  const roster = leaderPreview.volunteers.map((volunteer) => {
-    const activeCount = requests.filter(
-      (request) =>
-        request.status === "Open" &&
-        request.assignedVolunteer?.name === volunteer.name
-    ).length;
+  const previewMap = new Map(
+    leaderPreview.volunteers.map((volunteer) => [volunteer.name, volunteer])
+  );
+  const liveRoster = listVolunteerRoster().map((volunteer) => {
+    const preview = previewMap.get(volunteer.name);
 
     return {
+      ...preview,
       ...volunteer,
-      activeCount,
+      role: volunteer.team || preview?.role || "Volunteer roster",
+      availability:
+        preview?.availability ||
+        (volunteer.active
+          ? "Available for routed care work in this lane."
+          : "Currently marked inactive in the internal roster."),
+      fit:
+        preview?.fit ||
+        (volunteer.lane
+          ? `Best fit: ${volunteer.lane}.`
+          : "General volunteer support coverage."),
     };
   });
+  const roster =
+    liveRoster.length > 0
+      ? liveRoster
+      : leaderPreview.volunteers.map((volunteer) => ({
+          ...volunteer,
+          activeCount: requests.filter(
+            (request) =>
+              request.status === "Open" &&
+              request.assignedVolunteer?.name === volunteer.name
+          ).length,
+        }));
   const forcedVolunteerName =
     user.role === "volunteer" ? user.volunteerName || user.name : "";
   const selectedVolunteer =
@@ -115,6 +137,7 @@ function mapRequestToTask(request, now) {
     badgeTone:
       bucket === "overdue" ? "high" : bucket === "dueToday" ? "watch" : "routine",
     canAccept: !accepted,
+    canDecline: !accepted,
     canComplete: true,
     canAddNote: true,
     accepted,
@@ -137,6 +160,7 @@ function mapRequestToCompletedTask(request) {
     badge: "Completed",
     badgeTone: "done",
     canAccept: false,
+    canDecline: false,
     canComplete: false,
     canAddNote: false,
     accepted: Boolean(request.assignedVolunteer?.acceptedAt),

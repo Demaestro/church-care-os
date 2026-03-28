@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireCurrentUser } from "@/lib/auth";
 import { APP_TIME_ZONE } from "@/lib/care-format";
 import { getDashboardData } from "@/lib/care-store";
+import { getChurchSettings } from "@/lib/organization-store";
 import { atRiskMembers } from "@/lib/role-previews";
 
 const metricToneClasses = {
@@ -25,6 +26,7 @@ const riskBarClasses = {
 
 export default async function Home() {
   const user = await requireCurrentUser(["pastor", "owner"]);
+  const settings = getChurchSettings();
   const { households, openRequests } = await getDashboardData();
   const now = new Date();
   const activeCases = openRequests.slice(0, 5).map((request) => ({
@@ -96,7 +98,7 @@ export default async function Home() {
             Good morning, {user.name}
           </p>
           <p className="mt-2 text-lg text-muted">
-            Grace Community Church - {dashboardDate}
+            {settings?.churchName || "Grace Community Church"} - {dashboardDate}
           </p>
         </div>
         <Link

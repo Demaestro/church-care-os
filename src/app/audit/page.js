@@ -1,5 +1,5 @@
 import { getRoleLabel, requireCurrentUser } from "@/lib/auth";
-import { listAuditLogs, getOperationsSnapshot } from "@/lib/care-store";
+import { getOperationsSnapshot, listAuditLogs } from "@/lib/care-store";
 
 export const metadata = {
   title: "Audit Log",
@@ -54,7 +54,7 @@ export default async function AuditPage() {
                     {entry.summary}
                   </p>
                   <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted">
-                    {entry.action} · {entry.targetType} · {entry.targetId}
+                    {entry.action} / {entry.targetType} / {entry.targetId}
                   </p>
                 </div>
                 <p className="text-sm text-muted">{entry.createdLabel}</p>

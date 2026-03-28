@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next*/
 /out/
 
 # production
@@ -44,5 +45,6 @@ next-env.d.ts
 # local state
 /backups
 /data/*.db
+/data/*.db-*
 /data/*.sqlite
 /data/backups/

@@ -2,6 +2,17 @@
 
 Church Care OS is a Next.js 16 care coordination app for pastors, ministry leaders, and volunteers. The app now runs on a local SQLite database at `data/care.db`, with automatic backup scripts, auth-protected internal routes, and a public member intake flow.
 
+Core product surfaces already included:
+
+- Pastor dashboard
+- Leader routing and volunteer assignment
+- Volunteer task workflow
+- Household timelines
+- Public care request intake
+- Request status lookup
+- Account recovery
+- Admin users, teams, reports, settings, audit trail, and notifications
+
 ## Runtime requirements
 
 - Node.js `20.9.0` or newer
@@ -88,6 +99,7 @@ Useful commands:
 ```bash
 npm run db:init
 npm run db:backup
+npm run db:restore -- --from /absolute/path/to/backup.sqlite
 npm run db:drill
 npm run ops:retention
 npm run ops:healthcheck
@@ -101,6 +113,15 @@ To create a production owner account:
 ```bash
 npm run auth:create-user -- --name "Church Owner" --email owner@example.com --password "StrongPass!2026" --role owner
 ```
+
+## Email delivery status
+
+The app already includes the in-app email system, templates, and outbox logging. By default it is safe to run in `log-only` mode until you connect a provider.
+
+- `log-only`: records outbound emails in the outbox but does not send them
+- `resend`: sends live email once `RESEND_API_KEY` and a verified sender domain are configured
+
+If you are not ready to connect live email yet, the app still works fully in `log-only` mode.
 
 ## Provider configs
 
@@ -135,4 +156,8 @@ Avoid Vercel or other ephemeral serverless targets for now.
 ```bash
 npm run lint
 npm run build
+npm run db:init
+npm run db:backup
+npm run db:drill
+npm run ops:backup-freshness
 ```

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/login-form";
 import { getCurrentUser, getRoleLabel, getUserLandingPage } from "@/lib/auth";
@@ -49,6 +50,20 @@ export default async function LoginPage() {
           </p>
           <div className="mt-6">
             <LoginForm />
+          </div>
+          <div className="mt-6 flex flex-wrap gap-4 text-sm text-muted">
+            <Link
+              href="/account-recovery"
+              className="font-medium text-foreground underline decoration-[rgba(34,28,22,0.18)] underline-offset-4"
+            >
+              Need account recovery?
+            </Link>
+            <Link
+              href="/requests/status"
+              className="font-medium text-foreground underline decoration-[rgba(34,28,22,0.18)] underline-offset-4"
+            >
+              Track a care request
+            </Link>
           </div>
         </article>
       </section>

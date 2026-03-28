@@ -5,6 +5,7 @@ import {
   acceptVolunteerTask,
   addVolunteerTaskNote,
   completeVolunteerTask,
+  declineVolunteerTask,
 } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -148,7 +149,13 @@ function TabButton({ label, active, onClick }) {
 }
 
 function TaskCard({ task, avatarClass }) {
-  const [showNoteForm, setShowNoteForm] = useState(false);
+  const [expandedPanel, setExpandedPanel] = useState("");
+  const showNoteForm = expandedPanel === "note";
+  const showDeclineForm = expandedPanel === "decline";
+
+  function togglePanel(panel) {
+    setExpandedPanel((current) => (current === panel ? "" : panel));
+  }
 
   return (
     <article className="surface-card rounded-[1.75rem] border border-line bg-paper p-6">
@@ -188,7 +195,7 @@ function TaskCard({ task, avatarClass }) {
       ) : null}
 
       {task.canAccept || task.canComplete || task.canAddNote ? (
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="mt-5 flex flex-wrap gap-3">
           {task.canAccept ? (
             <form
               action={acceptVolunteerTask.bind(
@@ -197,6 +204,7 @@ function TaskCard({ task, avatarClass }) {
                 task.householdSlug,
                 task.volunteerName
               )}
+              className="flex-1 min-w-[12rem]"
             >
               <SubmitButton
                 idleLabel="Accept task"
@@ -216,6 +224,7 @@ function TaskCard({ task, avatarClass }) {
                 task.householdSlug,
                 task.volunteerName
               )}
+              className="flex-1 min-w-[12rem]"
             >
               <SubmitButton
                 idleLabel="Mark complete"
@@ -223,21 +232,27 @@ function TaskCard({ task, avatarClass }) {
                 className="w-full rounded-[1rem] border border-line bg-paper px-4 py-4 text-xl font-medium text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
               />
             </form>
-          ) : (
-            <div />
-          )}
+          ) : null}
 
           {task.canAddNote ? (
             <button
               type="button"
-              onClick={() => setShowNoteForm((value) => !value)}
-              className="rounded-[1rem] border border-line bg-paper px-4 py-4 text-xl font-medium text-foreground transition hover:bg-[#f4ecde]"
+              onClick={() => togglePanel("note")}
+              className="min-w-[12rem] flex-1 rounded-[1rem] border border-line bg-paper px-4 py-4 text-xl font-medium text-foreground transition hover:bg-[#f4ecde]"
             >
               {showNoteForm ? "Hide note" : "Add note"}
             </button>
-          ) : (
-            <div />
-          )}
+          ) : null}
+
+          {task.canDecline ? (
+            <button
+              type="button"
+              onClick={() => togglePanel("decline")}
+              className="min-w-[12rem] flex-1 rounded-[1rem] border border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)] px-4 py-4 text-xl font-medium text-clay transition hover:bg-[rgba(184,101,76,0.14)]"
+            >
+              {showDeclineForm ? "Keep task" : "Decline task"}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -259,6 +274,7 @@ function TaskCard({ task, avatarClass }) {
               name="body"
               rows={3}
               placeholder="What happened, and what should the leader or pastor know next?"
+              required
               className="mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground outline-none transition focus:border-moss"
             />
           </label>
@@ -266,6 +282,36 @@ function TaskCard({ task, avatarClass }) {
             idleLabel="Save note"
             pendingLabel="Saving note..."
             className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
+          />
+        </form>
+      ) : null}
+
+      {showDeclineForm ? (
+        <form
+          action={declineVolunteerTask.bind(
+            null,
+            task.id,
+            task.householdSlug,
+            task.volunteerName
+          )}
+          className="mt-4 space-y-3 rounded-[1.25rem] border border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)] p-4"
+        >
+          <label className="block">
+            <span className="text-sm font-medium text-foreground">
+              Reason for re-routing
+            </span>
+            <textarea
+              name="reason"
+              rows={3}
+              required
+              placeholder="Share what changed so the leader can reassign this safely."
+              className="mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground outline-none transition focus:border-clay"
+            />
+          </label>
+          <SubmitButton
+            idleLabel="Send back for re-routing"
+            pendingLabel="Sending back..."
+            className="inline-flex items-center rounded-[1rem] border border-[rgba(184,101,76,0.18)] bg-paper px-4 py-3 text-sm font-semibold text-clay transition hover:bg-[#f8efe9] disabled:cursor-not-allowed disabled:opacity-70"
           />
         </form>
       ) : null}

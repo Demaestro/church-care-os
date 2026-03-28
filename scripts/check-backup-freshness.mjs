@@ -8,7 +8,10 @@ const maxAgeHours = Number(process.env.BACKUP_MAX_AGE_HOURS || 26);
 const entries = await readdir(backupDir, { withFileTypes: true }).catch(() => []);
 const files = entries
   .filter((entry) => entry.isFile() && entry.name.endsWith(".sqlite"))
-  .map((entry) => path.join(backupDir, entry.name));
+  .map((entry) => ({
+    filePath: path.join(backupDir, entry.name),
+    sortTimeMs: parseBackupTimestamp(entry.name),
+  }));
 
 if (files.length === 0) {
   console.error(`No backups found in ${backupDir}`);
@@ -16,15 +19,19 @@ if (files.length === 0) {
 }
 
 const stats = await Promise.all(
-  files.map(async (filePath) => ({
-    filePath,
-    stats: await stat(filePath),
+  files.map(async (file) => ({
+    filePath: file.filePath,
+    sortTimeMs: file.sortTimeMs,
+    stats: await stat(file.filePath),
   }))
 );
 const latest = stats.sort(
-  (first, second) => second.stats.mtimeMs - first.stats.mtimeMs
+  (first, second) =>
+    (second.sortTimeMs ?? second.stats.mtimeMs) -
+    (first.sortTimeMs ?? first.stats.mtimeMs)
 )[0];
-const ageHours = (Date.now() - latest.stats.mtimeMs) / (60 * 60 * 1000);
+const freshnessTimeMs = latest.sortTimeMs ?? latest.stats.mtimeMs;
+const ageHours = (Date.now() - freshnessTimeMs) / (60 * 60 * 1000);
 
 if (ageHours > maxAgeHours) {
   console.error(`Latest backup is ${ageHours.toFixed(1)} hours old: ${latest.filePath}`);
@@ -32,3 +39,19 @@ if (ageHours > maxAgeHours) {
 }
 
 console.log(`Latest backup is healthy: ${latest.filePath}`);
+
+function parseBackupTimestamp(fileName) {
+  const match = fileName.match(
+    /^care-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.sqlite$/
+  );
+  if (!match) {
+    return null;
+  }
+
+  const [, date, hours, minutes, seconds, millis] = match;
+  const parsed = Date.parse(
+    `${date}T${hours}:${minutes}:${seconds}.${millis}Z`
+  );
+
+  return Number.isNaN(parsed) ? null : parsed;
+}

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { createCareRequest } from "@/app/actions";
 import { intakeSupportOptions, intakeUrgencyOptions } from "@/lib/role-previews";
@@ -12,12 +13,14 @@ const initialState = {
     summary: "",
     responseWindow: "no-rush",
     submittedBy: "",
+    contactEmail: "",
     preferredContact: "",
     keepNamePrivate: false,
     markSensitive: true,
     allowContact: true,
   },
   submitted: false,
+  trackingCode: "",
 };
 
 export function RequestIntakeForm() {
@@ -38,6 +41,31 @@ export function RequestIntakeForm() {
         <p className="mt-4 max-w-2xl text-base leading-8 text-muted">
           {state.message}
         </p>
+        {state.trackingCode ? (
+          <div className="mt-6 space-y-4">
+            <div className="inline-flex rounded-full border border-[rgba(73,106,77,0.18)] bg-paper px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-moss">
+              Tracking code: {state.trackingCode}
+            </div>
+            <p className="max-w-2xl text-sm leading-7 text-muted">
+              Use this code any time you want to check the status of this request
+              without signing in.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href={`/requests/status?code=${encodeURIComponent(state.trackingCode)}`}
+                className="inline-flex items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
+              >
+                Track this request
+              </Link>
+              <Link
+                href="/requests/new"
+                className="inline-flex items-center justify-center rounded-[1rem] border border-[rgba(34,28,22,0.08)] bg-transparent px-5 py-3 text-sm font-semibold text-muted transition hover:bg-paper hover:text-foreground"
+              >
+                Submit another request
+              </Link>
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -99,13 +127,21 @@ export function RequestIntakeForm() {
         />
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Field
           label="Your name (optional)"
           name="submittedBy"
           placeholder="Leave blank if you want a pastor to review first"
           defaultValue={state.values.submittedBy}
           error={state.errors.submittedBy}
+        />
+        <Field
+          label="Email for updates (optional, only if contact is allowed)"
+          name="contactEmail"
+          type="email"
+          placeholder="you@example.com"
+          defaultValue={state.values.contactEmail}
+          error={state.errors.contactEmail}
         />
         <Field
           label="Best contact method (optional)"
@@ -185,6 +221,7 @@ function Field({
   defaultValue,
   error,
   multiline = false,
+  type = "text",
 }) {
   const classes =
     "mt-2 w-full rounded-[1.15rem] border border-line bg-paper px-4 py-4 text-base text-foreground outline-none transition placeholder:text-[#8b847d] focus:border-moss";
@@ -202,7 +239,7 @@ function Field({
         />
       ) : (
         <input
-          type="text"
+          type={type}
           name={name}
           defaultValue={defaultValue}
           placeholder={placeholder}

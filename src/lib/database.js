@@ -5,6 +5,10 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync, backup } from "node:sqlite";
 import { hashPassword } from "@/lib/auth-crypto";
+import {
+  defaultChurchSettings,
+  defaultMinistryTeams,
+} from "@/lib/organization-defaults";
 import { demoAuthUsers, retentionPolicy } from "@/lib/policies";
 
 let database;
@@ -38,6 +42,7 @@ export function getDatabase() {
     database.exec("PRAGMA journal_mode = WAL;");
     database.exec("PRAGMA busy_timeout = 5000;");
     createSchema(database);
+    ensureSchemaMigrations(database);
     bootstrapDatabase(database);
   }
 
@@ -60,6 +65,10 @@ export function withTransaction(callback) {
 
 export function serializeJson(value) {
   return JSON.stringify(value ?? null);
+}
+
+export function generateTrackingCode() {
+  return `CCO-${randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
 }
 
 export function parseJson(value, fallback) {
@@ -152,6 +161,8 @@ function createSchema(db) {
       created_at TEXT NOT NULL,
       requester_json TEXT NOT NULL DEFAULT '{}',
       privacy_json TEXT NOT NULL DEFAULT '{}',
+      tracking_code TEXT,
+      status_detail TEXT,
       assigned_volunteer_json TEXT,
       escalation_json TEXT
     ) STRICT;
@@ -202,16 +213,282 @@ function createSchema(db) {
       window_started_at TEXT NOT NULL,
       last_seen_at TEXT NOT NULL
     ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS teams (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      lane TEXT NOT NULL UNIQUE,
+      description TEXT NOT NULL,
+      lead_name TEXT NOT NULL,
+      contact_email TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      capabilities_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS church_settings (
+      id TEXT PRIMARY KEY,
+      church_name TEXT NOT NULL,
+      campus_name TEXT,
+      support_email TEXT,
+      support_phone TEXT,
+      timezone TEXT NOT NULL,
+      intake_confirmation_text TEXT NOT NULL,
+      emergency_banner TEXT NOT NULL,
+      plan_name TEXT NOT NULL,
+      billing_contact_email TEXT,
+      monthly_seat_allowance TEXT,
+      next_renewal_date TEXT,
+      backup_expectation TEXT,
+      email_delivery_mode TEXT NOT NULL DEFAULT 'log-only',
+      email_provider TEXT NOT NULL DEFAULT 'resend',
+      email_from_name TEXT,
+      email_from_address TEXT,
+      email_reply_to TEXT,
+      email_subject_prefix TEXT,
+      notification_channels_json TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS recovery_requests (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      requester_name TEXT,
+      note TEXT,
+      status TEXT NOT NULL,
+      requested_at TEXT NOT NULL,
+      handled_at TEXT,
+      handled_by TEXT,
+      resolution_note TEXT
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_recovery_requests_status
+      ON recovery_requests (status, requested_at DESC);
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      recipient_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      href TEXT,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      read_at TEXT
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created
+      ON notifications (recipient_user_id, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_notifications_recipient_read
+      ON notifications (recipient_user_id, read_at, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS email_outbox (
+      id TEXT PRIMARY KEY,
+      template_key TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      recipient_email TEXT NOT NULL,
+      recipient_name TEXT,
+      subject TEXT NOT NULL,
+      text_body TEXT NOT NULL,
+      html_body TEXT NOT NULL,
+      status TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      provider_message_id TEXT,
+      provider_response_json TEXT NOT NULL DEFAULT '{}',
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      attempted_at TEXT,
+      sent_at TEXT,
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_email_outbox_status_created
+      ON email_outbox (status, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_email_outbox_recipient_created
+      ON email_outbox (recipient_email, created_at DESC);
   `);
 }
 
+function ensureSchemaMigrations(db) {
+  addColumnIfMissing(db, "requests", "tracking_code", "TEXT");
+  addColumnIfMissing(db, "requests", "status_detail", "TEXT");
+  addColumnIfMissing(
+    db,
+    "church_settings",
+    "email_delivery_mode",
+    "TEXT NOT NULL DEFAULT 'log-only'"
+  );
+  addColumnIfMissing(
+    db,
+    "church_settings",
+    "email_provider",
+    "TEXT NOT NULL DEFAULT 'resend'"
+  );
+  addColumnIfMissing(db, "church_settings", "email_from_name", "TEXT");
+  addColumnIfMissing(db, "church_settings", "email_from_address", "TEXT");
+  addColumnIfMissing(db, "church_settings", "email_reply_to", "TEXT");
+  addColumnIfMissing(db, "church_settings", "email_subject_prefix", "TEXT");
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_tracking_code
+      ON requests (tracking_code);
+  `);
+  backfillRequestTrackingCodes(db);
+  backfillRequestStatusDetails(db);
+}
+
+function addColumnIfMissing(db, tableName, columnName, columnDefinition) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
+  const exists = columns.some((column) => column.name === columnName);
+
+  if (!exists) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`);
+  }
+}
+
+function backfillRequestTrackingCodes(db) {
+  const rows = db.prepare(`
+    SELECT id
+    FROM requests
+    WHERE tracking_code IS NULL OR tracking_code = ''
+  `).all();
+  const update = db.prepare(`
+    UPDATE requests
+    SET tracking_code = ?
+    WHERE id = ?
+  `);
+
+  for (const row of rows) {
+    update.run(nextTrackingCode(db), row.id);
+  }
+}
+
+function backfillRequestStatusDetails(db) {
+  const rows = db.prepare(`
+    SELECT id, owner, status, assigned_volunteer_json, escalation_json
+    FROM requests
+    WHERE status_detail IS NULL OR status_detail = ''
+  `).all();
+  const update = db.prepare(`
+    UPDATE requests
+    SET status_detail = ?
+    WHERE id = ?
+  `);
+
+  for (const row of rows) {
+    update.run(buildStatusDetail(row), row.id);
+  }
+}
+
+function nextTrackingCode(db) {
+  let code = generateTrackingCode();
+
+  while (
+    db.prepare("SELECT 1 AS exists_flag FROM requests WHERE tracking_code = ? LIMIT 1")
+      .get(code)?.exists_flag === 1
+  ) {
+    code = generateTrackingCode();
+  }
+
+  return code;
+}
+
+function buildStatusDetail(row) {
+  if (row.status === "Closed") {
+    return "Your request has been resolved and logged by the care team.";
+  }
+
+  if (row.escalation_json) {
+    return "A pastor is reviewing the next safe step before any wider handoff.";
+  }
+
+  if (row.assigned_volunteer_json) {
+    return "An assigned care team follow-up is now in progress.";
+  }
+
+  if (row.owner && row.owner !== "Unassigned") {
+    return "Your request has been assigned to a care lead for follow-up.";
+  }
+
+  return "Your request has been received and is awaiting pastoral review.";
+}
+
 function bootstrapDatabase(db) {
+  const hasTeams =
+    db.prepare("SELECT 1 AS exists_flag FROM teams LIMIT 1").get()?.exists_flag === 1;
+  const hasSettings =
+    db.prepare("SELECT 1 AS exists_flag FROM church_settings LIMIT 1").get()
+      ?.exists_flag === 1;
   const hasUsers =
     db.prepare("SELECT 1 AS exists_flag FROM users LIMIT 1").get()?.exists_flag === 1;
+
+  if (!hasTeams) {
+    seedTeams(db);
+  }
+
+  if (!hasSettings) {
+    seedChurchSettings(db);
+  }
 
   if (!hasUsers) {
     seedUsers(db);
   }
+}
+
+function seedTeams(db) {
+  const insertTeam = db.prepare(`
+    INSERT INTO teams (
+      id, name, lane, description, lead_name, contact_email, active,
+      capabilities_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const now = new Date().toISOString();
+
+  for (const team of defaultMinistryTeams) {
+    insertTeam.run(
+      team.id,
+      team.name,
+      team.lane,
+      team.description,
+      team.leadName,
+      team.contactEmail || null,
+      1,
+      serializeJson(team.capabilities || []),
+      now,
+      now
+    );
+  }
+}
+
+function seedChurchSettings(db) {
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO church_settings (
+      id, church_name, campus_name, support_email, support_phone, timezone,
+      intake_confirmation_text, emergency_banner, plan_name, billing_contact_email,
+      monthly_seat_allowance, next_renewal_date, backup_expectation,
+      notification_channels_json, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    "primary",
+    defaultChurchSettings.churchName,
+    defaultChurchSettings.campusName,
+    defaultChurchSettings.supportEmail,
+    defaultChurchSettings.supportPhone,
+    defaultChurchSettings.timezone,
+    defaultChurchSettings.intakeConfirmationText,
+    defaultChurchSettings.emergencyBanner,
+    defaultChurchSettings.planName,
+    defaultChurchSettings.billingContactEmail,
+    defaultChurchSettings.monthlySeatAllowance,
+    defaultChurchSettings.nextRenewalDate,
+    defaultChurchSettings.backupExpectation,
+    serializeJson(defaultChurchSettings.notificationChannels),
+    now
+  );
 }
 
 function seedUsers(db) {

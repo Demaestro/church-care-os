@@ -7,6 +7,7 @@ import { stageDescriptions } from "@/lib/care-copy";
 import {
   getDatabase,
   getDatabasePath,
+  generateTrackingCode,
   parseJson,
   serializeJson,
   withTransaction,
@@ -21,6 +22,7 @@ const defaultPrivacyPreference = {
 
 const defaultRequester = {
   name: "Member",
+  email: "",
   preferredContact: "Follow up requested",
   requestFor: "self",
 };
@@ -319,6 +321,8 @@ function readStore() {
       created_at,
       requester_json,
       privacy_json,
+      tracking_code,
+      status_detail,
       assigned_volunteer_json,
       escalation_json
     FROM requests
@@ -355,6 +359,8 @@ function readStore() {
       createdAt: row.created_at,
       requester: parseJson(row.requester_json, defaultRequester),
       privacy: parseJson(row.privacy_json, defaultPrivacyPreference),
+      trackingCode: row.tracking_code || "",
+      statusDetail: row.status_detail || "",
       assignedVolunteer: parseJson(row.assigned_volunteer_json, null),
       escalation: parseJson(row.escalation_json, null),
     })),
@@ -402,6 +408,8 @@ function getRequestRecord(id) {
         created_at,
         requester_json,
         privacy_json,
+        tracking_code,
+        status_detail,
         assigned_volunteer_json,
         escalation_json
       FROM requests
@@ -409,6 +417,34 @@ function getRequestRecord(id) {
       LIMIT 1
     `)
     .get(id);
+}
+
+function getRequestRecordByTrackingCode(trackingCode) {
+  return getDatabase()
+    .prepare(`
+      SELECT
+        id,
+        household_slug,
+        household_name,
+        need,
+        summary,
+        owner,
+        due_at,
+        tone,
+        status,
+        source,
+        created_at,
+        requester_json,
+        privacy_json,
+        tracking_code,
+        status_detail,
+        assigned_volunteer_json,
+        escalation_json
+      FROM requests
+      WHERE tracking_code = ?
+      LIMIT 1
+    `)
+    .get(trackingCode);
 }
 
 function insertHouseholdNote(db, householdSlug, note) {
@@ -445,6 +481,8 @@ function mapRequestRecord(record) {
     createdAt: record.created_at,
     requester: parseJson(record.requester_json, defaultRequester),
     privacy: parseJson(record.privacy_json, defaultPrivacyPreference),
+    trackingCode: record.tracking_code || "",
+    statusDetail: record.status_detail || "",
     assignedVolunteer: parseJson(record.assigned_volunteer_json, null),
     escalation: parseJson(record.escalation_json, null),
   };
@@ -472,6 +510,132 @@ function mapHouseholdRecord(record) {
   };
 }
 
+function buildRequestStatusDetail(request) {
+  if (request.status === "Closed") {
+    return "Your request has been resolved and logged by the care team.";
+  }
+
+  if (request.escalation?.reason) {
+    return "A pastor is reviewing the next safe step before any wider handoff.";
+  }
+
+  if (request.assignedVolunteer?.name) {
+    return "An assigned care team follow-up is now in progress.";
+  }
+
+  if (request.owner && request.owner !== "Unassigned") {
+    return "Your request has been assigned to a care lead for follow-up.";
+  }
+
+  return "Your request has been received and is awaiting pastoral review.";
+}
+
+function buildMemberSafeTimeline(request, household) {
+  const events = [
+    {
+      id: `${request.id}-submitted`,
+      label: "Request received",
+      detail: "We logged your request and recorded your privacy choices.",
+      createdAt: request.createdAt,
+      createdLabel: formatDateTime(request.createdAt),
+    },
+  ];
+
+  if (request.owner && request.owner !== "Unassigned") {
+    events.push({
+      id: `${request.id}-assigned`,
+      label: "Care lead assigned",
+      detail:
+        request.privacy?.visibility === "pastors-only"
+          ? "A pastor or care lead has taken ownership of your request."
+          : "Your request is now with a care lead for follow-up.",
+      createdAt: request.createdAt,
+      createdLabel: formatDateTime(request.createdAt),
+    });
+  }
+
+  if (request.assignedVolunteer?.name && request.privacy?.shareWithVolunteers !== false) {
+    events.push({
+      id: `${request.id}-volunteer`,
+      label: "Follow-up in progress",
+      detail: "A care team follow-up has been assigned and is underway.",
+      createdAt: request.assignedVolunteer.assignedAt || request.createdAt,
+      createdLabel: formatDateTime(
+        request.assignedVolunteer.assignedAt || request.createdAt
+      ),
+    });
+  }
+
+  if (request.escalation?.reason) {
+    events.push({
+      id: `${request.id}-pastoral`,
+      label: "Pastoral review",
+      detail:
+        "Pastoral staff are reviewing the next safe step for this request before any wider handoff.",
+      createdAt: request.escalation.escalatedAt || request.createdAt,
+      createdLabel: formatDateTime(
+        request.escalation.escalatedAt || request.createdAt
+      ),
+    });
+  }
+
+  if (request.status === "Closed") {
+    events.push({
+      id: `${request.id}-closed`,
+      label: "Request resolved",
+      detail: "This request has been marked complete by the care team.",
+      createdAt:
+        request.assignedVolunteer?.completedAt ||
+        household?.notes?.[0]?.createdAt ||
+        request.createdAt,
+      createdLabel: formatDateTime(
+        request.assignedVolunteer?.completedAt ||
+          household?.notes?.[0]?.createdAt ||
+          request.createdAt
+      ),
+    });
+  }
+
+  return [...events].sort((first, second) =>
+    sortByDateDesc(first.createdAt, second.createdAt)
+  );
+}
+
+function resolveMemberFacingState(request) {
+  if (request.status === "Closed") {
+    return {
+      label: "Resolved",
+      tone: "done",
+    };
+  }
+
+  if (request.assignedVolunteer?.name) {
+    return {
+      label: "Follow-up active",
+      tone: "active",
+    };
+  }
+
+  if (request.escalation?.reason || request.owner === "Pastoral staff") {
+    return {
+      label: "Pastoral review",
+      tone: "pastoral",
+    };
+  }
+
+  if (request.owner && request.owner !== "Unassigned") {
+    return {
+      label: "Assigned",
+      tone: "watch",
+    };
+  }
+
+  return {
+    label: "Received",
+    tone: "quiet",
+  };
+}
+
 export const getDashboardData = cache(async function getDashboardData() {
   return buildDashboardData(readStore());
 });
@@ -486,6 +650,47 @@ export const getHouseholds = cache(async function getHouseholds() {
 export const getHouseholdBySlug = cache(async function getHouseholdBySlug(slug) {
   return buildHouseholdDetail(readStore(), slug);
 });
+
+export async function getMemberRequestStatusByTrackingCode(trackingCode) {
+  const normalizedCode = String(trackingCode || "").trim().toUpperCase();
+  if (!normalizedCode) {
+    return null;
+  }
+
+  const requestRecord = getRequestRecordByTrackingCode(normalizedCode);
+  const request = mapRequestRecord(requestRecord);
+
+  if (!request) {
+    return null;
+  }
+
+  const household = buildHouseholdDetail(readStore(), request.householdSlug);
+  const memberState = resolveMemberFacingState(request);
+
+  return {
+    trackingCode: request.trackingCode,
+    householdName:
+      request.privacy?.visibility === "pastors-only"
+        ? "Private care request"
+        : request.householdName,
+    need:
+      request.privacy?.visibility === "pastors-only" ? "Private support" : request.need,
+    summary:
+      request.privacy?.visibility === "pastors-only"
+        ? "A pastor is keeping the details of this request private while follow-up is arranged."
+        : request.summary,
+    statusLabel: memberState.label,
+    statusTone: memberState.tone,
+    statusDetail: request.statusDetail || buildRequestStatusDetail(request),
+    createdLabel: request.createdLabel || formatDateTime(request.createdAt),
+    dueLabel: request.dueLabel || formatDateTime(request.dueAt),
+    privacyLabel:
+      request.privacy?.visibility === "pastors-only"
+        ? "Visible only to pastor until they decide what should be shared wider."
+        : "Visible to pastor and assigned care leads.",
+    timeline: buildMemberSafeTimeline(request, household),
+  };
+}
 
 export async function getCareStoreHealth() {
   const db = getDatabase();
@@ -696,6 +901,7 @@ export function runRetentionSweep() {
 export async function createCareRequestEntry(input) {
   const slug = slugify(input.householdName);
   const now = new Date().toISOString();
+  const trackingCode = generateTrackingCode();
   const tags = normalizeTags(input.tags);
   const owner = input.owner || "Unassigned";
   const noteBody =
@@ -706,6 +912,8 @@ export async function createCareRequestEntry(input) {
     shareWithVolunteers: input.shareWithVolunteers ?? true,
     allowTextUpdates: input.allowTextUpdates ?? true,
   };
+  const statusDetail =
+    input.statusDetail || "Your request has been received and is awaiting pastoral review.";
 
   withTransaction((db) => {
     const householdRecord = getHouseholdRecord(slug);
@@ -793,9 +1001,9 @@ export async function createCareRequestEntry(input) {
     db.prepare(`
       INSERT INTO requests (
         id, household_slug, household_name, need, summary, owner, due_at, tone,
-        status, source, created_at, requester_json, privacy_json,
-        assigned_volunteer_json, escalation_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        status, source, created_at, requester_json, privacy_json, tracking_code,
+        status_detail, assigned_volunteer_json, escalation_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       randomUUID(),
       slug,
@@ -810,16 +1018,22 @@ export async function createCareRequestEntry(input) {
       now,
       serializeJson({
         name: input.submittedBy || "Member",
+        email: input.contactEmail || "",
         preferredContact: input.preferredContact || "Follow up requested",
         requestFor: input.requestFor || "self",
       }),
       serializeJson(privacyPreference),
+      trackingCode,
+      statusDetail,
       null,
       null
     );
   });
 
-  return slug;
+  return {
+    householdSlug: slug,
+    trackingCode,
+  };
 }
 
 export async function updateHouseholdSnapshotEntry(slug, updates) {
@@ -836,6 +1050,10 @@ export async function updateHouseholdSnapshotEntry(slug, updates) {
   const nextTouchpoint = updates.nextTouchpoint || household.nextTouchpoint;
   const nextSituation = updates.situation || household.situation;
   const nextSummaryNote = updates.summaryNote || household.summaryNote;
+  const nextStatusDetail =
+    nextOwner && nextOwner !== "Unassigned"
+      ? "Your request has been assigned to a care lead for follow-up."
+      : "Your request has been received and is awaiting pastoral review.";
 
   const changeBits = [];
   if (household.stage !== nextStage) {
@@ -873,6 +1091,11 @@ export async function updateHouseholdSnapshotEntry(slug, updates) {
       serializeJson(nextTags),
       slug
     );
+    db.prepare(`
+      UPDATE requests
+      SET owner = ?, status_detail = ?
+      WHERE household_slug = ? AND status = 'Open'
+    `).run(nextOwner, nextStatusDetail, slug);
 
     if (changeBits.length > 0) {
       insertHouseholdNote(db, slug, {
@@ -910,7 +1133,8 @@ export async function closeCareRequestEntry(requestId, householdSlug) {
   withTransaction((db) => {
     db.prepare(`
       UPDATE requests
-      SET status = 'Closed'
+      SET status = 'Closed',
+          status_detail = 'Your request has been resolved and logged by the care team.'
       WHERE id = ?
     `).run(requestId);
 
@@ -955,7 +1179,8 @@ export async function assignRequestVolunteerEntry(requestId, householdSlug, inpu
   withTransaction((db) => {
     db.prepare(`
       UPDATE requests
-      SET owner = ?, assigned_volunteer_json = ?, escalation_json = NULL
+      SET owner = ?, assigned_volunteer_json = ?, escalation_json = NULL,
+          status_detail = 'An assigned care team follow-up is now in progress.'
       WHERE id = ?
     `).run(
       request.owner && request.owner !== "Unassigned"
@@ -1012,7 +1237,8 @@ export async function escalateRequestToPastorEntry(requestId, householdSlug, inp
       UPDATE requests
       SET owner = 'Pastoral staff',
           assigned_volunteer_json = NULL,
-          escalation_json = ?
+          escalation_json = ?,
+          status_detail = 'A pastor is reviewing the next safe step before any wider handoff.'
       WHERE id = ?
     `).run(serializeJson(escalation), requestId);
 
@@ -1070,7 +1296,8 @@ export async function acceptVolunteerTaskEntry(requestId, householdSlug, volunte
   withTransaction((db) => {
     db.prepare(`
       UPDATE requests
-      SET assigned_volunteer_json = ?
+      SET assigned_volunteer_json = ?,
+          status_detail = 'A care team follow-up is actively underway.'
       WHERE id = ?
     `).run(serializeJson(assignment), requestId);
 
@@ -1080,6 +1307,62 @@ export async function acceptVolunteerTaskEntry(requestId, householdSlug, volunte
       author: volunteerName,
       kind: "Volunteer",
       body: `Accepted volunteer task for ${request.need}.`,
+    });
+  });
+}
+
+export async function declineVolunteerTaskEntry(requestId, householdSlug, input) {
+  const request = mapRequestRecord(getRequestRecord(requestId));
+  const household = mapHouseholdRecord(getHouseholdRecord(householdSlug));
+
+  if (!request) {
+    throw new Error("Request not found.");
+  }
+
+  if (request.status !== "Open") {
+    throw new Error("Only open requests can be declined.");
+  }
+
+  if (request.assignedVolunteer?.name !== input.volunteerName) {
+    throw new Error("This request is not assigned to that volunteer.");
+  }
+
+  if (request.assignedVolunteer?.acceptedAt) {
+    throw new Error("Accepted tasks should be re-routed by a leader.");
+  }
+
+  const now = new Date().toISOString();
+  const declineReason =
+    input.reason ||
+    "Volunteer asked for this task to be re-routed before accepting it.";
+  const nextOwner =
+    household?.owner && household.owner !== "Unassigned"
+      ? household.owner
+      : input.laneOwner || "Ministry leader";
+
+  withTransaction((db) => {
+    db.prepare(`
+      UPDATE requests
+      SET assigned_volunteer_json = NULL,
+          owner = ?,
+          status_detail = 'A care lead is re-routing this request after a volunteer handoff change.'
+      WHERE id = ?
+    `).run(nextOwner, requestId);
+
+    if (household) {
+      db.prepare(`
+        UPDATE households
+        SET owner = ?, stage = ?
+        WHERE slug = ?
+      `).run(nextOwner, household.stage === "Assign" ? "Assign" : household.stage, householdSlug);
+    }
+
+    insertHouseholdNote(db, householdSlug, {
+      id: randomUUID(),
+      createdAt: now,
+      author: input.volunteerName,
+      kind: "Volunteer",
+      body: `Declined volunteer task for ${request.need}. Reason: ${declineReason}`,
     });
   });
 }
@@ -1107,7 +1390,9 @@ export async function completeVolunteerTaskEntry(requestId, householdSlug, volun
   withTransaction((db) => {
     db.prepare(`
       UPDATE requests
-      SET status = 'Closed', assigned_volunteer_json = ?
+      SET status = 'Closed',
+          assigned_volunteer_json = ?,
+          status_detail = 'Your request has been resolved and logged by the care team.'
       WHERE id = ?
     `).run(serializeJson(assignment), requestId);
 

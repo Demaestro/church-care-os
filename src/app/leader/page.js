@@ -1,12 +1,10 @@
 import Link from "next/link";
-import { requireCurrentUser } from "@/lib/auth";
-import {
-  assignRequestVolunteer,
-  escalateRequestToPastor,
-} from "@/app/actions";
+import { assignRequestVolunteer, escalateRequestToPastor } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
+import { requireCurrentUser } from "@/lib/auth";
 import { getDashboardData } from "@/lib/care-store";
-import { leaderPreview } from "@/lib/role-previews";
+import { listVolunteerRoster } from "@/lib/organization-store";
+import { leaderPreview, volunteerPreview } from "@/lib/role-previews";
 
 const statusClasses = {
   watch: "bg-[rgba(179,138,69,0.14)] text-[#7a6128]",
@@ -31,6 +29,7 @@ export default async function LeaderPage() {
     .filter((request) => isVisibleInLeaderLane(request))
     .map((request) => {
       const household = householdMap[request.householdSlug];
+
       return {
         ...request,
         household,
@@ -46,6 +45,7 @@ export default async function LeaderPage() {
     .filter((request) => isEscalatedRequest(request, householdMap[request.householdSlug]))
     .map((request) => {
       const household = householdMap[request.householdSlug];
+
       return {
         id: request.id,
         householdName: request.householdName,
@@ -55,22 +55,59 @@ export default async function LeaderPage() {
           "Leader requested a pastor to review the next step directly.",
         nextStep:
           household?.pastoralNeed?.nextStep ||
-          "Pastor Emmanuel to review, contact the household, and decide the next safe handoff.",
+          "Pastoral review is needed before this request is handed off more widely.",
       };
     });
-  const volunteers = leaderPreview.volunteers.map((volunteer) => {
-    const activeCount = openRequests.filter(
-      (request) =>
-        request.status === "Open" &&
-        request.assignedVolunteer?.name === volunteer.name
-    ).length;
+  const previewMap = new Map(
+    leaderPreview.volunteers.map((volunteer) => [volunteer.name, volunteer])
+  );
+  const liveVolunteers = listVolunteerRoster()
+    .filter((volunteer) => !user.lane || volunteer.lane === user.lane || !volunteer.lane)
+    .map((volunteer) => {
+      const preview = previewMap.get(volunteer.name);
+      const activeCount = openRequests.filter(
+        (request) =>
+          request.status === "Open" &&
+          request.assignedVolunteer?.name === volunteer.name
+      ).length;
 
-    return {
-      ...volunteer,
-      activeCount,
-      load: `${activeCount} active task${activeCount === 1 ? "" : "s"}`,
-    };
-  });
+      return {
+        ...preview,
+        ...volunteer,
+        role: volunteer.team || preview?.role || user.lane || "Volunteer roster",
+        availability:
+          preview?.availability ||
+          (volunteer.active
+            ? "Available for routed practical care work."
+            : "Currently marked inactive in the internal roster."),
+        fit:
+          preview?.fit ||
+          (volunteer.lane
+            ? `Best fit: ${volunteer.lane}.`
+            : "General volunteer coverage."),
+        activeCount,
+        load: `${activeCount} active task${activeCount === 1 ? "" : "s"}`,
+      };
+    });
+  const volunteers =
+    liveVolunteers.length > 0
+      ? liveVolunteers
+      : leaderPreview.volunteers.map((volunteer) => {
+          const activeCount = openRequests.filter(
+            (request) =>
+              request.status === "Open" &&
+              request.assignedVolunteer?.name === volunteer.name
+          ).length;
+
+          return {
+            ...volunteer,
+            activeCount,
+            load: `${activeCount} active task${activeCount === 1 ? "" : "s"}`,
+          };
+        });
+  const assignableVolunteers = volunteers.filter((volunteer) => volunteer.active !== false);
+  const volunteerOptions =
+    assignableVolunteers.length > 0 ? assignableVolunteers : volunteers;
   const metrics = [
     {
       label: "Routed cases",
@@ -105,9 +142,9 @@ export default async function LeaderPage() {
             </h1>
             <p className="mt-5 text-base leading-8 text-muted sm:text-lg">
               {leaderPreview.leader.name} is working inside the{" "}
-              {user.lane || leaderPreview.leader.lane}. This screen now reads from the live
-              request store, so assignments and escalations here immediately
-              reshape the volunteer and household views.
+              {user.lane || leaderPreview.leader.lane}. This screen reads from the
+              live request store, so assignments here immediately shape the
+              volunteer, household, and notification views.
             </p>
             <p className="mt-4 text-sm uppercase tracking-[0.18em] text-muted">
               {leaderPreview.leader.church} - {user.lane || leaderPreview.leader.lane}
@@ -200,7 +237,7 @@ export default async function LeaderPage() {
                     </div>
                   </div>
 
-                    {item.assignedVolunteer ? (
+                  {item.assignedVolunteer ? (
                     <div className="mt-4 rounded-[1.25rem] border border-[rgba(73,106,77,0.18)] bg-[rgba(73,106,77,0.08)] p-4">
                       <p className="text-xs uppercase tracking-[0.18em] text-moss">
                         Current assignment
@@ -226,16 +263,14 @@ export default async function LeaderPage() {
                         )}
                         className="space-y-4 rounded-[1.25rem] border border-line bg-paper p-4"
                       >
-                        <input
-                          type="hidden"
-                          name="assignedBy"
-                          value={user.name}
-                        />
+                        <input type="hidden" name="assignedBy" value={user.name} />
                         <input
                           type="hidden"
                           name="laneOwner"
                           value={user.lane || leaderPreview.leader.lane}
                         />
+                        <input type="hidden" name="householdName" value={item.householdName} />
+                        <input type="hidden" name="need" value={item.need} />
 
                         <label className="block">
                           <span className="text-sm font-medium text-foreground">
@@ -246,7 +281,7 @@ export default async function LeaderPage() {
                             defaultValue={item.defaultVolunteerName}
                             className="mt-2 w-full rounded-[1rem] border border-line bg-canvas px-4 py-3 text-sm text-foreground outline-none transition focus:border-moss"
                           >
-                            {volunteers.map((volunteer) => (
+                            {volunteerOptions.map((volunteer) => (
                               <option key={volunteer.name} value={volunteer.name}>
                                 {volunteer.name} - {volunteer.load}
                               </option>
@@ -280,8 +315,8 @@ export default async function LeaderPage() {
                           Volunteer assignment blocked
                         </p>
                         <p className="mt-2 text-sm leading-7 text-foreground">
-                          This request is still pastor-only and cannot be routed
-                          to a volunteer until that boundary changes.
+                          This request is still pastor-only and cannot be routed to a
+                          volunteer until that boundary changes.
                         </p>
                       </div>
                     )}
@@ -295,16 +330,14 @@ export default async function LeaderPage() {
                         )}
                         className="space-y-4"
                       >
-                        <input
-                          type="hidden"
-                          name="escalatedBy"
-                          value={user.name}
-                        />
+                        <input type="hidden" name="escalatedBy" value={user.name} />
                         <input
                           type="hidden"
                           name="nextStep"
                           value="Pastor Emmanuel to review, contact the household, and decide the next safe handoff."
                         />
+                        <input type="hidden" name="householdName" value={item.householdName} />
+                        <input type="hidden" name="need" value={item.need} />
 
                         <label className="block">
                           <span className="text-sm font-medium text-foreground">
@@ -484,7 +517,10 @@ function isVisibleInLeaderLane(request) {
     return false;
   }
 
-  if (request.privacy?.visibility === "pastors-only" && request.privacy?.shareWithVolunteers === false) {
+  if (
+    request.privacy?.visibility === "pastors-only" &&
+    request.privacy?.shareWithVolunteers === false
+  ) {
     return false;
   }
 
@@ -519,7 +555,7 @@ function suggestVolunteerName(request) {
     return "Elder Tunde";
   }
 
-  return "Sister Ngozi Okafor";
+  return volunteerPreview.volunteer.name;
 }
 
 function buildVolunteerBrief(request) {
@@ -531,7 +567,10 @@ function buildVolunteerBrief(request) {
     return "Sensitive details are not shared with volunteers. Give a simple encouragement task and route all questions back to the care lead.";
   }
 
-  return request.summary;
+  return (
+    request.summary ||
+    "Follow the leader brief and route questions back to the care lead."
+  );
 }
 
 function resolveStatus(request) {

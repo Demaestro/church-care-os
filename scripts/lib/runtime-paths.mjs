@@ -1,6 +1,10 @@
 import path from "node:path";
 import { mkdir } from "node:fs/promises";
 import { DatabaseSync, backup } from "node:sqlite";
+import { fileURLToPath } from "node:url";
+
+const scriptsRoot = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(scriptsRoot, "..", "..");
 
 export function resolveDatabasePath() {
   if (process.env.CARE_DB_PATH) {
@@ -11,7 +15,7 @@ export function resolveDatabasePath() {
     return path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, "care.db");
   }
 
-  return path.join(process.cwd(), "data", "care.db");
+  return path.join(projectRoot, "data", "care.db");
 }
 
 export function resolveBackupDir() {

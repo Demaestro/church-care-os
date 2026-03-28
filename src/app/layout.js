@@ -2,6 +2,7 @@ import Link from "next/link";
 import "./globals.css";
 import { logout } from "@/app/actions";
 import { getCurrentUser, getRoleLabel } from "@/lib/auth";
+import { getUnreadNotificationCountForUser } from "@/lib/notifications-store";
 
 export const metadata = {
   title: {
@@ -21,7 +22,10 @@ export const metadata = {
 
 export default async function RootLayout({ children }) {
   const user = await getCurrentUser();
-  const navLinks = buildNavLinks(user);
+  const unreadNotificationCount = user
+    ? getUnreadNotificationCountForUser(user)
+    : 0;
+  const navLinks = buildNavLinks(user, unreadNotificationCount);
 
   return (
     <html lang="en" className="h-full antialiased">
@@ -62,10 +66,10 @@ export default async function RootLayout({ children }) {
                 ))}
               </nav>
 
-              <div className="hidden lg:flex">
+              <div className="flex">
                 {user ? (
                   <div className="flex items-center gap-3">
-                    <span className="rounded-full border border-[rgba(73,106,77,0.16)] bg-[rgba(73,106,77,0.10)] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-moss">
+                    <span className="hidden rounded-full border border-[rgba(73,106,77,0.16)] bg-[rgba(73,106,77,0.10)] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-moss sm:inline-flex">
                       {getRoleLabel(user.role)}
                     </span>
                     <form action={logout}>
@@ -73,7 +77,8 @@ export default async function RootLayout({ children }) {
                         type="submit"
                         className="rounded-full border border-line bg-paper px-4 py-2 text-sm font-medium text-foreground transition hover:bg-canvas"
                       >
-                        {user.name} · Sign out
+                        <span className="hidden sm:inline">{user.name} / </span>
+                        Sign out
                       </button>
                     </form>
                   </div>
@@ -86,6 +91,20 @@ export default async function RootLayout({ children }) {
                   </Link>
                 )}
               </div>
+            </div>
+
+            <div className="border-t border-line px-4 py-3 md:hidden">
+              <nav className="flex gap-2 overflow-x-auto pb-1">
+                {navLinks.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="shrink-0 rounded-full border border-line bg-paper px-4 py-2 text-sm font-medium text-muted transition hover:bg-canvas hover:text-foreground"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </nav>
             </div>
           </header>
 
@@ -103,11 +122,15 @@ export default async function RootLayout({ children }) {
   );
 }
 
-function buildNavLinks(user) {
+function buildNavLinks(user, unreadNotificationCount = 0) {
   const links = [
     {
       href: "/requests/new",
       label: "Request Care",
+    },
+    {
+      href: "/requests/status",
+      label: "Track Request",
     },
     {
       href: "/permissions",
@@ -128,6 +151,18 @@ function buildNavLinks(user) {
       href: "/",
       label: "Dashboard",
     });
+    links.push({
+      href: "/teams",
+      label: "Teams",
+    });
+    links.push({
+      href: "/admin/users",
+      label: "People",
+    });
+    links.push({
+      href: "/reports",
+      label: "Reports",
+    });
   }
 
   if (["leader", "pastor", "owner"].includes(user.role)) {
@@ -143,6 +178,13 @@ function buildNavLinks(user) {
 
   if (["volunteer", "leader", "pastor", "owner"].includes(user.role)) {
     links.push({
+      href: "/notifications",
+      label:
+        unreadNotificationCount > 0
+          ? `Notifications (${unreadNotificationCount})`
+          : "Notifications",
+    });
+    links.push({
       href: "/volunteer",
       label: "Volunteer View",
     });
@@ -152,6 +194,13 @@ function buildNavLinks(user) {
     links.push({
       href: "/audit",
       label: "Audit",
+    });
+  }
+
+  if (user.role === "owner") {
+    links.push({
+      href: "/settings",
+      label: "Settings",
     });
   }
 
