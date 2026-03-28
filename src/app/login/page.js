@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/login-form";
+import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getCurrentUser, getRoleLabel, getUserLandingPage } from "@/lib/auth";
+import { getCopy } from "@/lib/i18n";
 import { demoAuthUsers } from "@/lib/policies";
 
 export const metadata = {
@@ -10,6 +12,8 @@ export const metadata = {
 };
 
 export default async function LoginPage() {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
   const user = await getCurrentUser();
   if (user) {
     redirect(getUserLandingPage(user));
@@ -20,49 +24,47 @@ export default async function LoginPage() {
       <section className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
         <article className="surface-card rounded-[2rem] border border-line bg-paper p-8 lg:p-10">
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-            Internal access
+            {copy.loginPage.kicker}
           </p>
           <h1 className="mt-4 text-5xl leading-none tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-6xl">
-            Sign in before you open internal care workflows.
+            {copy.loginPage.title}
           </h1>
           <p className="mt-5 text-lg leading-8 text-muted">
-            Pastor, leader, owner, and volunteer screens are now protected with
-            role-based access checks on both pages and server actions.
+            {copy.loginPage.description}
           </p>
 
           <div className="mt-8 rounded-[1.5rem] bg-canvas p-6">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
-              Public route
+              {copy.loginPage.publicRouteTitle}
             </p>
             <p className="mt-3 text-sm leading-7 text-foreground">
-              Members can still submit a care request without signing in at
-              <span className="font-medium"> /requests/new</span>.
+              {copy.loginPage.publicRouteBody}
             </p>
           </div>
         </article>
 
         <article className="surface-card rounded-[2rem] border border-line bg-paper p-8 lg:p-10">
           <h2 className="text-3xl tracking-[-0.04em] text-foreground [font-family:var(--font-display)]">
-            Welcome back
+            {copy.loginPage.welcomeBack}
           </h2>
           <p className="mt-3 text-sm leading-7 text-muted">
-            Use the account assigned to your care role.
+            {copy.loginPage.useAssignedAccount}
           </p>
           <div className="mt-6">
-            <LoginForm />
+            <LoginForm copy={copy} />
           </div>
           <div className="mt-6 flex flex-wrap gap-4 text-sm text-muted">
             <Link
               href="/account-recovery"
               className="font-medium text-foreground underline decoration-[rgba(34,28,22,0.18)] underline-offset-4"
             >
-              Need account recovery?
+              {copy.loginPage.needRecovery}
             </Link>
             <Link
               href="/requests/status"
               className="font-medium text-foreground underline decoration-[rgba(34,28,22,0.18)] underline-offset-4"
             >
-              Track a care request
+              {copy.loginPage.trackRequest}
             </Link>
           </div>
         </article>
@@ -71,7 +73,7 @@ export default async function LoginPage() {
       {process.env.NODE_ENV !== "production" ? (
         <section className="mt-8 surface-card rounded-[2rem] border border-line bg-paper p-8">
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-            Local demo accounts
+            {copy.loginPage.demoAccounts}
           </p>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             {demoAuthUsers.map((account) => (

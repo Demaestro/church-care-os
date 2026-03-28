@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { VolunteerTaskBoard } from "@/components/volunteer-task-board";
+import { getAppPreferences } from "@/lib/app-preferences-server";
 import { requireCurrentUser } from "@/lib/auth";
 import { getDashboardData } from "@/lib/care-store";
+import { getCopy } from "@/lib/i18n";
 import { listVolunteerRoster } from "@/lib/organization-store";
 import { leaderPreview, volunteerPreview } from "@/lib/role-previews";
 
@@ -12,6 +14,8 @@ export const metadata = {
 };
 
 export default async function VolunteerPage({ searchParams }) {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
   const user = await requireCurrentUser(["volunteer", "leader", "pastor", "owner"]);
   const params = await searchParams;
   const requestedVolunteer =
@@ -84,7 +88,11 @@ export default async function VolunteerPage({ searchParams }) {
         </div>
       ) : null}
 
-      <VolunteerTaskBoard preview={preview} initialTab={requestedTab} />
+      <VolunteerTaskBoard
+        preview={preview}
+        initialTab={requestedTab}
+        copy={copy}
+      />
     </div>
   );
 }

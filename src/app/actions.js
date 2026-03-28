@@ -1,8 +1,15 @@
 'use server';
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import {
+  DISPLAY_MODE_COOKIE,
+  LANGUAGE_COOKIE,
+  getPreferenceCookieOptions,
+  normalizeDisplayMode,
+  normalizeLanguage,
+} from "@/lib/app-preferences";
 import {
   authenticateCredentials,
   getUserLandingPage,
@@ -50,6 +57,7 @@ import {
   updateChurchSettingsEntry,
   updateMinistryTeamEntry,
 } from "@/lib/organization-store";
+import { getCopy } from "@/lib/i18n";
 
 function getString(formData, key) {
   const value = formData.get(key);
@@ -249,6 +257,11 @@ function resolveVolunteerIdentity(user) {
   return user.volunteerName || user.name;
 }
 
+async function getRequestCopy() {
+  const cookieStore = await cookies();
+  return getCopy(normalizeLanguage(cookieStore.get(LANGUAGE_COOKIE)?.value));
+}
+
 function canManageRole(actorRole, role) {
   if (actorRole === "owner") {
     return true;
@@ -274,22 +287,24 @@ function assertUserManagement(actor, targetUser, nextRole = targetUser?.role) {
 
 export async function login(prevState, formData) {
   void prevState;
+  const copy = await getRequestCopy();
+  const loginCopy = copy.loginForm;
 
   const email = getString(formData, "email").toLowerCase();
   const password = getString(formData, "password");
   const errors = {};
 
   if (!email) {
-    errors.email = "Enter the email tied to your care team account.";
+    errors.email = loginCopy.actionMessages.emailRequired;
   }
 
   if (!password) {
-    errors.password = "Enter your password.";
+    errors.password = loginCopy.actionMessages.passwordRequired;
   }
 
   if (Object.keys(errors).length > 0) {
     return {
-      message: "Please correct the highlighted fields and try again.",
+      message: loginCopy.actionMessages.fixFields,
       errors,
     };
   }
@@ -297,9 +312,9 @@ export async function login(prevState, formData) {
   const user = await authenticateCredentials(email, password);
   if (!user) {
     return {
-      message: "We couldn't sign you in with those credentials.",
+      message: loginCopy.actionMessages.invalidCredentials,
       errors: {
-        email: "Check your email and password, then try again.",
+        email: loginCopy.actionMessages.retryHint,
       },
     };
   }
@@ -333,6 +348,8 @@ export async function logout() {
 
 export async function createCareRequest(prevState, formData) {
   void prevState;
+  const copy = await getRequestCopy();
+  const intakeCopy = copy.intakeForm;
 
   const responseWindow = getString(formData, "responseWindow") || "48-hours";
   const responsePlan = resolveResponseWindow(responseWindow);
@@ -371,16 +388,16 @@ export async function createCareRequest(prevState, formData) {
   const errors = {};
 
   if (!need) {
-    errors.need = "Describe the kind of care that would help most right now.";
+    errors.need = intakeCopy.needError;
   }
 
   if (allowContact && rawContactEmail && !isValidEmailAddress(rawContactEmail)) {
-    errors.contactEmail = "Enter a valid email address for updates or leave it blank.";
+    errors.contactEmail = copy.recoveryForm.actionMessages.emailInvalid;
   }
 
   if (Object.keys(errors).length > 0) {
     return {
-      message: "Please correct the highlighted fields and try again.",
+      message: copy.recoveryForm.actionMessages.fixFields,
       errors,
       values,
       submitted: false,
@@ -399,12 +416,11 @@ export async function createCareRequest(prevState, formData) {
 
   const rateLimit = consumeRateLimit(await getRequestFingerprint());
   if (!rateLimit.allowed) {
-    return {
-      message:
-        "We have received several requests from this connection in a short window. Please wait a little and try again.",
-      errors: {},
-      values,
-      submitted: false,
+      return {
+        message: intakeCopy.rateLimited,
+        errors: {},
+        values,
+        submitted: false,
     };
   }
 
@@ -871,14 +887,16 @@ export async function addVolunteerTaskNote(
 
 export async function lookupRequestStatus(prevState, formData) {
   void prevState;
+  const copy = await getRequestCopy();
+  const statusCopy = copy.requestStatusLookup;
 
   const trackingCode = getString(formData, "trackingCode").toUpperCase();
 
   if (!trackingCode) {
     return {
-      message: "Enter the tracking code from your request confirmation.",
+      message: statusCopy.actionMessages.enterCode,
       errors: {
-        trackingCode: "Tracking code is required.",
+        trackingCode: statusCopy.actionMessages.trackingRequired,
       },
       lookupCode: "",
       result: null,
@@ -889,10 +907,9 @@ export async function lookupRequestStatus(prevState, formData) {
 
   if (!result) {
     return {
-      message:
-        "We could not find a care request with that code yet. Check the code and try again.",
+      message: statusCopy.actionMessages.notFound,
       errors: {
-        trackingCode: "No request matched that code.",
+        trackingCode: statusCopy.actionMessages.notFoundField,
       },
       lookupCode: trackingCode,
       result: null,
@@ -900,7 +917,7 @@ export async function lookupRequestStatus(prevState, formData) {
   }
 
   return {
-    message: "We found your request.",
+    message: statusCopy.foundMessage,
     errors: {},
     lookupCode: trackingCode,
     result,
@@ -909,6 +926,8 @@ export async function lookupRequestStatus(prevState, formData) {
 
 export async function requestAccountRecovery(prevState, formData) {
   void prevState;
+  const copy = await getRequestCopy();
+  const recoveryCopy = copy.recoveryForm;
 
   const email = normalizeEmail(getString(formData, "email"));
   const requesterName = getString(formData, "requesterName");
@@ -917,14 +936,14 @@ export async function requestAccountRecovery(prevState, formData) {
   const errors = {};
 
   if (!email) {
-    errors.email = "Enter the email address connected to your care account.";
+    errors.email = recoveryCopy.actionMessages.emailRequired;
   } else if (!isValidEmailAddress(email)) {
-    errors.email = "Enter a valid email address.";
+    errors.email = recoveryCopy.actionMessages.emailInvalid;
   }
 
   if (Object.keys(errors).length > 0) {
     return {
-      message: "Please correct the highlighted fields and try again.",
+      message: recoveryCopy.actionMessages.fixFields,
       errors,
       values: {
         email,
@@ -937,8 +956,7 @@ export async function requestAccountRecovery(prevState, formData) {
 
   if (honeypot) {
     return {
-      message:
-        "We have logged your request. A pastor or care admin will review it and follow up safely.",
+      message: recoveryCopy.actionMessages.logged,
       errors: {},
       values: {},
       submitted: true,
@@ -948,8 +966,7 @@ export async function requestAccountRecovery(prevState, formData) {
   const rateLimit = consumeRateLimit(`recovery:${await getRequestFingerprint()}`);
   if (!rateLimit.allowed) {
     return {
-      message:
-        "We have received several recovery requests from this connection in a short window. Please wait a bit and try again.",
+      message: recoveryCopy.actionMessages.rateLimited,
       errors: {},
       values: {
         email,
@@ -1014,12 +1031,24 @@ export async function requestAccountRecovery(prevState, formData) {
   revalidateCarePaths();
 
   return {
-    message:
-      "We have logged your request. A pastor or care admin will review it and follow up safely.",
+    message: recoveryCopy.actionMessages.logged,
     errors: {},
     values: {},
     submitted: true,
   };
+}
+
+export async function saveDisplayPreferences(formData) {
+  const cookieStore = await cookies();
+  const language = normalizeLanguage(getString(formData, "language"));
+  const displayMode = normalizeDisplayMode(getString(formData, "displayMode"));
+  const redirectTo = getString(formData, "redirectTo") || "/";
+  const cookieOptions = getPreferenceCookieOptions();
+
+  cookieStore.set(LANGUAGE_COOKIE, language, cookieOptions);
+  cookieStore.set(DISPLAY_MODE_COOKIE, displayMode, cookieOptions);
+
+  redirect(redirectTo);
 }
 
 export async function createUserAccount(formData) {

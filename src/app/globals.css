@@ -39,6 +39,7 @@
 html {
   scroll-behavior: smooth;
   background: var(--canvas);
+  font-size: 17px;
 }
 
 body {
@@ -50,11 +51,27 @@ body {
     linear-gradient(180deg, #fffaf2 0%, #f5f1e8 55%, #efe6d7 100%);
   color: var(--foreground);
   font-family: var(--font-sans);
+  line-height: 1.55;
 }
 
 ::selection {
   background: rgba(184, 101, 76, 0.18);
   color: var(--ink);
+}
+
+html[data-display-mode="comfort"] {
+  font-size: 19px;
+}
+
+html[data-display-mode="comfort"] body {
+  line-height: 1.7;
+}
+
+html[data-display-mode="comfort"] button,
+html[data-display-mode="comfort"] input,
+html[data-display-mode="comfort"] select,
+html[data-display-mode="comfort"] textarea {
+  min-height: 3.25rem;
 }
 
 a {
@@ -64,4 +81,23 @@ a {
 
 .surface-card {
   box-shadow: var(--shadow);
+}
+
+:focus-visible {
+  outline: 3px solid rgba(73, 106, 77, 0.45);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

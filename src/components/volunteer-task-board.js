@@ -9,12 +9,6 @@ import {
 } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 
-const sectionLabels = {
-  overdue: "Overdue",
-  dueToday: "Due today",
-  upcoming: "Upcoming",
-};
-
 const badgeClasses = {
   high: "bg-[rgba(184,101,76,0.10)] text-clay",
   watch: "bg-[rgba(179,138,69,0.14)] text-[#7a6128]",
@@ -29,25 +23,25 @@ const avatarClasses = [
   "bg-[rgba(184,101,76,0.12)] text-clay",
 ];
 
-export function VolunteerTaskBoard({ preview, initialTab = "assigned" }) {
+export function VolunteerTaskBoard({ preview, initialTab = "assigned", copy }) {
   const [tab, setTab] = useState(
     initialTab === "completed" ? "completed" : "assigned"
   );
   const sections = Object.entries(preview.assigned);
   const hasAssignedTasks = sections.some(([, tasks]) => tasks.length > 0);
+  const volunteerCopy = copy.volunteer;
 
   return (
     <section className="space-y-8">
       <div className="max-w-4xl">
         <p className="text-4xl leading-tight tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-5xl">
-          Finally, the volunteer task view - what a volunteer sees when they
-          log in, with just enough context to act and nothing more.
+          {volunteerCopy.hero}
         </p>
       </div>
 
       <div>
         <h1 className="text-4xl tracking-[-0.04em] text-foreground [font-family:var(--font-display)]">
-          Your care tasks
+          {volunteerCopy.title}
         </h1>
         <p className="mt-2 text-lg text-muted">
           {preview.volunteer.name} - {preview.volunteer.team}
@@ -56,12 +50,12 @@ export function VolunteerTaskBoard({ preview, initialTab = "assigned" }) {
 
       <div className="flex flex-wrap gap-3">
         <TabButton
-          label={`Assigned (${preview.tabs.assigned})`}
+          label={`${volunteerCopy.assigned} (${preview.tabs.assigned})`}
           active={tab === "assigned"}
           onClick={() => setTab("assigned")}
         />
         <TabButton
-          label={`Completed (${preview.tabs.completed})`}
+          label={`${volunteerCopy.completed} (${preview.tabs.completed})`}
           active={tab === "completed"}
           onClick={() => setTab("completed")}
         />
@@ -74,7 +68,7 @@ export function VolunteerTaskBoard({ preview, initialTab = "assigned" }) {
               tasks.length > 0 ? (
                 <section key={key}>
                   <p className="text-[0.8rem] font-semibold uppercase tracking-[0.16em] text-muted">
-                    {sectionLabels[key]}
+                    {volunteerCopy.sections[key]}
                   </p>
                   <div className="mt-4 space-y-5">
                     {tasks.map((task, index) => (
@@ -82,6 +76,7 @@ export function VolunteerTaskBoard({ preview, initialTab = "assigned" }) {
                         key={task.id}
                         task={task}
                         avatarClass={avatarClasses[index % avatarClasses.length]}
+                        copy={volunteerCopy}
                       />
                     ))}
                   </div>
@@ -90,20 +85,19 @@ export function VolunteerTaskBoard({ preview, initialTab = "assigned" }) {
             )}
           </div>
         ) : (
-          <article className="surface-card rounded-[1.75rem] border border-dashed border-line bg-paper p-6">
-            <h2 className="text-2xl text-foreground [font-family:var(--font-display)]">
-              No assigned tasks right now
-            </h2>
-            <p className="mt-3 text-sm leading-7 text-muted">
-              When a leader routes work to this volunteer, it will appear here
-              automatically.
-            </p>
-          </article>
+            <article className="surface-card rounded-[1.75rem] border border-dashed border-line bg-paper p-6">
+              <h2 className="text-2xl text-foreground [font-family:var(--font-display)]">
+                {volunteerCopy.emptyAssignedTitle}
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-muted">
+                {volunteerCopy.emptyAssignedBody}
+              </p>
+            </article>
         )
       ) : (
         <section>
           <p className="text-[0.8rem] font-semibold uppercase tracking-[0.16em] text-muted">
-            Completed
+            {volunteerCopy.sections.completed}
           </p>
           {preview.completed.length > 0 ? (
             <div className="mt-4 space-y-5">
@@ -112,17 +106,17 @@ export function VolunteerTaskBoard({ preview, initialTab = "assigned" }) {
                   key={task.id}
                   task={task}
                   avatarClass={avatarClasses[(index + 1) % avatarClasses.length]}
+                  copy={volunteerCopy}
                 />
               ))}
             </div>
           ) : (
             <article className="surface-card mt-4 rounded-[1.75rem] border border-dashed border-line bg-paper p-6">
               <h2 className="text-2xl text-foreground [font-family:var(--font-display)]">
-                No completed tasks yet
+                {volunteerCopy.emptyCompletedTitle}
               </h2>
               <p className="mt-3 text-sm leading-7 text-muted">
-                Completed volunteer handoffs will collect here once requests are
-                closed.
+                {volunteerCopy.emptyCompletedBody}
               </p>
             </article>
           )}
@@ -148,7 +142,7 @@ function TabButton({ label, active, onClick }) {
   );
 }
 
-function TaskCard({ task, avatarClass }) {
+function TaskCard({ task, avatarClass, copy }) {
   const [expandedPanel, setExpandedPanel] = useState("");
   const showNoteForm = expandedPanel === "note";
   const showDeclineForm = expandedPanel === "decline";
@@ -190,7 +184,7 @@ function TaskCard({ task, avatarClass }) {
 
       {task.accepted ? (
         <p className="mt-4 text-sm text-muted">
-          Accepted {task.acceptedLabel !== "No time set" ? task.acceptedLabel : "recently"}.
+          {copy.accepted(task.acceptedLabel)}
         </p>
       ) : null}
 
@@ -207,8 +201,8 @@ function TaskCard({ task, avatarClass }) {
               className="flex-1 min-w-[12rem]"
             >
               <SubmitButton
-                idleLabel="Accept task"
-                pendingLabel="Accepting..."
+                idleLabel={copy.acceptTask}
+                pendingLabel={copy.accepting}
                 className="w-full rounded-[1rem] border border-line bg-paper px-4 py-4 text-xl font-medium text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
               />
             </form>
@@ -227,8 +221,8 @@ function TaskCard({ task, avatarClass }) {
               className="flex-1 min-w-[12rem]"
             >
               <SubmitButton
-                idleLabel="Mark complete"
-                pendingLabel="Completing..."
+                idleLabel={copy.markComplete}
+                pendingLabel={copy.completing}
                 className="w-full rounded-[1rem] border border-line bg-paper px-4 py-4 text-xl font-medium text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
               />
             </form>
@@ -240,7 +234,7 @@ function TaskCard({ task, avatarClass }) {
               onClick={() => togglePanel("note")}
               className="min-w-[12rem] flex-1 rounded-[1rem] border border-line bg-paper px-4 py-4 text-xl font-medium text-foreground transition hover:bg-[#f4ecde]"
             >
-              {showNoteForm ? "Hide note" : "Add note"}
+              {showNoteForm ? copy.hideNote : copy.addNote}
             </button>
           ) : null}
 
@@ -250,7 +244,7 @@ function TaskCard({ task, avatarClass }) {
               onClick={() => togglePanel("decline")}
               className="min-w-[12rem] flex-1 rounded-[1rem] border border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)] px-4 py-4 text-xl font-medium text-clay transition hover:bg-[rgba(184,101,76,0.14)]"
             >
-              {showDeclineForm ? "Keep task" : "Decline task"}
+              {showDeclineForm ? copy.keepTask : copy.declineTask}
             </button>
           ) : null}
         </div>
@@ -268,19 +262,19 @@ function TaskCard({ task, avatarClass }) {
         >
           <label className="block">
             <span className="text-sm font-medium text-foreground">
-              Note for the care timeline
+              {copy.noteLabel}
             </span>
             <textarea
               name="body"
               rows={3}
-              placeholder="What happened, and what should the leader or pastor know next?"
+              placeholder={copy.notePlaceholder}
               required
               className="mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground outline-none transition focus:border-moss"
             />
           </label>
           <SubmitButton
-            idleLabel="Save note"
-            pendingLabel="Saving note..."
+            idleLabel={copy.saveNote}
+            pendingLabel={copy.savingNote}
             className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
           />
         </form>
@@ -298,19 +292,19 @@ function TaskCard({ task, avatarClass }) {
         >
           <label className="block">
             <span className="text-sm font-medium text-foreground">
-              Reason for re-routing
+              {copy.declineReason}
             </span>
             <textarea
               name="reason"
               rows={3}
               required
-              placeholder="Share what changed so the leader can reassign this safely."
+              placeholder={copy.declinePlaceholder}
               className="mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground outline-none transition focus:border-clay"
             />
           </label>
           <SubmitButton
-            idleLabel="Send back for re-routing"
-            pendingLabel="Sending back..."
+            idleLabel={copy.reroute}
+            pendingLabel={copy.rerouting}
             className="inline-flex items-center rounded-[1rem] border border-[rgba(184,101,76,0.18)] bg-paper px-4 py-3 text-sm font-semibold text-clay transition hover:bg-[#f8efe9] disabled:cursor-not-allowed disabled:opacity-70"
           />
         </form>

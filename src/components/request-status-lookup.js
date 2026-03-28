@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { lookupRequestStatus } from "@/app/actions";
+import { translateSupportNeed } from "@/lib/i18n";
 
 const statusToneClasses = {
   done: "border-[rgba(73,106,77,0.16)] bg-[rgba(73,106,77,0.08)] text-moss",
@@ -14,19 +15,25 @@ const statusToneClasses = {
 
 function buildInitialState(initialCode, initialResult) {
   return {
-    message: initialResult ? "We found your request." : "",
+    message: "",
     errors: {},
     lookupCode: initialCode || "",
     result: initialResult || null,
   };
 }
 
-export function RequestStatusLookup({ initialCode = "", initialResult = null }) {
+export function RequestStatusLookup({
+  initialCode = "",
+  initialResult = null,
+  copy,
+  language = "en",
+}) {
   const [state, formAction, pending] = useActionState(
     lookupRequestStatus,
     buildInitialState(initialCode, initialResult)
   );
   const result = state.result;
+  const statusCopy = copy.requestStatusLookup;
 
   return (
     <div className="space-y-6">
@@ -36,7 +43,7 @@ export function RequestStatusLookup({ initialCode = "", initialResult = null }) 
       >
         <label className="block">
           <span className="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
-            Tracking code
+            {statusCopy.trackingCodeLabel}
           </span>
           <input
             type="text"
@@ -53,15 +60,14 @@ export function RequestStatusLookup({ initialCode = "", initialResult = null }) 
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm leading-7 text-muted">
-            Enter the code from your intake confirmation to see the current care
-            status and a member-safe timeline.
+            {statusCopy.helper}
           </p>
           <button
             type="submit"
             disabled={pending}
             className="inline-flex items-center justify-center rounded-[1rem] bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {pending ? "Looking up request..." : "Check status"}
+            {pending ? statusCopy.checkingStatus : statusCopy.checkStatus}
           </button>
         </div>
       </form>
@@ -77,7 +83,7 @@ export function RequestStatusLookup({ initialCode = "", initialResult = null }) 
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-                Request located
+                {statusCopy.requestLocated}
               </p>
               <h2 className="mt-3 text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
                 {result.householdName}
@@ -94,15 +100,21 @@ export function RequestStatusLookup({ initialCode = "", initialResult = null }) 
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <InfoCard label="Support need" value={result.need} />
-            <InfoCard label="Created" value={result.createdLabel} />
-            <InfoCard label="Response window" value={result.dueLabel} />
-            <InfoCard label="Privacy" value={result.privacyLabel} />
+            <InfoCard
+              label={statusCopy.infoCards.supportNeed}
+              value={translateSupportNeed(result.need, language)}
+            />
+            <InfoCard label={statusCopy.infoCards.created} value={result.createdLabel} />
+            <InfoCard
+              label={statusCopy.infoCards.responseWindow}
+              value={result.dueLabel}
+            />
+            <InfoCard label={statusCopy.infoCards.privacy} value={result.privacyLabel} />
           </div>
 
           <div className="mt-6 rounded-[1.35rem] bg-canvas p-5">
             <p className="text-xs uppercase tracking-[0.18em] text-muted">
-              Current update
+              {statusCopy.currentUpdate}
             </p>
             <p className="mt-3 text-base leading-8 text-foreground">
               {result.statusDetail}
@@ -113,13 +125,13 @@ export function RequestStatusLookup({ initialCode = "", initialResult = null }) 
           <div className="mt-7">
             <div className="flex items-center justify-between gap-4">
               <h3 className="text-2xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
-                Member-safe timeline
+                {statusCopy.timelineTitle}
               </h3>
               <Link
                 href="/requests/new"
                 className="text-sm font-medium text-[#356fbe] transition hover:text-[#29578f]"
               >
-                Submit another request
+                {statusCopy.submitAnotherRequest}
               </Link>
             </div>
 
@@ -142,12 +154,12 @@ export function RequestStatusLookup({ initialCode = "", initialResult = null }) 
       ) : (
         <section className="grid gap-4 md:grid-cols-2">
           <HelperCard
-            title="What you can see here"
-            body="This page shows a member-safe view of the request status, follow-up stage, and privacy boundary without exposing internal notes."
+            title={statusCopy.helperCards.visibleTitle}
+            body={statusCopy.helperCards.visibleBody}
           />
           <HelperCard
-            title="No code yet?"
-            body="If you just submitted a request, use the tracking code shown on the confirmation screen. If you no longer have it, contact your church care team directly."
+            title={statusCopy.helperCards.noCodeTitle}
+            body={statusCopy.helperCards.noCodeBody}
           />
         </section>
       )}

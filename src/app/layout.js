@@ -1,7 +1,15 @@
 import Link from "next/link";
 import "./globals.css";
 import { logout } from "@/app/actions";
-import { getCurrentUser, getRoleLabel } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
+import { DisplayPreferencesForm } from "@/components/display-preferences-form";
+import { getAppPreferences } from "@/lib/app-preferences-server";
+import {
+  getCopy,
+  getDisplayModeOptionsWithLabels,
+  getLanguageOptionsWithLabels,
+  translateRoleLabel,
+} from "@/lib/i18n";
 import { getUnreadNotificationCountForUser } from "@/lib/notifications-store";
 
 export const metadata = {
@@ -21,14 +29,22 @@ export const metadata = {
 };
 
 export default async function RootLayout({ children }) {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
   const user = await getCurrentUser();
   const unreadNotificationCount = user
     ? getUnreadNotificationCountForUser(user)
     : 0;
-  const navLinks = buildNavLinks(user, unreadNotificationCount);
+  const navLinks = buildNavLinks(user, unreadNotificationCount, copy);
+  const languageOptions = getLanguageOptionsWithLabels(preferences.language);
+  const displayModeOptions = getDisplayModeOptionsWithLabels(preferences.language);
 
   return (
-    <html lang="en" className="h-full antialiased">
+    <html
+      lang={preferences.language}
+      data-display-mode={preferences.displayMode}
+      className="h-full antialiased"
+    >
       <body className="min-h-full text-foreground">
         <div className="relative isolate min-h-screen overflow-x-hidden">
           <div
@@ -46,10 +62,10 @@ export default async function RootLayout({ children }) {
                 </span>
                 <span>
                   <span className="block text-[0.68rem] uppercase tracking-[0.24em] text-muted">
-                    Church Care
+                    {copy.layout.brandKicker}
                   </span>
                   <span className="block text-sm font-semibold text-foreground">
-                    Operations board
+                    {copy.layout.brandTitle}
                   </span>
                 </span>
               </Link>
@@ -59,7 +75,7 @@ export default async function RootLayout({ children }) {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="rounded-full px-4 py-2 text-sm font-medium text-muted transition hover:bg-canvas hover:text-foreground"
+                    className="rounded-full px-4 py-3 text-sm font-medium text-muted transition hover:bg-canvas hover:text-foreground"
                   >
                     {item.label}
                   </Link>
@@ -70,24 +86,24 @@ export default async function RootLayout({ children }) {
                 {user ? (
                   <div className="flex items-center gap-3">
                     <span className="hidden rounded-full border border-[rgba(73,106,77,0.16)] bg-[rgba(73,106,77,0.10)] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-moss sm:inline-flex">
-                      {getRoleLabel(user.role)}
+                      {translateRoleLabel(user.role, preferences.language)}
                     </span>
                     <form action={logout}>
                       <button
                         type="submit"
-                        className="rounded-full border border-line bg-paper px-4 py-2 text-sm font-medium text-foreground transition hover:bg-canvas"
+                        className="rounded-full border border-line bg-paper px-4 py-3 text-sm font-medium text-foreground transition hover:bg-canvas"
                       >
                         <span className="hidden sm:inline">{user.name} / </span>
-                        Sign out
+                        {copy.layout.signOut}
                       </button>
                     </form>
                   </div>
                 ) : (
                   <Link
                     href="/login"
-                    className="rounded-full border border-[rgba(73,106,77,0.16)] bg-[rgba(73,106,77,0.10)] px-4 py-2 text-sm font-semibold text-moss transition hover:bg-[rgba(73,106,77,0.14)]"
+                    className="rounded-full border border-[rgba(73,106,77,0.16)] bg-[rgba(73,106,77,0.10)] px-4 py-3 text-sm font-semibold text-moss transition hover:bg-[rgba(73,106,77,0.14)]"
                   >
-                    Sign in
+                    {copy.layout.signIn}
                   </Link>
                 )}
               </div>
@@ -99,12 +115,32 @@ export default async function RootLayout({ children }) {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="shrink-0 rounded-full border border-line bg-paper px-4 py-2 text-sm font-medium text-muted transition hover:bg-canvas hover:text-foreground"
+                    className="shrink-0 rounded-full border border-line bg-paper px-4 py-3 text-sm font-medium text-muted transition hover:bg-canvas hover:text-foreground"
                   >
                     {item.label}
                   </Link>
                 ))}
               </nav>
+            </div>
+
+            <div className="border-t border-line bg-[rgba(255,250,242,0.88)] px-4 py-4">
+              <div className="mx-auto max-w-7xl px-2 lg:px-6">
+                <div className="mb-3 max-w-2xl">
+                  <p className="text-sm font-semibold text-foreground">
+                    {copy.layout.preferencesTitle}
+                  </p>
+                  <p className="mt-1 text-sm leading-7 text-muted">
+                    {copy.layout.preferencesBody}
+                  </p>
+                </div>
+                <DisplayPreferencesForm
+                  currentLanguage={preferences.language}
+                  currentDisplayMode={preferences.displayMode}
+                  languageOptions={languageOptions}
+                  displayModeOptions={displayModeOptions}
+                  copy={copy}
+                />
+              </div>
             </div>
           </header>
 
@@ -112,8 +148,8 @@ export default async function RootLayout({ children }) {
 
           <footer className="border-t border-line">
             <div className="mx-auto flex max-w-7xl flex-col gap-3 px-6 py-8 text-sm text-muted lg:flex-row lg:items-center lg:justify-between lg:px-10">
-              <p>Built for care teams who want clarity, warmth, and fewer dropped handoffs.</p>
-              <p>Pastors, deacons, and volunteers stay in one visible rhythm.</p>
+              <p>{copy.layout.footerPrimary}</p>
+              <p>{copy.layout.footerSecondary}</p>
             </div>
           </footer>
         </div>
@@ -122,26 +158,26 @@ export default async function RootLayout({ children }) {
   );
 }
 
-function buildNavLinks(user, unreadNotificationCount = 0) {
+function buildNavLinks(user, unreadNotificationCount = 0, copy) {
   const links = [
     {
       href: "/requests/new",
-      label: "Request Care",
+      label: copy.layout.nav.requestCare,
     },
     {
       href: "/requests/status",
-      label: "Track Request",
+      label: copy.layout.nav.trackRequest,
     },
     {
       href: "/permissions",
-      label: "Permissions",
+      label: copy.layout.nav.permissions,
     },
   ];
 
   if (!user) {
     links.push({
       href: "/login",
-      label: "Sign In",
+      label: copy.layout.nav.signIn,
     });
     return links;
   }
@@ -149,30 +185,30 @@ function buildNavLinks(user, unreadNotificationCount = 0) {
   if (["pastor", "owner"].includes(user.role)) {
     links.unshift({
       href: "/",
-      label: "Dashboard",
+      label: copy.layout.nav.dashboard,
     });
     links.push({
       href: "/teams",
-      label: "Teams",
+      label: copy.layout.nav.teams,
     });
     links.push({
       href: "/admin/users",
-      label: "People",
+      label: copy.layout.nav.people,
     });
     links.push({
       href: "/reports",
-      label: "Reports",
+      label: copy.layout.nav.reports,
     });
   }
 
   if (["leader", "pastor", "owner"].includes(user.role)) {
     links.push({
       href: "/leader",
-      label: "Leader View",
+      label: copy.layout.nav.leaderView,
     });
     links.push({
       href: "/households",
-      label: "Households",
+      label: copy.layout.nav.households,
     });
   }
 
@@ -181,26 +217,26 @@ function buildNavLinks(user, unreadNotificationCount = 0) {
       href: "/notifications",
       label:
         unreadNotificationCount > 0
-          ? `Notifications (${unreadNotificationCount})`
-          : "Notifications",
+          ? `${copy.layout.nav.notifications} (${unreadNotificationCount})`
+          : copy.layout.nav.notifications,
     });
     links.push({
       href: "/volunteer",
-      label: "Volunteer View",
+      label: copy.layout.nav.volunteerView,
     });
   }
 
   if (["pastor", "owner"].includes(user.role)) {
     links.push({
       href: "/audit",
-      label: "Audit",
+      label: copy.layout.nav.audit,
     });
   }
 
   if (user.role === "owner") {
     links.push({
       href: "/settings",
-      label: "Settings",
+      label: copy.layout.nav.settings,
     });
   }
 

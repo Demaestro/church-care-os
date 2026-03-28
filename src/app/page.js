@@ -2,6 +2,9 @@ import Link from "next/link";
 import { requireCurrentUser } from "@/lib/auth";
 import { APP_TIME_ZONE } from "@/lib/care-format";
 import { getDashboardData } from "@/lib/care-store";
+import { getLocaleTag } from "@/lib/app-preferences";
+import { getAppPreferences } from "@/lib/app-preferences-server";
+import { getCopy, translateSupportNeed } from "@/lib/i18n";
 import { getChurchSettings } from "@/lib/organization-store";
 import { atRiskMembers } from "@/lib/role-previews";
 
@@ -25,6 +28,8 @@ const riskBarClasses = {
 };
 
 export default async function Home() {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
   const user = await requireCurrentUser(["pastor", "owner"]);
   const settings = getChurchSettings();
   const { households, openRequests } = await getDashboardData();
@@ -33,7 +38,7 @@ export default async function Home() {
     id: request.id,
     initials: getInitials(request.householdName),
     name: request.householdName,
-    detail: `${request.need} - ${formatOwnerLabel(
+    detail: `${translateSupportNeed(request.need, preferences.language)} - ${formatOwnerLabel(
       request.owner,
       request.assignedVolunteer?.name
     )}`,
@@ -52,7 +57,7 @@ export default async function Home() {
       initials: getInitials(household.name),
       name: household.name,
       detail: `${household.situation} - ${household.owner || "Unassigned"}`,
-      age: formatFollowUpAge(household.nextTouchpoint, now),
+      age: formatFollowUpAge(household.nextTouchpoint, now, copy),
     }));
   const overdueCount = households.filter((household) =>
     isOverdue(household.nextTouchpoint, now)
@@ -60,7 +65,7 @@ export default async function Home() {
   const resolvedThisMonth = households.filter((household) =>
     ["Review", "Comfort"].includes(household.stage)
   ).length;
-  const dashboardDate = new Intl.DateTimeFormat("en-GB", {
+  const dashboardDate = new Intl.DateTimeFormat(getLocaleTag(preferences.language), {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -69,22 +74,22 @@ export default async function Home() {
   }).format(now);
   const metrics = [
     {
-      label: "Open cases",
+      label: copy.home.metrics.openCases,
       value: openRequests.length,
       tone: "default",
     },
     {
-      label: "Overdue follow-ups",
+      label: copy.home.metrics.overdueFollowUps,
       value: overdueCount,
       tone: "default",
     },
     {
-      label: "At risk members",
+      label: copy.home.metrics.atRiskMembers,
       value: atRiskMembers.length,
       tone: "clay",
     },
     {
-      label: "Resolved this month",
+      label: copy.home.metrics.resolvedThisMonth,
       value: resolvedThisMonth,
       tone: "moss",
     },
@@ -95,7 +100,7 @@ export default async function Home() {
       <section className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-4xl tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-5xl">
-            Good morning, {user.name}
+            {copy.home.greeting(user.name)}
           </p>
           <p className="mt-2 text-lg text-muted">
             {settings?.churchName || "Grace Community Church"} - {dashboardDate}
@@ -105,7 +110,7 @@ export default async function Home() {
           href="/requests/new"
           className="inline-flex items-center justify-center rounded-[1rem] border border-line bg-paper px-6 py-4 text-xl font-medium text-foreground transition hover:bg-[#f4ecde]"
         >
-          + New care request
+          {copy.home.newCareRequest}
         </Link>
       </section>
 
@@ -127,9 +132,9 @@ export default async function Home() {
 
       <section className="mt-8 grid gap-6 xl:grid-cols-2">
         <PanelCard
-          title="Active care cases"
+          title={copy.home.panels.activeCareCases}
           href="/households"
-          linkLabel="See all"
+          linkLabel={copy.home.panels.seeAll}
         >
           <div className="space-y-1">
             {activeCases.map((item) => (
@@ -156,9 +161,9 @@ export default async function Home() {
         </PanelCard>
 
         <PanelCard
-          title="Overdue follow-ups"
+          title={copy.home.panels.overdueFollowUps}
           href="/households"
-          linkLabel="See all"
+          linkLabel={copy.home.panels.seeAll}
         >
           <div className="space-y-1">
             {followUpRows.map((item) => (
@@ -184,13 +189,13 @@ export default async function Home() {
       <section className="mt-8 surface-card rounded-[1.75rem] border border-line bg-paper p-6 lg:p-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
-            Members at risk of being overlooked
+            {copy.home.panels.atRiskHeading}
           </h2>
           <Link
             href="/permissions"
             className="text-lg font-medium text-[#356fbe] transition hover:text-[#29578f]"
           >
-            How is this calculated? {"->"}
+            {copy.home.panels.howCalculated} {"->"}
           </Link>
         </div>
 
@@ -219,7 +224,7 @@ export default async function Home() {
                 type="button"
                 className="rounded-[1rem] border border-line bg-paper px-6 py-3 text-xl font-medium text-foreground transition hover:bg-[#f4ecde]"
               >
-                Reach out
+                {copy.home.panels.reachOut}
               </button>
             </article>
           ))}
@@ -294,10 +299,10 @@ function isOverdue(value, now) {
   return !Number.isNaN(date.valueOf()) && date.valueOf() < now.valueOf();
 }
 
-function formatFollowUpAge(value, now) {
+function formatFollowUpAge(value, now, copy = null) {
   const date = new Date(value);
   if (Number.isNaN(date.valueOf())) {
-    return "No date";
+    return copy?.home?.dates?.noDate || "No date";
   }
 
   const diff = date.valueOf() - now.valueOf();
@@ -305,16 +310,20 @@ function formatFollowUpAge(value, now) {
 
   if (diff < 0) {
     const overdueDays = Math.max(1, Math.ceil(Math.abs(diff) / (24 * 60 * 60 * 1000)));
-    return `${overdueDays} day${overdueDays === 1 ? "" : "s"} overdue`;
+    return copy?.home?.dates?.overdueDays
+      ? copy.home.dates.overdueDays(overdueDays)
+      : `${overdueDays} day${overdueDays === 1 ? "" : "s"} overdue`;
   }
 
   if (dayDiff === 0) {
-    return "Due today";
+    return copy?.home?.dates?.dueToday || "Due today";
   }
 
   if (dayDiff === 1) {
-    return "Due tomorrow";
+    return copy?.home?.dates?.dueTomorrow || "Due tomorrow";
   }
 
-  return `Due in ${dayDiff} days`;
+  return copy?.home?.dates?.dueInDays
+    ? copy.home.dates.dueInDays(dayDiff)
+    : `Due in ${dayDiff} days`;
 }

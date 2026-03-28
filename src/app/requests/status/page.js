@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { RequestStatusLookup } from "@/components/request-status-lookup";
+import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getMemberRequestStatusByTrackingCode } from "@/lib/care-store";
+import { getCopy } from "@/lib/i18n";
 import { getChurchSettings } from "@/lib/organization-store";
 
 export const metadata = {
@@ -10,6 +12,8 @@ export const metadata = {
 };
 
 export default async function RequestStatusPage({ searchParams }) {
+  const preferences = await getAppPreferences();
+  const copy = getCopy(preferences.language);
   const params = await searchParams;
   const trackingCode =
     typeof params?.code === "string" ? params.code.trim().toUpperCase() : "";
@@ -23,48 +27,51 @@ export default async function RequestStatusPage({ searchParams }) {
       <section className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
         <article className="surface-card rounded-[2rem] border border-line bg-paper p-8 lg:p-10">
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-            Member self-service
+            {copy.requestStatusPage.kicker}
           </p>
           <h1 className="mt-4 text-5xl leading-none tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-6xl">
-            Check where your care request stands.
+            {copy.requestStatusPage.title}
           </h1>
           <p className="mt-5 text-lg leading-8 text-muted">
-            Use the tracking code from your intake confirmation to see a calm,
-            member-safe progress view without logging in or exposing internal care
-            notes.
+            {copy.requestStatusPage.description}
           </p>
 
           <div className="mt-8 grid gap-4">
             <InfoPanel
-              title="What appears here"
-              body="You will see the request stage, the current follow-up status, and a privacy-safe timeline of major care handoffs."
+              title={copy.requestStatusPage.infoVisibleTitle}
+              body={copy.requestStatusPage.infoVisibleBody}
             />
             <InfoPanel
-              title="Need help with the code?"
-              body={`If you cannot find your code, contact ${settings?.supportEmail || "your church care team"}${settings?.supportPhone ? ` or call ${settings.supportPhone}` : ""}.`}
+              title={copy.requestStatusPage.infoSupportTitle}
+              body={copy.requestStatusPage.infoSupportBody(
+                settings?.supportEmail,
+                settings?.supportPhone
+              )}
             />
           </div>
 
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href="/requests/new"
-              className="inline-flex items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
-            >
-              Submit a care request
-            </Link>
-            <Link
-              href="/account-recovery"
-              className="inline-flex items-center justify-center rounded-[1rem] border border-[rgba(34,28,22,0.08)] bg-transparent px-5 py-3 text-sm font-semibold text-muted transition hover:bg-paper hover:text-foreground"
-            >
-              Account recovery
-            </Link>
-          </div>
-        </article>
+            href="/requests/new"
+            className="inline-flex items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
+          >
+            {copy.requestStatusPage.submitCareRequest}
+          </Link>
+          <Link
+            href="/account-recovery"
+            className="inline-flex items-center justify-center rounded-[1rem] border border-[rgba(34,28,22,0.08)] bg-transparent px-5 py-3 text-sm font-semibold text-muted transition hover:bg-paper hover:text-foreground"
+          >
+            {copy.requestStatusPage.accountRecovery}
+          </Link>
+        </div>
+      </article>
 
-        <RequestStatusLookup
-          initialCode={trackingCode}
-          initialResult={initialResult}
-        />
+      <RequestStatusLookup
+        copy={copy}
+        language={preferences.language}
+        initialCode={trackingCode}
+        initialResult={initialResult}
+      />
       </section>
     </div>
   );

@@ -14,20 +14,21 @@ const initialState = {
   submitted: false,
 };
 
-export function AccountRecoveryForm() {
+export function AccountRecoveryForm({ copy }) {
   const [state, formAction, pending] = useActionState(
     requestAccountRecovery,
     initialState
   );
+  const recoveryCopy = copy.recoveryForm;
 
   if (state.submitted) {
     return (
       <div className="rounded-[1.8rem] border border-[rgba(73,106,77,0.16)] bg-[rgba(73,106,77,0.08)] p-6">
         <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-moss">
-          Recovery request logged
+          {recoveryCopy.successKicker}
         </p>
         <h2 className="mt-4 text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
-          A care admin will review this manually.
+          {recoveryCopy.successTitle}
         </h2>
         <p className="mt-4 text-sm leading-7 text-muted">{state.message}</p>
       </div>
@@ -46,23 +47,23 @@ export function AccountRecoveryForm() {
       />
 
       <Field
-        label="Your name (optional)"
+        label={recoveryCopy.nameLabel}
         name="requesterName"
-        placeholder="Name of the person requesting help"
+        placeholder={recoveryCopy.namePlaceholder}
         defaultValue={state.values.requesterName}
       />
       <Field
-        label="Account email"
+        label={recoveryCopy.emailLabel}
         name="email"
         type="email"
-        placeholder="you@example.com"
+        placeholder={recoveryCopy.emailPlaceholder}
         defaultValue={state.values.email}
         error={state.errors.email}
       />
       <Field
-        label="What would help us verify this request? (optional)"
+        label={recoveryCopy.noteLabel}
         name="note"
-        placeholder="For example: your ministry role, last login, or safest way to reach you"
+        placeholder={recoveryCopy.notePlaceholder}
         defaultValue={state.values.note}
         multiline
       />
@@ -78,7 +79,7 @@ export function AccountRecoveryForm() {
         disabled={pending}
         className="inline-flex w-full items-center justify-center rounded-[1.15rem] bg-foreground px-6 py-4 text-lg font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
       >
-        {pending ? "Sending request..." : "Request account recovery"}
+        {pending ? recoveryCopy.submitting : recoveryCopy.submit}
       </button>
     </form>
   );
@@ -94,11 +95,11 @@ function Field({
   type = "text",
 }) {
   const classes =
-    "mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-[#8b847d] focus:border-moss";
+    "mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-4 text-base text-foreground outline-none transition placeholder:text-[#8b847d] focus:border-moss";
 
   return (
     <label className="block">
-      <span className="text-sm font-medium text-foreground">{label}</span>
+      <span className="text-base font-medium text-foreground">{label}</span>
       {multiline ? (
         <textarea
           name={name}

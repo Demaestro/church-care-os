@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { createCareRequest } from "@/app/actions";
 import { intakeSupportOptions, intakeUrgencyOptions } from "@/lib/role-previews";
+import { translateSupportNeed, translateUrgencyOption } from "@/lib/i18n";
 
 const initialState = {
   message: "",
@@ -23,20 +24,21 @@ const initialState = {
   trackingCode: "",
 };
 
-export function RequestIntakeForm() {
+export function RequestIntakeForm({ language = "en", copy }) {
   const [state, formAction, pending] = useActionState(
     createCareRequest,
     initialState
   );
+  const intakeCopy = copy.intakeForm;
 
   if (state.submitted) {
     return (
       <div className="rounded-[2rem] border border-[rgba(73,106,77,0.16)] bg-[rgba(73,106,77,0.08)] p-8">
         <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-moss">
-          Request received
+          {intakeCopy.successKicker}
         </p>
         <h2 className="mt-4 text-4xl tracking-[-0.04em] text-foreground [font-family:var(--font-display)]">
-          Your care request has been sent.
+          {intakeCopy.successTitle}
         </h2>
         <p className="mt-4 max-w-2xl text-base leading-8 text-muted">
           {state.message}
@@ -44,24 +46,23 @@ export function RequestIntakeForm() {
         {state.trackingCode ? (
           <div className="mt-6 space-y-4">
             <div className="inline-flex rounded-full border border-[rgba(73,106,77,0.18)] bg-paper px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-moss">
-              Tracking code: {state.trackingCode}
+              {intakeCopy.trackingCodeLabel}: {state.trackingCode}
             </div>
             <p className="max-w-2xl text-sm leading-7 text-muted">
-              Use this code any time you want to check the status of this request
-              without signing in.
+              {intakeCopy.trackingCodeHelp}
             </p>
             <div className="flex flex-wrap gap-3">
               <Link
                 href={`/requests/status?code=${encodeURIComponent(state.trackingCode)}`}
                 className="inline-flex items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
               >
-                Track this request
+                {intakeCopy.trackThisRequest}
               </Link>
               <Link
                 href="/requests/new"
                 className="inline-flex items-center justify-center rounded-[1rem] border border-[rgba(34,28,22,0.08)] bg-transparent px-5 py-3 text-sm font-semibold text-muted transition hover:bg-paper hover:text-foreground"
               >
-                Submit another request
+                {intakeCopy.submitAnother}
               </Link>
             </div>
           </div>
@@ -84,24 +85,27 @@ export function RequestIntakeForm() {
 
       <section className="space-y-5">
         <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
+            {intakeCopy.steps.support}
+          </p>
           <h2 className="text-4xl tracking-[-0.04em] text-foreground [font-family:var(--font-display)]">
-            Request care or support
+            {intakeCopy.title}
           </h2>
           <p className="mt-3 max-w-3xl text-base leading-8 text-muted">
-            This is a private space. Share what you&apos;re comfortable
-            sharing. Your pastor and care team are here to help, not judge.
+            {intakeCopy.intro}
           </p>
         </div>
 
         <div>
           <p className="text-lg font-semibold text-foreground">
-            What kind of support do you need?
+            {intakeCopy.supportQuestion}
           </p>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             {intakeSupportOptions.map((option) => (
               <SupportOption
                 key={option}
-                label={option}
+                label={translateSupportNeed(option, language)}
+                value={option}
                 defaultChecked={state.values.need === option}
               />
             ))}
@@ -112,69 +116,79 @@ export function RequestIntakeForm() {
         </div>
 
         <Field
-          label="Tell us a bit more (optional)"
+          label={intakeCopy.summaryLabel}
           name="summary"
-          placeholder="Share as much or as little as you're comfortable with. You can always add more later."
+          placeholder={intakeCopy.summaryPlaceholder}
           defaultValue={state.values.summary}
           multiline
         />
 
         <SelectField
-          label="How urgent is this?"
+          label={intakeCopy.urgencyLabel}
           name="responseWindow"
           defaultValue={state.values.responseWindow || "no-rush"}
-          options={intakeUrgencyOptions}
+          options={intakeUrgencyOptions.map((option) => ({
+            ...option,
+            label: translateUrgencyOption(option.value, language, option.label),
+          }))}
         />
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="md:col-span-2 xl:col-span-3">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
+            {intakeCopy.steps.contact}
+          </p>
+        </div>
         <Field
-          label="Your name (optional)"
+          label={intakeCopy.nameLabel}
           name="submittedBy"
-          placeholder="Leave blank if you want a pastor to review first"
+          placeholder={intakeCopy.namePlaceholder}
           defaultValue={state.values.submittedBy}
           error={state.errors.submittedBy}
         />
         <Field
-          label="Email for updates (optional, only if contact is allowed)"
+          label={intakeCopy.emailLabel}
           name="contactEmail"
           type="email"
-          placeholder="you@example.com"
+          placeholder={intakeCopy.emailPlaceholder}
           defaultValue={state.values.contactEmail}
           error={state.errors.contactEmail}
         />
         <Field
-          label="Best contact method (optional)"
+          label={intakeCopy.contactLabel}
           name="preferredContact"
-          placeholder="Phone number, email, or what works best"
+          placeholder={intakeCopy.contactPlaceholder}
           defaultValue={state.values.preferredContact}
           error={state.errors.preferredContact}
         />
       </section>
 
       <section className="rounded-[1.75rem] bg-canvas p-6">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
+          {intakeCopy.steps.privacy}
+        </p>
         <p className="max-w-3xl text-base leading-8 text-muted">
-          You control who sees this request. These choices apply to this
-          submission only.
+          {intakeCopy.privacyIntro}
         </p>
 
         <div className="mt-6 space-y-5">
           <ToggleField
             name="keepNamePrivate"
-            title="Keep my name private"
-            detail="Only your pastor will know this came from you."
+            title={intakeCopy.keepPrivateTitle}
+            detail={intakeCopy.keepPrivateDetail}
             defaultChecked={state.values.keepNamePrivate ?? false}
           />
           <ToggleField
             name="markSensitive"
-            title="Mark as sensitive"
-            detail="Visible only to pastor until they decide what should be shared more widely."
+            title={intakeCopy.sensitiveTitle}
+            detail={intakeCopy.sensitiveDetail}
             defaultChecked={state.values.markSensitive ?? true}
           />
           <ToggleField
             name="allowContact"
-            title="I consent to being contacted"
-            detail="Allow the care team to reach out by phone, text, or visit when follow-up is needed."
+            title={intakeCopy.allowContactTitle}
+            detail={intakeCopy.allowContactDetail}
             defaultChecked={state.values.allowContact ?? true}
           />
         </div>
@@ -186,24 +200,23 @@ export function RequestIntakeForm() {
           disabled={pending}
           className="inline-flex w-full items-center justify-center rounded-[1.15rem] border border-line bg-paper px-6 py-4 text-lg font-semibold text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {pending ? "Submitting care request..." : "Submit care request"}
+          {pending ? intakeCopy.submitting : intakeCopy.submit}
         </button>
         <p aria-live="polite" className="text-center text-sm text-muted">
-          {state.message ||
-            "Only the people you consent to share with will see this request inside the app."}
+          {state.message || intakeCopy.footerHelp}
         </p>
       </div>
     </form>
   );
 }
 
-function SupportOption({ label, defaultChecked }) {
+function SupportOption({ label, value, defaultChecked }) {
   return (
     <label className="block cursor-pointer">
       <input
         type="radio"
         name="need"
-        value={label}
+        value={value}
         defaultChecked={defaultChecked}
         className="peer sr-only"
       />
