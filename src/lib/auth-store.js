@@ -12,6 +12,7 @@ export function findUserByEmail(email) {
   const row = getDatabase()
     .prepare(`
       SELECT id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
+      , session_version, last_login_at
       FROM users
       WHERE email = ?
       LIMIT 1
@@ -29,6 +30,7 @@ export function findUserById(id) {
   const row = getDatabase()
     .prepare(`
       SELECT id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
+      , session_version, last_login_at
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -42,6 +44,7 @@ export function listUsers() {
   const rows = getDatabase()
     .prepare(`
       SELECT id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
+      , session_version, last_login_at
       FROM users
       ORDER BY role, name
     `)
@@ -137,6 +140,36 @@ export function toggleUserActiveEntry(userId, active) {
     .run(active ? 1 : 0, userId);
 }
 
+export function touchUserLoginEntry(userId) {
+  const existing = findUserById(userId);
+  if (!existing) {
+    throw new Error("User not found.");
+  }
+
+  getDatabase()
+    .prepare(`
+      UPDATE users
+      SET last_login_at = ?
+      WHERE id = ?
+    `)
+    .run(new Date().toISOString(), userId);
+}
+
+export function bumpUserSessionVersionEntry(userId) {
+  const existing = findUserById(userId);
+  if (!existing) {
+    throw new Error("User not found.");
+  }
+
+  getDatabase()
+    .prepare(`
+      UPDATE users
+      SET session_version = session_version + 1
+      WHERE id = ?
+    `)
+    .run(userId);
+}
+
 function mapUserRow(row) {
   if (!row) {
     return null;
@@ -152,6 +185,8 @@ function mapUserRow(row) {
     lane: row.lane || "",
     volunteerName: row.volunteer_name || "",
     active: row.active === 1,
+    sessionVersion: Number(row.session_version || 1),
+    lastLoginAt: row.last_login_at || "",
     createdAt: row.created_at,
   };
 }

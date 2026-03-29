@@ -87,6 +87,24 @@ function slugify(value) {
     .replace(/(^-|-$)/g, "");
 }
 
+function normalizeContactValue(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (trimmed.includes("@")) {
+    return trimmed.toLowerCase();
+  }
+
+  const digits = trimmed.replace(/[^\d+]/g, "");
+  if (digits.startsWith("+")) {
+    return `+${digits.slice(1).replace(/[^\d]/g, "")}`;
+  }
+
+  return digits.replace(/[^\d]/g, "");
+}
+
 function sortRequests(requests) {
   return [...requests].sort((first, second) => {
     if (first.status !== second.status) {
@@ -531,6 +549,91 @@ function buildRequestStatusDetail(request) {
   return "Your request has been received and is awaiting pastoral review.";
 }
 
+function isSameRequesterContact(request, contactValue) {
+  const normalized = normalizeContactValue(contactValue);
+  if (!normalized) {
+    return false;
+  }
+
+  const requesterEmail = normalizeContactValue(request.requester?.email);
+  const requesterPhone = normalizeContactValue(request.requester?.phone);
+
+  return normalized === requesterEmail || normalized === requesterPhone;
+}
+
+function buildMemberSafeRequest(request, household) {
+  const memberState = resolveMemberFacingState(request);
+  const householdName =
+    request.privacy?.visibility === "pastors-only"
+      ? "Private care request"
+      : request.householdName;
+  const need =
+    request.privacy?.visibility === "pastors-only" ? "Private support" : request.need;
+  const summary =
+    request.privacy?.visibility === "pastors-only"
+      ? "A pastor is keeping the details of this request private while follow-up is arranged."
+      : request.summary;
+
+  return {
+    id: request.id,
+    trackingCode: request.trackingCode,
+    householdSlug: request.householdSlug,
+    householdName,
+    need,
+    summary,
+    statusLabel: memberState.label,
+    statusTone: memberState.tone,
+    statusDetail: request.statusDetail || buildRequestStatusDetail(request),
+    createdLabel: request.createdLabel || formatDateTime(request.createdAt),
+    dueLabel: request.dueLabel || formatDateTime(request.dueAt),
+    isOpen: request.status === "Open",
+    timeline: buildMemberSafeTimeline(request, household),
+  };
+}
+
+function resolveScheduleBucket(nextTouchpoint, now = new Date()) {
+  const target = new Date(nextTouchpoint);
+  if (Number.isNaN(target.valueOf())) {
+    return {
+      bucket: "later",
+      bucketLabel: "Later",
+    };
+  }
+
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(startOfToday);
+  endOfToday.setHours(23, 59, 59, 999);
+  const nextWeek = new Date(endOfToday);
+  nextWeek.setDate(nextWeek.getDate() + 7);
+
+  if (target.valueOf() < startOfToday.valueOf()) {
+    return {
+      bucket: "overdue",
+      bucketLabel: "Overdue",
+    };
+  }
+
+  if (target.valueOf() <= endOfToday.valueOf()) {
+    return {
+      bucket: "today",
+      bucketLabel: "Today",
+    };
+  }
+
+  if (target.valueOf() <= nextWeek.valueOf()) {
+    return {
+      bucket: "this-week",
+      bucketLabel: "Next 7 days",
+    };
+  }
+
+  return {
+    bucket: "later",
+    bucketLabel: "Later",
+  };
+}
+
 function buildMemberSafeTimeline(request, household) {
   const events = [
     {
@@ -690,6 +793,154 @@ export async function getMemberRequestStatusByTrackingCode(trackingCode) {
         ? "Visible only to pastor until they decide what should be shared wider."
         : "Visible to pastor and assigned care leads.",
     timeline: buildMemberSafeTimeline(request, household),
+  };
+}
+
+export async function getMemberPortalData(trackingCode, contactValue) {
+  const normalizedCode = String(trackingCode || "").trim().toUpperCase();
+  const normalizedContact = normalizeContactValue(contactValue);
+
+  if (!normalizedCode || !normalizedContact) {
+    return null;
+  }
+
+  const request = mapRequestRecord(getRequestRecordByTrackingCode(normalizedCode));
+  if (!request || !isSameRequesterContact(request, normalizedContact)) {
+    return null;
+  }
+
+  const store = readStore();
+  const householdMap = new Map(
+    store.households.map((household) => [household.slug, household])
+  );
+  const matchingRequests = sortRequests(
+    store.requests.filter((item) => isSameRequesterContact(item, normalizedContact))
+  ).map((item) =>
+    buildMemberSafeRequest(item, buildHouseholdDetail(store, item.householdSlug))
+  );
+  const connectedHouseholds = Array.from(
+    new Map(
+      matchingRequests.map((item) => [
+        item.householdSlug,
+        {
+          slug: item.householdSlug,
+          name: item.householdName,
+          openRequests: matchingRequests.filter(
+            (requestItem) => requestItem.householdSlug === item.householdSlug && requestItem.isOpen
+          ).length,
+          lastUpdate:
+            householdMap.get(item.householdSlug)?.nextTouchpoint ||
+            householdMap.get(item.householdSlug)?.createdAt ||
+            "",
+        },
+      ])
+    ).values()
+  ).map((item) => ({
+    ...item,
+    lastUpdateLabel: formatDateTime(item.lastUpdate),
+  }));
+  const profileSource = request.requester || {};
+
+  return {
+    trackingCode: request.trackingCode,
+    contactValue: normalizedContact,
+    profile: {
+      submittedBy: profileSource.name || "",
+      email: profileSource.email || "",
+      phone: profileSource.phone || "",
+      preferredContact: profileSource.preferredContact || "",
+    },
+    requests: matchingRequests,
+    openRequests: matchingRequests.filter((item) => item.isOpen),
+    resolvedRequests: matchingRequests.filter((item) => !item.isOpen),
+    connectedHouseholds,
+  };
+}
+
+export async function updateMemberContactProfileEntry(trackingCode, contactValue, updates) {
+  const portal = await getMemberPortalData(trackingCode, contactValue);
+  if (!portal) {
+    throw new Error("We could not verify that member request access.");
+  }
+
+  const nextEmail = normalizeContactValue(updates.email || portal.profile.email);
+  const nextPhone = normalizeContactValue(updates.phone || portal.profile.phone);
+  const nextSubmittedBy = updates.submittedBy || portal.profile.submittedBy;
+  const nextPreferredContact = updates.preferredContact || portal.profile.preferredContact;
+  const matchValue = portal.contactValue;
+
+  withTransaction((db) => {
+    const rows = db.prepare(`
+      SELECT id, requester_json
+      FROM requests
+    `).all();
+
+    for (const row of rows) {
+      const requester = parseJson(row.requester_json, defaultRequester);
+      const request = {
+        requester,
+      };
+
+      if (!isSameRequesterContact(request, matchValue)) {
+        continue;
+      }
+
+      db.prepare(`
+        UPDATE requests
+        SET requester_json = ?
+        WHERE id = ?
+      `).run(
+        serializeJson({
+          ...requester,
+          name: nextSubmittedBy,
+          email: nextEmail,
+          phone: nextPhone,
+          preferredContact: nextPreferredContact,
+        }),
+        row.id
+      );
+    }
+  });
+
+  return {
+    trackingCode: portal.trackingCode,
+    contactValue: nextEmail || nextPhone || matchValue,
+  };
+}
+
+export async function getFollowUpScheduleData() {
+  const dashboard = await getDashboardData();
+  const now = new Date();
+  const items = dashboard.households
+    .filter((household) => household.nextTouchpoint)
+    .map((household) => {
+      const scheduleState = resolveScheduleBucket(household.nextTouchpoint, now);
+      const openRequest = household.relatedRequests.find((request) => request.status === "Open");
+
+      return {
+        householdSlug: household.slug,
+        householdName: household.name,
+        owner: household.owner || "Unassigned",
+        nextTouchpoint: household.nextTouchpoint,
+        nextTouchpointLabel: household.nextTouchpointLabel,
+        nextTouchpointShortLabel: household.nextTouchpointShortLabel,
+        summary: household.summaryNote || household.situation,
+        need: openRequest?.need || "Care follow-up",
+        openRequestCount: household.openRequestCount,
+        bucket: scheduleState.bucket,
+        bucketLabel: scheduleState.bucketLabel,
+      };
+    })
+    .sort((first, second) => sortByDateAsc(first.nextTouchpoint, second.nextTouchpoint));
+
+  return {
+    summary: {
+      overdue: items.filter((item) => item.bucket === "overdue").length,
+      today: items.filter((item) => item.bucket === "today").length,
+      thisWeek: items.filter((item) => item.bucket === "this-week").length,
+      later: items.filter((item) => item.bucket === "later").length,
+    },
+    items,
   };
 }
 
@@ -1123,6 +1374,41 @@ export async function addHouseholdNoteEntry(slug, input) {
     author: input.author || "Care team",
     kind: input.kind || "Follow-up",
     body: input.body,
+  });
+}
+
+export async function saveFollowUpPlanEntry(slug, input) {
+  const householdRecord = getHouseholdRecord(slug);
+  if (!householdRecord) {
+    throw new Error("Household not found.");
+  }
+
+  const household = mapHouseholdRecord(householdRecord);
+  const nextTouchpoint = input.nextTouchpoint || household.nextTouchpoint;
+  const nextOwner = input.owner || household.owner || "Unassigned";
+
+  withTransaction((db) => {
+    db.prepare(`
+      UPDATE households
+      SET next_touchpoint = ?, owner = ?
+      WHERE slug = ?
+    `).run(nextTouchpoint, nextOwner, slug);
+
+    db.prepare(`
+      UPDATE requests
+      SET owner = ?
+      WHERE household_slug = ? AND status = 'Open'
+    `).run(nextOwner, slug);
+
+    insertHouseholdNote(db, slug, {
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+      author: input.author || "Care scheduler",
+      kind: input.noteKind || "Follow-up",
+      body:
+        input.note ||
+        `Follow-up scheduled for ${formatDateTime(nextTouchpoint)}.`,
+    });
   });
 }
 

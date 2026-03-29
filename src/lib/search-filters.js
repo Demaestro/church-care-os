@@ -93,6 +93,62 @@ export function filterRecoveryRequests(requests, filters = {}) {
   });
 }
 
+export function filterTeams(teams, filters = {}) {
+  const query = String(filters.query || "");
+  const status = String(filters.status || "all");
+
+  return teams.filter((team) => {
+    const matchesQuery = matchesSearchQuery(
+      [
+        team.name,
+        team.lane,
+        team.description,
+        team.leadName,
+        team.contactEmail,
+        team.capabilities,
+        team.volunteers?.map((volunteer) => volunteer.name || volunteer.volunteerName),
+        team.leaders?.map((leader) => leader.name),
+      ],
+      query
+    );
+    const matchesStatus =
+      status === "all"
+        ? true
+        : status === "active"
+          ? team.active
+          : !team.active;
+
+    return matchesQuery && matchesStatus;
+  });
+}
+
+export function filterAuditEntries(entries, filters = {}) {
+  const query = String(filters.query || "");
+  const role = String(filters.role || "all");
+  const action = String(filters.action || "all");
+
+  return entries.filter((entry) => {
+    const matchesQuery = matchesSearchQuery(
+      [
+        entry.summary,
+        entry.actorName,
+        entry.actorRole,
+        entry.action,
+        entry.targetType,
+        entry.targetId,
+      ],
+      query
+    );
+    const matchesRole = role === "all" ? true : entry.actorRole === role;
+    const matchesAction =
+      action === "all"
+        ? true
+        : entry.action === action || entry.action.startsWith(`${action}.`);
+
+    return matchesQuery && matchesRole && matchesAction;
+  });
+}
+
 export function filterNotifications(notifications, filters = {}) {
   const query = String(filters.query || "");
   const status = String(filters.status || "all");
@@ -115,6 +171,26 @@ export function filterNotifications(notifications, filters = {}) {
   });
 }
 
+export function filterMemberRequests(requests, filters = {}) {
+  const query = String(filters.query || "");
+  const status = String(filters.status || "all");
+
+  return requests.filter((request) => {
+    const matchesQuery = matchesSearchQuery(
+      [request.householdName, request.need, request.statusLabel, request.summary],
+      query
+    );
+    const matchesStatus =
+      status === "all"
+        ? true
+        : status === "open"
+          ? request.isOpen
+          : !request.isOpen;
+
+    return matchesQuery && matchesStatus;
+  });
+}
+
 export function filterVolunteerLoads(items, filters = {}) {
   return items.filter((item) =>
     matchesSearchQuery([item.name, item.team, item.lane, item.email], filters.query)
@@ -131,6 +207,23 @@ export function filterRecentClosures(items, filters = {}) {
   return items.filter((item) =>
     matchesSearchQuery([item.householdName, item.need, item.closedLabel], filters.query)
   );
+}
+
+export function filterScheduleItems(items, filters = {}) {
+  const query = String(filters.query || "");
+  const bucket = String(filters.bucket || "all");
+  const owner = String(filters.owner || "all");
+
+  return items.filter((item) => {
+    const matchesQuery = matchesSearchQuery(
+      [item.householdName, item.owner, item.summary, item.need, item.bucketLabel],
+      query
+    );
+    const matchesBucket = bucket === "all" ? true : item.bucket === bucket;
+    const matchesOwner = owner === "all" ? true : item.owner === owner;
+
+    return matchesQuery && matchesBucket && matchesOwner;
+  });
 }
 
 export function hasActiveFilters(filters = {}) {

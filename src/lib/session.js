@@ -70,10 +70,11 @@ export async function createSession(user) {
     role: user.role,
     name: user.name,
     email: user.email,
-    lane: user.lane || "",
-    volunteerName: user.volunteerName || "",
-    exp: expiresAt,
-  });
+      lane: user.lane || "",
+      volunteerName: user.volunteerName || "",
+      sessionVersion: Number(user.sessionVersion || 1),
+      exp: expiresAt,
+    });
 
   (await cookies()).set(sessionCookieName, token, {
     path: "/",

@@ -12,6 +12,7 @@ import {
   filterRecentClosures,
   filterVolunteerLoads,
   hasActiveFilters,
+  matchesSearchQuery,
 } from "@/lib/search-filters";
 
 export const metadata = {
@@ -33,13 +34,45 @@ export default async function ReportsPage({ searchParams }) {
   const visibleVolunteerLoads = filterVolunteerLoads(report.volunteerLoads, filters);
   const visibleOverdueFollowUps = filterOverdueFollowUps(report.overdueFollowUps, filters);
   const visibleRecentClosures = filterRecentClosures(report.recentClosures, filters);
+  const visibleRequestTrend = report.requestTrend.filter((item) =>
+    matchesSearchQuery([item.label], filters.query)
+  );
+  const visibleOwnerLoad = report.ownerLoad.filter((item) =>
+    matchesSearchQuery([item.label], filters.query)
+  );
+  const visibleSourceMix = report.sourceMix.filter((item) =>
+    matchesSearchQuery([item.label], filters.query)
+  );
+  const visibleAgingBuckets = report.agingBuckets.filter((item) =>
+    matchesSearchQuery([item.label], filters.query)
+  );
   const showClearFilters = hasActiveFilters(filters);
+  const visibleSearchTotal =
+    visibleVolunteerLoads.length +
+    visibleOverdueFollowUps.length +
+    visibleRecentClosures.length +
+    visibleRequestTrend.length +
+    visibleOwnerLoad.length +
+    visibleSourceMix.length +
+    visibleAgingBuckets.length;
+  const overallSearchTotal =
+    report.volunteerLoads.length +
+    report.overdueFollowUps.length +
+    report.recentClosures.length +
+    report.requestTrend.length +
+    report.ownerLoad.length +
+    report.sourceMix.length +
+    report.agingBuckets.length;
   const needMax = Math.max(...report.needBreakdown.map((item) => item.count), 1);
   const stageMax = Math.max(...report.stageBreakdown.map((item) => item.count), 1);
   const volunteerMax = Math.max(
     ...visibleVolunteerLoads.map((item) => item.activeCount),
     1
   );
+  const trendMax = Math.max(...visibleRequestTrend.map((item) => item.count), 1);
+  const ownerLoadMax = Math.max(...visibleOwnerLoad.map((item) => item.count), 1);
+  const sourceMixMax = Math.max(...visibleSourceMix.map((item) => item.count), 1);
+  const agingMax = Math.max(...visibleAgingBuckets.map((item) => item.count), 1);
   const summaryCards = [
     {
       label: pageCopy.summary.openCareRequests,
@@ -135,10 +168,7 @@ export default async function ReportsPage({ searchParams }) {
             </div>
           </div>
           <p className="mt-4 text-sm leading-7 text-muted">
-            {pageCopy.searchSummary(
-              visibleVolunteerLoads.length + visibleOverdueFollowUps.length + visibleRecentClosures.length,
-              report.volunteerLoads.length + report.overdueFollowUps.length + report.recentClosures.length
-            )}
+            {pageCopy.searchSummary(visibleSearchTotal, overallSearchTotal)}
           </p>
         </form>
       </section>
@@ -271,6 +301,24 @@ export default async function ReportsPage({ searchParams }) {
               value={report.ops.auditLogCount}
             />
           </div>
+        </DataPanel>
+      </section>
+
+      <section className="mt-8 grid gap-6 xl:grid-cols-2">
+        <DataPanel title={pageCopy.panels.intakeTrend}>
+          <BarList items={visibleRequestTrend} max={trendMax} emptyBody={pageCopy.noSliceData} />
+        </DataPanel>
+        <DataPanel title={pageCopy.panels.ownerLoad}>
+          <BarList items={visibleOwnerLoad} max={ownerLoadMax} tone="moss" emptyBody={pageCopy.noSliceData} />
+        </DataPanel>
+      </section>
+
+      <section className="mt-8 grid gap-6 xl:grid-cols-2">
+        <DataPanel title={pageCopy.panels.sourceMix}>
+          <BarList items={visibleSourceMix} max={sourceMixMax} emptyBody={pageCopy.noSliceData} />
+        </DataPanel>
+        <DataPanel title={pageCopy.panels.caseAging}>
+          <BarList items={visibleAgingBuckets} max={agingMax} tone="moss" emptyBody={pageCopy.noSliceData} />
         </DataPanel>
       </section>
     </div>

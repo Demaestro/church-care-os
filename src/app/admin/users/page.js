@@ -1,7 +1,11 @@
 import {
   createUserAccount,
+  lockUserAccount,
+  revokeUserSessions,
   resetUserPassword,
   resolveRecoveryRequest,
+  sendAccountInviteLink,
+  unlockUserAccount,
   updateUserAccess,
 } from "@/app/actions";
 import { FlashBanner } from "@/components/flash-banner";
@@ -10,6 +14,7 @@ import { requireCurrentUser } from "@/lib/auth";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getLocaleTag } from "@/lib/app-preferences";
 import { listUsers } from "@/lib/auth-store";
+import { listAuditLogs } from "@/lib/care-store";
 import { getCopy, translateRecoveryStatus, translateRoleLabel } from "@/lib/i18n";
 import { listMinistryTeams, listRecoveryRequests } from "@/lib/organization-store";
 import { internalRoleOptions } from "@/lib/policies";
@@ -35,6 +40,7 @@ export default async function AdminUsersPage({ searchParams }) {
   const users = listUsers();
   const teams = listMinistryTeams();
   const recoveryRequests = listRecoveryRequests();
+  const auditEntries = listAuditLogs(240);
   const notice = typeof params?.notice === "string" ? params.notice : "";
   const error = typeof params?.error === "string" ? params.error : "";
   const filters = {
@@ -408,6 +414,8 @@ export default async function AdminUsersPage({ searchParams }) {
 
         {visibleUsers.map((account) => {
           const canManage = canManageRole(currentUser.role, account.role);
+          const roleHistory = getRoleHistory(auditEntries, account).slice(0, 4);
+          const sessionHistory = getSessionHistory(auditEntries, account).slice(0, 4);
 
           return (
             <article
@@ -437,6 +445,13 @@ export default async function AdminUsersPage({ searchParams }) {
                 <div className="rounded-[1rem] bg-canvas px-4 py-3 text-sm leading-7 text-muted">
                   {pageCopy.directory.createdOn}{" "}
                   {new Date(account.createdAt).toLocaleDateString(localeTag)}
+                  {account.lastLoginAt ? (
+                    <>
+                      <br />
+                      {pageCopy.directory.lastLogin}{" "}
+                      {new Date(account.lastLoginAt).toLocaleString(localeTag)}
+                    </>
+                  ) : null}
                 </div>
               </div>
 
@@ -507,28 +522,82 @@ export default async function AdminUsersPage({ searchParams }) {
                     />
                   </form>
 
-                  <form
-                    action={resetUserPassword.bind(null, account.id)}
-                    className="space-y-4 rounded-[1.35rem] border border-line bg-canvas p-5"
-                  >
-                    <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
-                      {pageCopy.fields.passwordReset}
-                    </p>
-                    <p className="text-sm leading-7 text-muted">
-                      {pageCopy.fields.passwordResetBody}
-                    </p>
-                    <Field
-                      label={pageCopy.fields.newPassword}
-                      name="password"
-                      type="password"
-                      placeholder={pageCopy.placeholders.newPassword}
-                    />
-                    <SubmitButton
-                      idleLabel={pageCopy.directory.setNewPassword}
-                      pendingLabel={pageCopy.directory.updatingPassword}
-                      className="inline-flex items-center rounded-[1rem] bg-foreground px-4 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
-                    />
-                  </form>
+                  <div className="space-y-4">
+                    <form
+                      action={resetUserPassword.bind(null, account.id)}
+                      className="space-y-4 rounded-[1.35rem] border border-line bg-canvas p-5"
+                    >
+                      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
+                        {pageCopy.fields.passwordReset}
+                      </p>
+                      <p className="text-sm leading-7 text-muted">
+                        {pageCopy.fields.passwordResetBody}
+                      </p>
+                      <Field
+                        label={pageCopy.fields.newPassword}
+                        name="password"
+                        type="password"
+                        placeholder={pageCopy.placeholders.newPassword}
+                      />
+                      <SubmitButton
+                        idleLabel={pageCopy.directory.setNewPassword}
+                        pendingLabel={pageCopy.directory.updatingPassword}
+                        className="inline-flex items-center rounded-[1rem] bg-foreground px-4 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
+                      />
+                    </form>
+
+                    <div className="rounded-[1.35rem] border border-line bg-canvas p-5">
+                      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted">
+                        {pageCopy.directory.securityControls}
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <form action={sendAccountInviteLink.bind(null, account.id)}>
+                          <SubmitButton
+                            idleLabel={pageCopy.directory.sendInvite}
+                            pendingLabel={pageCopy.directory.sendingInvite}
+                            className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
+                          />
+                        </form>
+                        <form action={revokeUserSessions.bind(null, account.id)}>
+                          <SubmitButton
+                            idleLabel={pageCopy.directory.revokeSessions}
+                            pendingLabel={pageCopy.directory.revokingSessions}
+                            className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
+                          />
+                        </form>
+                        <form
+                          action={
+                            account.active
+                              ? lockUserAccount.bind(null, account.id)
+                              : unlockUserAccount.bind(null, account.id)
+                          }
+                        >
+                          <SubmitButton
+                            idleLabel={
+                              account.active
+                                ? pageCopy.directory.lockAccount
+                                : pageCopy.directory.unlockAccount
+                            }
+                            pendingLabel={pageCopy.directory.savingSecurity}
+                            className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
+                          />
+                        </form>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <ActivityPanel
+                        title={pageCopy.directory.roleHistory}
+                        items={roleHistory}
+                        emptyLabel={pageCopy.directory.noRoleHistory}
+                      />
+                      <ActivityPanel
+                        title={pageCopy.directory.sessionHistory}
+                        items={sessionHistory}
+                        emptyLabel={pageCopy.directory.noSessionHistory}
+                      />
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="mt-6 rounded-[1.35rem] border border-line bg-canvas p-5">
@@ -558,6 +627,42 @@ function canManageRole(actorRole, role) {
   }
 
   return false;
+}
+
+function getRoleHistory(entries, account) {
+  return entries
+    .filter((entry) => {
+      if (entry.targetType !== "user") {
+        return false;
+      }
+
+      return entry.targetId === account.id || entry.targetId === account.email;
+    })
+    .filter((entry) =>
+      ["admin.user_created", "admin.user_updated"].includes(entry.action)
+    )
+    .map((entry) => ({
+      id: entry.id,
+      title:
+        entry.action === "admin.user_created" ? "Account created" : "Access updated",
+      body:
+        entry.metadata?.previousRole && entry.metadata?.role
+          ? `${entry.metadata.previousRole} -> ${entry.metadata.role}`
+          : entry.summary,
+      createdLabel: entry.createdLabel,
+    }));
+}
+
+function getSessionHistory(entries, account) {
+  return entries
+    .filter((entry) => entry.actorUserId === account.id)
+    .filter((entry) => ["auth.login", "auth.logout"].includes(entry.action))
+    .map((entry) => ({
+      id: entry.id,
+      title: entry.action === "auth.login" ? "Signed in" : "Signed out",
+      body: entry.summary,
+      createdLabel: entry.createdLabel,
+    }));
 }
 
 function MetricCard({ label, value }) {
@@ -670,6 +775,29 @@ function EmptyCard({ body }) {
   return (
     <div className="rounded-[1.35rem] border border-line bg-canvas p-5">
       <p className="text-sm leading-7 text-muted">{body}</p>
+    </div>
+  );
+}
+
+function ActivityPanel({ title, items, emptyLabel }) {
+  return (
+    <div className="rounded-[1.35rem] border border-line bg-paper p-4">
+      <p className="text-xs uppercase tracking-[0.18em] text-muted">{title}</p>
+      {items.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {items.map((item) => (
+            <article key={item.id} className="rounded-[1rem] border border-line bg-canvas p-3">
+              <p className="text-sm font-semibold text-foreground">{item.title}</p>
+              <p className="mt-1 text-sm leading-7 text-muted">{item.body}</p>
+              <p className="mt-2 text-xs uppercase tracking-[0.16em] text-muted">
+                {item.createdLabel}
+              </p>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm leading-7 text-muted">{emptyLabel}</p>
+      )}
     </div>
   );
 }

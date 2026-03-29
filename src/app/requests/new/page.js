@@ -60,6 +60,12 @@ export default async function NewRequestPage() {
             {copy.requestNew.trackRequest}
           </Link>
           <Link
+            href="/member"
+            className="font-medium text-foreground underline decoration-[rgba(34,28,22,0.18)] underline-offset-4"
+          >
+            {copy.layout.nav.memberPortal}
+          </Link>
+          <Link
             href="/permissions"
             className="font-medium text-foreground underline decoration-[rgba(34,28,22,0.18)] underline-offset-4"
           >

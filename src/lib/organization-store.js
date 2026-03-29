@@ -418,6 +418,90 @@ export const listVolunteerRoster = cache(function listVolunteerRoster() {
   );
 });
 
+function buildRequestTrend(requests) {
+  const buckets = new Map();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let index = 6; index >= 0; index -= 1) {
+    const day = new Date(today);
+    day.setDate(today.getDate() - index);
+    const key = day.toISOString().slice(0, 10);
+    buckets.set(key, {
+      key,
+      label: day.toLocaleDateString("en-GB", {
+        weekday: "short",
+        day: "numeric",
+      }),
+      count: 0,
+    });
+  }
+
+  for (const request of requests) {
+    const key = String(request.createdAt || "").slice(0, 10);
+    if (buckets.has(key)) {
+      buckets.get(key).count += 1;
+    }
+  }
+
+  return [...buckets.values()];
+}
+
+function buildOwnerLoad(households) {
+  const counts = households.reduce((result, household) => {
+    const owner = household.owner || "Unassigned";
+    result[owner] = (result[owner] ?? 0) + 1;
+    return result;
+  }, {});
+
+  return Object.entries(counts)
+    .map(([label, count]) => ({ label, count }))
+    .sort((first, second) => second.count - first.count);
+}
+
+function buildSourceMix(requests) {
+  const counts = requests.reduce((result, request) => {
+    const source = request.source || "Unknown";
+    result[source] = (result[source] ?? 0) + 1;
+    return result;
+  }, {});
+
+  return Object.entries(counts)
+    .map(([label, count]) => ({ label, count }))
+    .sort((first, second) => second.count - first.count);
+}
+
+function buildAgingBuckets(requests) {
+  const now = Date.now();
+  const counts = {
+    Overdue: 0,
+    "Due today": 0,
+    "1-3 days": 0,
+    "4+ days": 0,
+  };
+
+  for (const request of requests.filter((item) => item.status === "Open")) {
+    const dueAt = new Date(request.dueAt).valueOf();
+    if (Number.isNaN(dueAt)) {
+      counts["4+ days"] += 1;
+      continue;
+    }
+
+    const diffDays = Math.floor((dueAt - now) / (24 * 60 * 60 * 1000));
+    if (diffDays < 0) {
+      counts.Overdue += 1;
+    } else if (diffDays === 0) {
+      counts["Due today"] += 1;
+    } else if (diffDays <= 3) {
+      counts["1-3 days"] += 1;
+    } else {
+      counts["4+ days"] += 1;
+    }
+  }
+
+  return Object.entries(counts).map(([label, count]) => ({ label, count }));
+}
+
 export async function getOperationalReportData() {
   const [dashboard, settings] = await Promise.all([
     getDashboardData(),
@@ -495,6 +579,10 @@ export async function getOperationalReportData() {
         need: request.need,
         closedLabel: request.createdLabel,
       })),
+    requestTrend: buildRequestTrend(dashboard.requests),
+    ownerLoad: buildOwnerLoad(dashboard.households),
+    sourceMix: buildSourceMix(dashboard.requests),
+    agingBuckets: buildAgingBuckets(dashboard.requests),
   };
 }
 

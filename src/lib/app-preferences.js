@@ -13,6 +13,7 @@ export const languageOptions = [
 export const displayModeOptions = [
   { value: "standard", label: "Standard" },
   { value: "comfort", label: "Comfort" },
+  { value: "clarity", label: "Clarity" },
 ];
 
 const localeMap = {

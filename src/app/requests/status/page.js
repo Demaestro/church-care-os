@@ -52,26 +52,32 @@ export default async function RequestStatusPage({ searchParams }) {
 
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-            href="/requests/new"
-            className="inline-flex items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
-          >
-            {copy.requestStatusPage.submitCareRequest}
-          </Link>
-          <Link
-            href="/account-recovery"
-            className="inline-flex items-center justify-center rounded-[1rem] border border-[rgba(34,28,22,0.08)] bg-transparent px-5 py-3 text-sm font-semibold text-muted transition hover:bg-paper hover:text-foreground"
-          >
-            {copy.requestStatusPage.accountRecovery}
-          </Link>
-        </div>
-      </article>
+              href="/requests/new"
+              className="inline-flex items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
+            >
+              {copy.requestStatusPage.submitCareRequest}
+            </Link>
+            <Link
+              href="/member"
+              className="inline-flex items-center justify-center rounded-[1rem] border border-[rgba(34,28,22,0.08)] bg-transparent px-5 py-3 text-sm font-semibold text-muted transition hover:bg-paper hover:text-foreground"
+            >
+              {copy.layout.nav.memberPortal}
+            </Link>
+            <Link
+              href="/account-recovery"
+              className="inline-flex items-center justify-center rounded-[1rem] border border-[rgba(34,28,22,0.08)] bg-transparent px-5 py-3 text-sm font-semibold text-muted transition hover:bg-paper hover:text-foreground"
+            >
+              {copy.requestStatusPage.accountRecovery}
+            </Link>
+          </div>
+        </article>
 
-      <RequestStatusLookup
-        copy={copy}
-        language={preferences.language}
-        initialCode={trackingCode}
-        initialResult={initialResult}
-      />
+        <RequestStatusLookup
+          copy={copy}
+          language={preferences.language}
+          initialCode={trackingCode}
+          initialResult={initialResult}
+        />
       </section>
     </div>
   );

@@ -169,6 +169,10 @@ function buildNavLinks(user, unreadNotificationCount = 0, copy) {
       label: copy.layout.nav.trackRequest,
     },
     {
+      href: "/member",
+      label: copy.layout.nav.memberPortal,
+    },
+    {
       href: "/permissions",
       label: copy.layout.nav.permissions,
     },
@@ -205,6 +209,10 @@ function buildNavLinks(user, unreadNotificationCount = 0, copy) {
     links.push({
       href: "/leader",
       label: copy.layout.nav.leaderView,
+    });
+    links.push({
+      href: "/schedule",
+      label: copy.layout.nav.schedule,
     });
     links.push({
       href: "/households",

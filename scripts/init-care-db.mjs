@@ -220,6 +220,8 @@ function createSchema(database) {
       lane TEXT,
       volunteer_name TEXT,
       active INTEGER NOT NULL DEFAULT 1,
+      session_version INTEGER NOT NULL DEFAULT 1,
+      last_login_at TEXT,
       created_at TEXT NOT NULL
     ) STRICT;
 

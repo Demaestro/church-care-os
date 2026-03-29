@@ -31,6 +31,10 @@ export const getCurrentUser = cache(async function getCurrentUser() {
     return null;
   }
 
+  if (Number(session.sessionVersion || 1) !== Number(user.sessionVersion || 1)) {
+    return null;
+  }
+
   return sanitizeUser(user);
 });
 
@@ -81,5 +85,7 @@ function sanitizeUser(user) {
     lane: user.lane || "",
     volunteerName: user.volunteerName || "",
     active: user.active,
+    sessionVersion: Number(user.sessionVersion || 1),
+    lastLoginAt: user.lastLoginAt || "",
   };
 }

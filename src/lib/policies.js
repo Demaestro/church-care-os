@@ -10,6 +10,7 @@ export const internalRoles = Object.keys(roleLandingPages);
 export const protectedRouteRoles = {
   dashboard: ["pastor", "owner"],
   leader: ["leader", "pastor", "owner"],
+  schedule: ["leader", "pastor", "owner"],
   volunteer: ["volunteer", "leader", "pastor", "owner"],
   households: ["leader", "pastor", "owner"],
   audit: ["pastor", "owner"],

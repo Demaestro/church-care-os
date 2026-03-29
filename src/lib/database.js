@@ -189,6 +189,8 @@ function createSchema(db) {
       lane TEXT,
       volunteer_name TEXT,
       active INTEGER NOT NULL DEFAULT 1,
+      session_version INTEGER NOT NULL DEFAULT 1,
+      last_login_at TEXT,
       created_at TEXT NOT NULL
     ) STRICT;
 
@@ -368,6 +370,13 @@ function ensureSchemaMigrations(db) {
   addColumnIfMissing(db, "requests", "tracking_code", "TEXT");
   addColumnIfMissing(db, "requests", "status_detail", "TEXT");
   addColumnIfMissing(db, "users", "phone", "TEXT");
+  addColumnIfMissing(
+    db,
+    "users",
+    "session_version",
+    "INTEGER NOT NULL DEFAULT 1"
+  );
+  addColumnIfMissing(db, "users", "last_login_at", "TEXT");
   addColumnIfMissing(
     db,
     "church_settings",

@@ -5,6 +5,7 @@ import { requireCurrentUser } from "@/lib/auth";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getCopy } from "@/lib/i18n";
 import { listMinistryTeams } from "@/lib/organization-store";
+import { filterTeams, hasActiveFilters } from "@/lib/search-filters";
 
 export const metadata = {
   title: "Teams",
@@ -21,6 +22,12 @@ export default async function TeamsPage({ searchParams }) {
   const teams = listMinistryTeams();
   const notice = typeof params?.notice === "string" ? params.notice : "";
   const error = typeof params?.error === "string" ? params.error : "";
+  const filters = {
+    query: typeof params?.q === "string" ? params.q.trim() : "",
+    status: typeof params?.status === "string" ? params.status : "all",
+  };
+  const visibleTeams = filterTeams(teams, filters);
+  const showClearFilters = hasActiveFilters(filters);
   const activeTeams = teams.filter((team) => team.active);
 
   return (
@@ -64,6 +71,43 @@ export default async function TeamsPage({ searchParams }) {
 
       <section className="mt-8 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
+          <form action="/teams" className="rounded-[1.2rem] border border-line bg-canvas p-4">
+            <div className="grid gap-4 lg:grid-cols-[1fr_0.8fr_auto]">
+              <Field
+                label={copy.common.searchLabel}
+                name="q"
+                defaultValue={filters.query}
+                placeholder={pageCopy.placeholders.teamName}
+              />
+              <SelectField
+                label={pageCopy.fields.teamIsActive}
+                name="status"
+                defaultValue={filters.status}
+                options={[
+                  { value: "all", label: copy.common.allStatuses },
+                  { value: "active", label: copy.common.activeOnly },
+                  { value: "inactive", label: copy.common.inactiveOnly },
+                ]}
+              />
+              <div className="flex items-end gap-3">
+                <button
+                  type="submit"
+                  className="inline-flex min-h-14 items-center justify-center rounded-[1rem] bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f]"
+                >
+                  {copy.common.searchLabel}
+                </button>
+                {showClearFilters ? (
+                  <a
+                    href="/teams"
+                    className="inline-flex min-h-14 items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
+                  >
+                    {copy.common.clearFilters}
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          </form>
+
           <SectionHeading
             eyebrow={pageCopy.create.eyebrow}
             title={pageCopy.create.title}
@@ -117,7 +161,7 @@ export default async function TeamsPage({ searchParams }) {
         </article>
 
         <div className="space-y-4">
-          {teams.map((team) => (
+          {visibleTeams.map((team) => (
             <article
               key={team.id}
               className="surface-card rounded-[1.8rem] border border-line bg-paper p-6"
@@ -218,6 +262,11 @@ export default async function TeamsPage({ searchParams }) {
               </div>
             </article>
           ))}
+          {visibleTeams.length === 0 ? (
+            <article className="surface-card rounded-[1.8rem] border border-dashed border-line bg-paper p-6">
+              <p className="text-sm leading-7 text-muted">{copy.common.noMatchesFound}</p>
+            </article>
+          ) : null}
         </div>
       </section>
     </div>
@@ -260,6 +309,25 @@ function Field({ label, name, defaultValue, placeholder, type = "text" }) {
         placeholder={placeholder}
         className="mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground outline-none transition focus:border-moss"
       />
+    </label>
+  );
+}
+
+function SelectField({ label, name, defaultValue, options }) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        className="mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground outline-none transition focus:border-moss"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }

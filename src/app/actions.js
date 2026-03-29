@@ -16,10 +16,12 @@ import {
   requireCurrentUser,
 } from "@/lib/auth";
 import {
+  bumpUserSessionVersionEntry,
   createUserEntry,
   findUserByEmail,
   findUserById,
   setUserPasswordEntry,
+  touchUserLoginEntry,
   toggleUserActiveEntry,
   updateUserEntry,
 } from "@/lib/auth-store";
@@ -37,6 +39,8 @@ import {
   escalateRequestToPastorEntry,
   getMemberRequestStatusByTrackingCode,
   recordAuditLog,
+  saveFollowUpPlanEntry,
+  updateMemberContactProfileEntry,
   updateHouseholdSnapshotEntry,
   acceptVolunteerTaskEntry,
 } from "@/lib/care-store";
@@ -95,7 +99,8 @@ function normalizeEmail(value) {
 }
 
 function buildPathWithParams(path, values = {}) {
-  const params = new URLSearchParams();
+  const [pathname, existingQuery = ""] = String(path || "").split("?");
+  const params = new URLSearchParams(existingQuery);
 
   for (const [key, value] of Object.entries(values)) {
     if (value !== undefined && value !== null && value !== "") {
@@ -104,7 +109,7 @@ function buildPathWithParams(path, values = {}) {
   }
 
   const query = params.toString();
-  return query ? `${path}?${query}` : path;
+  return query ? `${pathname}?${query}` : pathname;
 }
 
 function redirectWithNotice(path, notice, values = {}) {
@@ -141,6 +146,13 @@ function buildMemberStatusPath(trackingCode) {
   return trackingCode
     ? `/requests/status?code=${encodeURIComponent(trackingCode)}`
     : "/requests/status";
+}
+
+function buildMemberPortalPath(trackingCode, contactValue = "") {
+  return buildPathWithParams("/member", {
+    code: trackingCode,
+    contact: contactValue,
+  });
 }
 
 function buildResetPasswordPath(token) {
@@ -247,6 +259,8 @@ function resolveResponseWindow(windowValue) {
 
 function revalidateCarePaths(householdSlug = "") {
   revalidatePath("/");
+  revalidatePath("/member");
+  revalidatePath("/schedule");
   revalidatePath("/teams");
   revalidatePath("/admin/users");
   revalidatePath("/reports");
@@ -352,6 +366,7 @@ export async function login(prevState, formData) {
     };
   }
 
+  touchUserLoginEntry(user.id);
   await createSession(user);
   recordAuditLog({
     ...buildActorLog(user),
@@ -1275,6 +1290,7 @@ export async function completePasswordReset(prevState, formData) {
 
   try {
     const updatedUser = consumePasswordResetTokenEntry(token, password);
+    bumpUserSessionVersionEntry(updatedUser.id);
 
     recordAuditLog({
       actorUserId: updatedUser.id,
@@ -1380,6 +1396,10 @@ export async function createUserAccount(formData) {
       targetType: "user",
       targetId: email,
       summary: `${actor.name} created a ${role} account for ${name}.`,
+      metadata: {
+        role,
+        active,
+      },
     });
 
     createNotifications({
@@ -1492,6 +1512,7 @@ export async function updateUserAccess(userId, formData) {
       targetId: userId,
       summary: `${actor.name} updated access for ${name}.`,
       metadata: {
+        previousRole: targetUser.role,
         role,
         active,
       },
@@ -1530,6 +1551,7 @@ export async function resetUserPassword(userId, formData) {
   try {
     assertUserManagement(actor, targetUser, targetUser.role);
     setUserPasswordEntry(userId, password);
+    bumpUserSessionVersionEntry(userId);
     invalidatePasswordResetTokensForUser(userId);
 
     if (recoveryRequestId) {
@@ -1602,6 +1624,181 @@ export async function resetUserPassword(userId, formData) {
 
   revalidateCarePaths();
   redirectWithNotice("/admin/users", `Password updated for ${targetUser.name}.`);
+}
+
+export async function sendAccountInviteLink(userId) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const targetUser = findUserById(userId);
+
+  if (!targetUser) {
+    redirectWithError("/admin/users", "That account no longer exists.");
+  }
+
+  try {
+    assertUserManagement(actor, targetUser, targetUser.role);
+    const resetToken = createPasswordResetTokenEntry(targetUser.email);
+
+    if (!resetToken) {
+      throw new Error("We could not create a sign-in link for that account.");
+    }
+
+    recordAuditLog({
+      ...buildActorLog(actor),
+      action: "admin.user_invite_sent",
+      targetType: "user",
+      targetId: targetUser.id,
+      summary: `${actor.name} sent a sign-in link to ${targetUser.name}.`,
+    });
+
+    createNotifications({
+      userIds: [targetUser.id],
+      kind: "account",
+      title: "Sign-in link sent",
+      body: `${actor.name} sent you a secure one-time link so you can finish setting up your password.`,
+      href: "/login",
+      metadata: {},
+    });
+
+    await emailAddress(
+      targetUser.email,
+      "password-reset-link",
+      {
+        email: targetUser.email,
+        expiresLabel: formatDateTime(resetToken.expiresAt),
+        resetPath: buildResetPasswordPath(resetToken.token),
+      },
+      {
+        recipientName: targetUser.name,
+        metadata: {
+          invitedBy: actor.name,
+          userId: targetUser.id,
+        },
+      }
+    );
+
+    if (targetUser.phone) {
+      await messagePhone(
+        targetUser.phone,
+        "sms",
+        "password-reset-link",
+        {
+          email: targetUser.email,
+          expiresLabel: formatDateTime(resetToken.expiresAt),
+          resetPath: buildResetPasswordPath(resetToken.token),
+        },
+        {
+          recipientName: targetUser.name,
+          metadata: {
+            invitedBy: actor.name,
+            userId: targetUser.id,
+          },
+        }
+      );
+    }
+  } catch (error) {
+    redirectWithError(
+      "/admin/users",
+      getActionErrorMessage(error, "We could not send that sign-in link.")
+    );
+  }
+
+  revalidateCarePaths();
+  redirectWithNotice("/admin/users", `Sent a sign-in link to ${targetUser.name}.`);
+}
+
+export async function revokeUserSessions(userId) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const targetUser = findUserById(userId);
+
+  if (!targetUser) {
+    redirectWithError("/admin/users", "That account no longer exists.");
+  }
+
+  try {
+    assertUserManagement(actor, targetUser, targetUser.role);
+    bumpUserSessionVersionEntry(userId);
+
+    recordAuditLog({
+      ...buildActorLog(actor),
+      action: "admin.user_sessions_revoked",
+      targetType: "user",
+      targetId: userId,
+      summary: `${actor.name} signed ${targetUser.name} out from every active session.`,
+    });
+  } catch (error) {
+    redirectWithError(
+      "/admin/users",
+      getActionErrorMessage(error, "We could not revoke those sessions.")
+    );
+  }
+
+  revalidateCarePaths();
+  redirectWithNotice("/admin/users", `Signed ${targetUser.name} out everywhere.`);
+}
+
+export async function lockUserAccount(userId) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const targetUser = findUserById(userId);
+
+  if (!targetUser) {
+    redirectWithError("/admin/users", "That account no longer exists.");
+  }
+
+  if (targetUser.id === actor.id) {
+    redirectWithError("/admin/users", "You cannot lock your own account.");
+  }
+
+  try {
+    assertUserManagement(actor, targetUser, targetUser.role);
+    toggleUserActiveEntry(userId, false);
+    bumpUserSessionVersionEntry(userId);
+
+    recordAuditLog({
+      ...buildActorLog(actor),
+      action: "admin.user_locked",
+      targetType: "user",
+      targetId: userId,
+      summary: `${actor.name} locked ${targetUser.name}'s account.`,
+    });
+  } catch (error) {
+    redirectWithError(
+      "/admin/users",
+      getActionErrorMessage(error, "We could not lock that account.")
+    );
+  }
+
+  revalidateCarePaths();
+  redirectWithNotice("/admin/users", `Locked ${targetUser.name}'s account.`);
+}
+
+export async function unlockUserAccount(userId) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const targetUser = findUserById(userId);
+
+  if (!targetUser) {
+    redirectWithError("/admin/users", "That account no longer exists.");
+  }
+
+  try {
+    assertUserManagement(actor, targetUser, targetUser.role);
+    toggleUserActiveEntry(userId, true);
+
+    recordAuditLog({
+      ...buildActorLog(actor),
+      action: "admin.user_unlocked",
+      targetType: "user",
+      targetId: userId,
+      summary: `${actor.name} unlocked ${targetUser.name}'s account.`,
+    });
+  } catch (error) {
+    redirectWithError(
+      "/admin/users",
+      getActionErrorMessage(error, "We could not unlock that account.")
+    );
+  }
+
+  revalidateCarePaths();
+  redirectWithNotice("/admin/users", `Unlocked ${targetUser.name}'s account.`);
 }
 
 export async function markNotificationRead(notificationId, href = "") {
@@ -1820,6 +2017,98 @@ export async function saveChurchSettings(formData) {
 
   revalidateCarePaths();
   redirectWithNotice("/settings", "Church settings updated.");
+}
+
+export async function updateMemberContactProfile(formData) {
+  const trackingCode = getString(formData, "trackingCode").toUpperCase();
+  const currentContact = getString(formData, "currentContact");
+  const submittedBy = getString(formData, "submittedBy");
+  const email = normalizeEmail(getString(formData, "email"));
+  const phone = normalizePhoneNumber(getString(formData, "phone"));
+  const preferredContact = getString(formData, "preferredContact");
+  const redirectPath = buildMemberPortalPath(trackingCode, currentContact);
+
+  if (!trackingCode || !currentContact) {
+    redirectWithError("/member", "We could not verify that member access link.");
+  }
+
+  if (email && !isValidEmailAddress(email)) {
+    redirectWithError(redirectPath, "Enter a valid email address.");
+  }
+
+  if (phone && !isValidMessagingPhone(phone)) {
+    redirectWithError(
+      redirectPath,
+      "Enter a phone number in international format, like +2348012345678."
+    );
+  }
+
+  try {
+    const result = await updateMemberContactProfileEntry(trackingCode, currentContact, {
+      submittedBy,
+      email,
+      phone,
+      preferredContact,
+    });
+
+    recordAuditLog({
+      actorName: submittedBy || "Member portal",
+      actorRole: "member",
+      action: "member.contact_updated",
+      targetType: "request",
+      targetId: trackingCode,
+      summary: `Member contact details were updated from the self-service portal.`,
+    });
+
+    revalidateCarePaths();
+    redirectWithNotice(
+      buildMemberPortalPath(result.trackingCode, result.contactValue),
+      "Your contact details were updated."
+    );
+  } catch (error) {
+    redirectWithError(
+      redirectPath,
+      getActionErrorMessage(error, "We could not update those contact details.")
+    );
+  }
+}
+
+export async function saveFollowUpPlan(householdSlug, formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const nextTouchpoint = getString(formData, "nextTouchpoint");
+
+  if (!householdSlug || !isValidDateTime(nextTouchpoint)) {
+    redirectWithError("/schedule", "Choose the next follow-up date and time first.");
+  }
+
+  try {
+    await saveFollowUpPlanEntry(householdSlug, {
+      nextTouchpoint,
+      owner: getString(formData, "owner"),
+      author: actor.name,
+      noteKind: getString(formData, "noteKind") || "Follow-up",
+      note: getString(formData, "note"),
+    });
+
+    recordAuditLog({
+      ...buildActorLog(actor),
+      action: "care.follow_up_planned",
+      targetType: "household",
+      targetId: householdSlug,
+      summary: `${actor.name} updated the follow-up plan for a household.`,
+      metadata: {
+        nextTouchpoint,
+      },
+    });
+  } catch (error) {
+    redirectWithError(
+      "/schedule",
+      getActionErrorMessage(error, "We could not save that follow-up plan.")
+    );
+  }
+
+  revalidateCarePaths(householdSlug);
+  redirectWithNotice("/schedule", "Follow-up plan updated.");
 }
 
 export async function sendTestEmail(formData) {

@@ -1,9 +1,13 @@
 import { describe, expect, test } from "vitest";
 import {
   filterHouseholds,
+  filterAuditEntries,
+  filterMemberRequests,
   filterNotifications,
   filterRecoveryRequests,
   filterRecentClosures,
+  filterScheduleItems,
+  filterTeams,
   filterOverdueFollowUps,
   filterUsers,
   filterVolunteerLoads,
@@ -183,5 +187,101 @@ describe("search filters", () => {
     expect(filterVolunteerLoads(volunteerLoads, { query: "ngozi mercy" })).toHaveLength(1);
     expect(filterOverdueFollowUps(overdueFollowUps, { query: "ruth overdue" })).toHaveLength(1);
     expect(filterRecentClosures(recentClosures, { query: "joyce meal" })).toHaveLength(1);
+  });
+
+  test("filters teams, audit entries, member requests, and schedule items", () => {
+    const teams = [
+      {
+        name: "Mercy & welfare team",
+        lane: "Mercy lane",
+        description: "Practical care support",
+        leadName: "Deacon Bello",
+        contactEmail: "mercy@grace.demo",
+        capabilities: ["Meals", "Visits"],
+        volunteers: [{ name: "Sister Ngozi" }],
+        leaders: [{ name: "Deacon Bello" }],
+        active: true,
+      },
+      {
+        name: "Prayer team",
+        lane: "Prayer lane",
+        description: "Prayer cover",
+        leadName: "Pastor Emmanuel",
+        contactEmail: "prayer@grace.demo",
+        capabilities: ["Prayer"],
+        volunteers: [],
+        leaders: [{ name: "Pastor Emmanuel" }],
+        active: false,
+      },
+    ];
+    const auditEntries = [
+      {
+        summary: "Pastor Emmanuel signed in.",
+        actorName: "Pastor Emmanuel",
+        actorRole: "pastor",
+        action: "auth.login",
+        targetType: "session",
+        targetId: "abc",
+      },
+      {
+        summary: "Deacon Bello updated access for Sister Ngozi.",
+        actorName: "Deacon Bello",
+        actorRole: "leader",
+        action: "admin.user_updated",
+        targetType: "user",
+        targetId: "user-1",
+      },
+    ];
+    const memberRequests = [
+      {
+        householdName: "Ruth Okonkwo",
+        need: "Prayer",
+        statusLabel: "Assigned",
+        summary: "Care lead assigned",
+        isOpen: true,
+      },
+      {
+        householdName: "Joyce Akin",
+        need: "Meal support",
+        statusLabel: "Resolved",
+        summary: "Care completed",
+        isOpen: false,
+      },
+    ];
+    const scheduleItems = [
+      {
+        householdName: "Ruth Okonkwo",
+        owner: "Mercy lane",
+        summary: "Phone check-in",
+        need: "Prayer",
+        bucket: "overdue",
+        bucketLabel: "Overdue",
+      },
+      {
+        householdName: "Joyce Akin",
+        owner: "Prayer lane",
+        summary: "Meal follow-up",
+        need: "Meal support",
+        bucket: "today",
+        bucketLabel: "Today",
+      },
+    ];
+
+    expect(
+      filterTeams(teams, { query: "ngozi meals", status: "active" })
+    ).toHaveLength(1);
+    expect(
+      filterAuditEntries(auditEntries, { query: "signed", role: "pastor", action: "auth" })
+    ).toHaveLength(1);
+    expect(
+      filterMemberRequests(memberRequests, { query: "joyce", status: "resolved" })
+    ).toHaveLength(1);
+    expect(
+      filterScheduleItems(scheduleItems, {
+        query: "ruth prayer",
+        bucket: "overdue",
+        owner: "Mercy lane",
+      })
+    ).toHaveLength(1);
   });
 });

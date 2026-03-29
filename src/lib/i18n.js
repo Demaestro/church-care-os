@@ -19,6 +19,7 @@ const englishDictionary = {
     applyPreferences: "Apply",
     roleLabels: {
       member: "Member",
+      public: "Public",
       owner: "Owner",
       pastor: "Pastor",
       leader: "Leader",
@@ -28,12 +29,14 @@ const englishDictionary = {
       dashboard: "Dashboard",
       requestCare: "Request care",
       trackRequest: "Track request",
+      memberPortal: "Member portal",
       permissions: "Permissions",
       signIn: "Sign in",
       teams: "Teams",
       people: "People",
       reports: "Reports",
       leaderView: "Leader view",
+      schedule: "Schedule",
       households: "Households",
       volunteerView: "Volunteer view",
       notifications: "Notifications",
@@ -48,6 +51,7 @@ const englishDictionary = {
   displayModes: {
     standard: "Standard",
     comfort: "Comfort / larger text",
+    clarity: "Clarity / highest contrast",
   },
   home: {
     greeting: (name) => `Good morning, ${name}`,
@@ -352,6 +356,7 @@ const englishDictionary = {
     allRoles: "All roles",
     allStatuses: "All statuses",
     allKinds: "All types",
+    allOwners: "All owners",
     allRecoveryStatuses: "All recovery statuses",
     allRisks: "All risk levels",
     allAssignments: "All assignments",
@@ -380,6 +385,7 @@ const englishDictionary = {
     available: "Available",
     notNeededInLogOnlyMode: "Not needed in log-only mode",
     notAttemptedYet: "Not attempted yet",
+    noMatchesFound: "Nothing matched the current filters yet.",
     labels: {
       template: "Template",
       provider: "Provider",
@@ -387,6 +393,7 @@ const englishDictionary = {
       lastAttempt: "Last attempt",
       read: "Read",
       nextStep: "Next step",
+      lastSeen: "Last seen",
     },
     stages: {
       Assign: "Assign",
@@ -450,6 +457,62 @@ const englishDictionary = {
       full: "Full access",
       own: "Own records only",
       none: "No access",
+    },
+  },
+  memberPortal: {
+    kicker: "Member care hub",
+    title: "Review your care history without learning the internal workflow.",
+    description:
+      "Use the tracking code and the email or phone number from your request so you can see current and past care follow-up in one calm, privacy-safe place.",
+    requestCare: "Request care",
+    trackSingleRequest: "Track one request",
+    lookupEyebrow: "Open your portal",
+    lookupTitle: "Use one request to unlock your care history",
+    lookupBody:
+      "Enter a tracking code together with the email or phone number you used on that request. If they match, this page will show the other requests connected to that same contact detail.",
+    helpTitle: "Need help?",
+    helperBody:
+      "Start with any recent tracking code and the email or phone number you used when you asked for care.",
+    notFound:
+      "We could not verify that combination yet. Check the tracking code and the contact detail you used on that request.",
+    emptyPortal:
+      "Once the code and contact match, your requests and households will appear here.",
+    profileEyebrow: "Contact details",
+    profileTitle: "Keep your follow-up details current",
+    historyTitle: "Request history",
+    householdsTitle: "Connected households",
+    searchPlaceholder: "Search by household name, support type, or status",
+    noMatches: "No requests in this portal match the current filters.",
+    lastPlannedTouchpoint: "Last planned touchpoint:",
+    connectedRequests: (count) =>
+      `${count} open request${count === 1 ? "" : "s"} connected to this household.`,
+    metrics: {
+      totalRequests: "Total requests",
+      openRequests: "Open requests",
+      households: "Households",
+    },
+    statuses: {
+      open: "Open",
+      resolved: "Resolved",
+    },
+    fields: {
+      trackingCode: "Tracking code",
+      contact: "Email or phone used on the request",
+      name: "Your name",
+      preferredContact: "Preferred contact method",
+      email: "Email",
+      phone: "Phone",
+      requestStatus: "Request status",
+    },
+    placeholders: {
+      contact: "you@example.com or +2348012345678",
+      name: "Tell us how you want your name to appear",
+      preferredContact: "Phone, email, or what works best",
+    },
+    buttons: {
+      openPortal: "Open member portal",
+      saveProfile: "Save contact details",
+      savingProfile: "Saving details...",
     },
   },
   leader: {
@@ -726,6 +789,19 @@ const englishDictionary = {
       savingChanges: "Saving changes...",
       setNewPassword: "Set new password",
       updatingPassword: "Updating password...",
+      securityControls: "Security controls",
+      sendInvite: "Send sign-in link",
+      sendingInvite: "Sending link...",
+      revokeSessions: "Revoke sessions",
+      revokingSessions: "Revoking...",
+      lockAccount: "Lock account",
+      unlockAccount: "Unlock account",
+      savingSecurity: "Saving...",
+      lastLogin: "Last login",
+      roleHistory: "Role history",
+      noRoleHistory: "No role changes are recorded for this account yet.",
+      sessionHistory: "Session activity",
+      noSessionHistory: "No recent sign-in or sign-out activity is recorded yet.",
       oversightOnly:
         "This account is visible for oversight, but only an owner can manage users at this role level.",
     },
@@ -762,6 +838,10 @@ const englishDictionary = {
       overdueFollowUps: "Overdue follow-ups",
       recentClosures: "Recent closures",
       governanceSnapshot: "Governance snapshot",
+      intakeTrend: "New requests over the last 7 days",
+      ownerLoad: "Household ownership load",
+      sourceMix: "How requests entered the system",
+      caseAging: "Open request aging",
     },
     noOverdue: "No overdue follow-ups are showing right now.",
     noClosures: "No closed requests are available yet.",
@@ -1036,6 +1116,44 @@ const englishDictionary = {
     details: {
       actor: "Actor",
       role: "Role",
+      action: "Action",
+      target: "Target type",
+    },
+  },
+  schedule: {
+    kicker: "Follow-up planning",
+    title: "Keep the next touchpoint visible before care starts to drift.",
+    description:
+      "This board turns household next-touchpoint dates into a simple planning rhythm for leaders and pastors. Use it to catch overdue follow-up, reassign ownership, and leave a planning note in one step.",
+    searchPlaceholder: "Search by household, owner, or support type",
+    nextTouchpoint: "Next touchpoint:",
+    openHousehold: "Open household",
+    empty: "No follow-up items match the current filters.",
+    metrics: {
+      overdue: "Overdue",
+      today: "Today",
+      thisWeek: "This week",
+      later: "Later",
+    },
+    buckets: {
+      overdue: "Overdue",
+      today: "Today",
+      thisWeek: "Next 7 days",
+      later: "Later",
+    },
+    fields: {
+      bucket: "Time bucket",
+      owner: "Owner",
+      nextTouchpoint: "Next touchpoint",
+      note: "Planning note",
+    },
+    placeholders: {
+      owner: "Mercy team",
+      note: "Briefly note what should happen next",
+    },
+    buttons: {
+      savePlan: "Save follow-up plan",
+      savingPlan: "Saving plan...",
     },
   },
   permissions: {
