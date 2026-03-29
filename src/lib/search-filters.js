@@ -63,7 +63,7 @@ export function filterUsers(users, filters = {}) {
 
   return users.filter((user) => {
     const matchesQuery = matchesSearchQuery(
-      [user.name, user.email, user.role, user.lane, user.volunteerName],
+      [user.name, user.email, user.phone, user.role, user.lane, user.volunteerName],
       query
     );
     const matchesRole = role === "all" ? true : user.role === role;
@@ -91,6 +91,46 @@ export function filterRecoveryRequests(requests, filters = {}) {
 
     return matchesQuery && matchesStatus;
   });
+}
+
+export function filterNotifications(notifications, filters = {}) {
+  const query = String(filters.query || "");
+  const status = String(filters.status || "all");
+  const kind = String(filters.kind || "all");
+
+  return notifications.filter((notification) => {
+    const matchesQuery = matchesSearchQuery(
+      [notification.title, notification.body, notification.kind],
+      query
+    );
+    const matchesStatus =
+      status === "all"
+        ? true
+        : status === "unread"
+          ? !notification.read
+          : notification.read;
+    const matchesKind = kind === "all" ? true : notification.kind === kind;
+
+    return matchesQuery && matchesStatus && matchesKind;
+  });
+}
+
+export function filterVolunteerLoads(items, filters = {}) {
+  return items.filter((item) =>
+    matchesSearchQuery([item.name, item.team, item.lane, item.email], filters.query)
+  );
+}
+
+export function filterOverdueFollowUps(items, filters = {}) {
+  return items.filter((item) =>
+    matchesSearchQuery([item.name, item.owner, item.dueLabel], filters.query)
+  );
+}
+
+export function filterRecentClosures(items, filters = {}) {
+  return items.filter((item) =>
+    matchesSearchQuery([item.householdName, item.need, item.closedLabel], filters.query)
+  );
 }
 
 export function hasActiveFilters(filters = {}) {

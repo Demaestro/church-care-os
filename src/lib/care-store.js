@@ -23,6 +23,7 @@ const defaultPrivacyPreference = {
 const defaultRequester = {
   name: "Member",
   email: "",
+  phone: "",
   preferredContact: "Follow up requested",
   requestFor: "self",
 };
@@ -1019,6 +1020,7 @@ export async function createCareRequestEntry(input) {
       serializeJson({
         name: input.submittedBy || "Member",
         email: input.contactEmail || "",
+        phone: input.contactPhone || "",
         preferredContact: input.preferredContact || "Follow up requested",
         requestFor: input.requestFor || "self",
       }),

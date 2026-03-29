@@ -103,6 +103,9 @@ const englishDictionary = {
     namePlaceholder: "Leave blank if you want a pastor to review first",
     emailLabel: "Email for updates (optional, only if contact is allowed)",
     emailPlaceholder: "you@example.com",
+    phoneLabel: "Phone for updates (optional, only if contact is allowed)",
+    phonePlaceholder: "+2348012345678",
+    phoneError: "Enter a phone number in international format, like +2348012345678.",
     contactLabel: "Best contact method (optional)",
     contactPlaceholder: "Phone number, email, or what works best",
     privacyIntro:
@@ -348,6 +351,7 @@ const englishDictionary = {
     all: "All",
     allRoles: "All roles",
     allStatuses: "All statuses",
+    allKinds: "All types",
     allRecoveryStatuses: "All recovery statuses",
     allRisks: "All risk levels",
     allAssignments: "All assignments",
@@ -355,6 +359,8 @@ const englishDictionary = {
     unassignedOnly: "Unassigned only",
     activeOnly: "Active only",
     inactiveOnly: "Inactive only",
+    unreadOnly: "Unread only",
+    readOnly: "Read only",
     showingResults: (visible, total) =>
       `Showing ${visible} of ${total}.`,
     member: "Member",
@@ -371,6 +377,7 @@ const englishDictionary = {
     notSet: "Not set",
     noChannelsListed: "No channels listed",
     volunteerRoster: "Volunteer roster",
+    available: "Available",
     notNeededInLogOnlyMode: "Not needed in log-only mode",
     notAttemptedYet: "Not attempted yet",
     labels: {
@@ -433,6 +440,11 @@ const englishDictionary = {
       "care-request": "Care request",
       account: "Account",
       update: "Update",
+      "recovery-request": "Recovery request",
+    },
+    messageChannels: {
+      sms: "SMS",
+      whatsapp: "WhatsApp",
     },
     permissionAccess: {
       full: "Full access",
@@ -649,6 +661,7 @@ const englishDictionary = {
     fields: {
       fullName: "Full name",
       email: "Email",
+      phone: "Phone number",
       role: "Role",
       lane: "Lane or team lane",
       volunteerDisplayName: "Volunteer display name",
@@ -670,6 +683,7 @@ const englishDictionary = {
     placeholders: {
       fullName: "Sister Ngozi Okafor",
       email: "ngozi@gracecommunity.church",
+      phone: "+2348012345678",
       lane: "Mercy & welfare lane",
       volunteerDisplayName: "Shown in volunteer task view",
       temporaryPassword: "Create a strong password",
@@ -752,6 +766,8 @@ const englishDictionary = {
     noOverdue: "No overdue follow-ups are showing right now.",
     noClosures: "No closed requests are available yet.",
     noSliceData: "No reporting data is available for this slice yet.",
+    searchPlaceholder: "Search volunteers, households, or recent closures",
+    searchSummary: (visible, total) => `Showing ${visible} of ${total} searchable report items.`,
     governance: {
       plan: "Plan",
       backupPosture: "Backup posture",
@@ -821,7 +837,9 @@ const englishDictionary = {
       plan: "Plan",
       teamCount: "Team count",
       emailMode: "Email mode",
+      messageMode: "Message mode",
       sentEmails: "Sent emails",
+      sentMessages: "Sent messages",
     },
     sections: {
       churchProfile: {
@@ -836,6 +854,12 @@ const englishDictionary = {
         body:
           "Sender details live here. Provider secrets stay in environment variables, not in the database.",
       },
+      messageDelivery: {
+        eyebrow: "Phone and WhatsApp delivery",
+        title: "Provider-ready text and chat alerts",
+        body:
+          "Configure the sender numbers and default delivery mode here. Provider credentials stay in environment variables, not in the database.",
+      },
       operationalSnapshot: {
         eyebrow: "Operational snapshot",
         title: "Current system posture",
@@ -847,6 +871,12 @@ const englishDictionary = {
         title: "Delivery readiness and outbox health",
         body:
           "Log-only mode is safe for local rehearsal. Live delivery needs both a valid sender address and the Resend API key in the host environment.",
+      },
+      messagePosture: {
+        eyebrow: "Message posture",
+        title: "Text and WhatsApp readiness",
+        body:
+          "Log-only mode records every message safely. Live delivery needs valid sender numbers and Twilio credentials in the host environment.",
       },
       liveExperience: {
         eyebrow: "Live experience",
@@ -860,11 +890,23 @@ const englishDictionary = {
         body:
           "This sends a branded test through the current mode. In log-only mode it still lands in the outbox so you can review the rendered message.",
       },
+      messageDeliveryTest: {
+        eyebrow: "Phone and WhatsApp test",
+        title: "Queue a test message",
+        body:
+          "Use this to verify that text and WhatsApp delivery settings are logging or sending correctly before the team depends on them.",
+      },
       outbox: {
         eyebrow: "Outbox",
         title: "Recent email activity",
         body:
           "Every delivery attempt is recorded here, even when live sending is turned off.",
+      },
+      messageOutbox: {
+        eyebrow: "Message outbox",
+        title: "Recent SMS and WhatsApp activity",
+        body:
+          "Every text or WhatsApp attempt is recorded here, even when live sending is turned off.",
       },
     },
     fields: {
@@ -887,12 +929,21 @@ const englishDictionary = {
       fromAddress: "From address",
       replyToAddress: "Reply-to address",
       subjectPrefix: "Subject prefix",
+      messageDeliveryMode: "Message delivery mode",
+      messageProvider: "Message provider",
+      smsFromNumber: "SMS sender number",
+      whatsappFromNumber: "WhatsApp sender number",
       recipientEmail: "Recipient email",
+      recipientPhone: "Recipient phone",
+      messageChannel: "Channel",
       optionalNote: "Optional note",
     },
     options: {
       logOnly: "Log only (capture emails without sending)",
       resend: "Resend API (live delivery)",
+      twilio: "Twilio API (live delivery)",
+      sms: "SMS text",
+      whatsapp: "WhatsApp",
     },
     placeholders: {
       notificationChannels: "Phone follow-up, Text updates, In-person visit",
@@ -900,14 +951,20 @@ const englishDictionary = {
       fromAddress: "care@yourchurch.org",
       replyToAddress: "care@yourchurch.org",
       subjectPrefix: "Grace Community Church",
+      smsFromNumber: "+15005550006",
+      whatsappFromNumber: "+14155238886",
       recipientEmail: "you@example.com",
+      recipientPhone: "+2348012345678",
       testNote: "This is a test of the Church Care OS email delivery setup.",
+      testMessageNote: "This is a test of the Church Care OS text and WhatsApp delivery setup.",
     },
     buttons: {
       saveSettings: "Save settings",
       savingSettings: "Saving settings...",
       sendTestEmail: "Send test email",
       queueingTest: "Queueing test...",
+      sendTestMessage: "Send test message",
+      queueingMessage: "Queueing message...",
     },
     snapshot: {
       databasePath: "Database path",
@@ -917,6 +974,7 @@ const englishDictionary = {
       mode: "Mode",
       provider: "Provider",
       apiKeyConfigured: "API key configured",
+      providerConfigured: "Provider configured",
       appBaseUrlConfigured: "App base URL configured",
       queued: "Queued",
       loggedOnly: "Logged only",
@@ -928,6 +986,9 @@ const englishDictionary = {
       noOutboxActivity: "No outbox activity yet",
       noOutboxActivityBody:
         "Workflow and test emails will appear here once the system starts queueing them.",
+      noMessageOutboxActivity: "No message activity yet",
+      noMessageOutboxActivityBody:
+        "SMS and WhatsApp delivery attempts will appear here once the system starts queueing them.",
     },
   },
   notifications: {
@@ -943,6 +1004,10 @@ const englishDictionary = {
     markAllRead: "Mark all as read",
     updating: "Updating...",
     backToWorkspace: "Back to workspace",
+    filters: {
+      status: "Read status",
+      kind: "Notification type",
+    },
     panels: {
       unreadTitle: "Needs your attention",
       unreadEyebrow: (count) => `Unread (${count})`,
@@ -1353,6 +1418,11 @@ export function translateOutboxStatus(value, language) {
 export function translateNotificationKind(value, language) {
   const copy = getCopy(language);
   return copy.common.notificationKinds[value] || value;
+}
+
+export function translateMessageChannel(value, language) {
+  const copy = getCopy(language);
+  return copy.common.messageChannels[value] || value;
 }
 
 export function translatePermissionAccess(value, language) {

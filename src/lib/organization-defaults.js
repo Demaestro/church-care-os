@@ -64,6 +64,10 @@ export const defaultChurchSettings = {
   emailFromAddress: "care@gracecommunity.church",
   emailReplyTo: "care@gracecommunity.church",
   emailSubjectPrefix: "Grace Community Church",
+  messageDeliveryMode: "log-only",
+  messageProvider: "twilio",
+  smsFromNumber: "+15005550006",
+  whatsappFromNumber: "+14155238886",
   notificationChannels: ["Phone follow-up", "Text updates", "In-person visit"],
 };
 

@@ -54,6 +54,7 @@ export const demoAuthUsers = [
   {
     name: "Pastor Emmanuel",
     email: "pastor@grace.demo",
+    phone: "+2348010000001",
     password: "PastorDemo!2026",
     role: "pastor",
     lane: "",
@@ -62,6 +63,7 @@ export const demoAuthUsers = [
   {
     name: "Deacon Bello",
     email: "leader@grace.demo",
+    phone: "+2348010000002",
     password: "LeaderDemo!2026",
     role: "leader",
     lane: "Mercy & welfare lane",
@@ -70,6 +72,7 @@ export const demoAuthUsers = [
   {
     name: "Sister Ngozi Okafor",
     email: "volunteer@grace.demo",
+    phone: "+2348010000003",
     password: "VolunteerDemo!2026",
     role: "volunteer",
     lane: "",
@@ -78,6 +81,7 @@ export const demoAuthUsers = [
   {
     name: "Church Owner",
     email: "owner@grace.demo",
+    phone: "+2348010000004",
     password: "OwnerDemo!2026",
     role: "owner",
     lane: "",

@@ -74,6 +74,10 @@ const defaultChurchSettings = {
   emailFromAddress: "care@gracecommunity.church",
   emailReplyTo: "care@gracecommunity.church",
   emailSubjectPrefix: "Grace Community Church",
+  messageDeliveryMode: "log-only",
+  messageProvider: "twilio",
+  smsFromNumber: "+15005550006",
+  whatsappFromNumber: "+14155238886",
   notificationChannels: ["Phone follow-up", "Text updates", "In-person visit"],
 };
 
@@ -81,6 +85,7 @@ const demoAuthUsers = [
   {
     name: "Pastor Emmanuel",
     email: "pastor@grace.demo",
+    phone: "+2348010000001",
     password: "PastorDemo!2026",
     role: "pastor",
     lane: "",
@@ -89,6 +94,7 @@ const demoAuthUsers = [
   {
     name: "Deacon Bello",
     email: "leader@grace.demo",
+    phone: "+2348010000002",
     password: "LeaderDemo!2026",
     role: "leader",
     lane: "Mercy & welfare lane",
@@ -97,6 +103,7 @@ const demoAuthUsers = [
   {
     name: "Sister Ngozi Okafor",
     email: "volunteer@grace.demo",
+    phone: "+2348010000003",
     password: "VolunteerDemo!2026",
     role: "volunteer",
     lane: "",
@@ -105,6 +112,7 @@ const demoAuthUsers = [
   {
     name: "Church Owner",
     email: "owner@grace.demo",
+    phone: "+2348010000004",
     password: "OwnerDemo!2026",
     role: "owner",
     lane: "",
@@ -206,6 +214,7 @@ function createSchema(database) {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
+      phone TEXT,
       role TEXT NOT NULL,
       password_hash TEXT NOT NULL,
       lane TEXT,
@@ -277,6 +286,10 @@ function createSchema(database) {
       email_from_address TEXT,
       email_reply_to TEXT,
       email_subject_prefix TEXT,
+      message_delivery_mode TEXT NOT NULL DEFAULT 'log-only',
+      message_provider TEXT NOT NULL DEFAULT 'twilio',
+      sms_from_number TEXT,
+      whatsapp_from_number TEXT,
       notification_channels_json TEXT NOT NULL DEFAULT '[]',
       updated_at TEXT NOT NULL
     ) STRICT;
@@ -354,12 +367,38 @@ function createSchema(database) {
 
     CREATE INDEX IF NOT EXISTS idx_email_outbox_recipient_created
       ON email_outbox (recipient_email, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS message_outbox (
+      id TEXT PRIMARY KEY,
+      channel TEXT NOT NULL,
+      template_key TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      recipient_phone TEXT NOT NULL,
+      recipient_name TEXT,
+      body TEXT NOT NULL,
+      status TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      provider_message_id TEXT,
+      provider_response_json TEXT NOT NULL DEFAULT '{}',
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      attempted_at TEXT,
+      sent_at TEXT,
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_message_outbox_status_created
+      ON message_outbox (status, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_message_outbox_recipient_created
+      ON message_outbox (recipient_phone, created_at DESC);
   `);
 }
 
 function ensureSchemaMigrations(database) {
   addColumnIfMissing(database, "requests", "tracking_code", "TEXT");
   addColumnIfMissing(database, "requests", "status_detail", "TEXT");
+  addColumnIfMissing(database, "users", "phone", "TEXT");
   addColumnIfMissing(
     database,
     "church_settings",
@@ -376,6 +415,20 @@ function ensureSchemaMigrations(database) {
   addColumnIfMissing(database, "church_settings", "email_from_address", "TEXT");
   addColumnIfMissing(database, "church_settings", "email_reply_to", "TEXT");
   addColumnIfMissing(database, "church_settings", "email_subject_prefix", "TEXT");
+  addColumnIfMissing(
+    database,
+    "church_settings",
+    "message_delivery_mode",
+    "TEXT NOT NULL DEFAULT 'log-only'"
+  );
+  addColumnIfMissing(
+    database,
+    "church_settings",
+    "message_provider",
+    "TEXT NOT NULL DEFAULT 'twilio'"
+  );
+  addColumnIfMissing(database, "church_settings", "sms_from_number", "TEXT");
+  addColumnIfMissing(database, "church_settings", "whatsapp_from_number", "TEXT");
   database.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_tracking_code
       ON requests (tracking_code);
@@ -544,8 +597,9 @@ function seedChurchSettings(database) {
       intake_confirmation_text, emergency_banner, plan_name, billing_contact_email,
       monthly_seat_allowance, next_renewal_date, backup_expectation,
       email_delivery_mode, email_provider, email_from_name, email_from_address,
-      email_reply_to, email_subject_prefix, notification_channels_json, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      email_reply_to, email_subject_prefix, message_delivery_mode, message_provider,
+      sms_from_number, whatsapp_from_number, notification_channels_json, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     "primary",
     defaultChurchSettings.churchName,
@@ -566,6 +620,10 @@ function seedChurchSettings(database) {
     defaultChurchSettings.emailFromAddress,
     defaultChurchSettings.emailReplyTo,
     defaultChurchSettings.emailSubjectPrefix,
+    defaultChurchSettings.messageDeliveryMode,
+    defaultChurchSettings.messageProvider,
+    defaultChurchSettings.smsFromNumber,
+    defaultChurchSettings.whatsappFromNumber,
     JSON.stringify(defaultChurchSettings.notificationChannels),
     now
   );
@@ -587,8 +645,8 @@ function seedUsers(database) {
 
   const insertUser = database.prepare(`
     INSERT INTO users (
-      id, name, email, role, password_hash, lane, volunteer_name, active, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const now = new Date().toISOString();
 
@@ -597,6 +655,7 @@ function seedUsers(database) {
       randomUUID(),
       user.name,
       user.email.toLowerCase(),
+      user.phone || null,
       user.role,
       hashPassword(user.password),
       user.lane || null,

@@ -30,6 +30,10 @@ export const getChurchSettings = cache(function getChurchSettings() {
         email_from_address,
         email_reply_to,
         email_subject_prefix,
+        message_delivery_mode,
+        message_provider,
+        sms_from_number,
+        whatsapp_from_number,
         notification_channels_json,
         updated_at
       FROM church_settings
@@ -68,6 +72,14 @@ export const getChurchSettings = cache(function getChurchSettings() {
       row.email_reply_to || row.support_email || defaultChurchSettings.emailReplyTo,
     emailSubjectPrefix:
       row.email_subject_prefix || defaultChurchSettings.emailSubjectPrefix,
+    messageDeliveryMode:
+      row.message_delivery_mode || defaultChurchSettings.messageDeliveryMode,
+    messageProvider:
+      row.message_provider || defaultChurchSettings.messageProvider,
+    smsFromNumber:
+      row.sms_from_number || defaultChurchSettings.smsFromNumber,
+    whatsappFromNumber:
+      row.whatsapp_from_number || defaultChurchSettings.whatsappFromNumber,
     notificationChannels: parseJson(row.notification_channels_json, []),
     updatedAt: row.updated_at,
     updatedLabel: formatDateTime(row.updated_at),
@@ -105,6 +117,10 @@ export function updateChurchSettingsEntry(input) {
         email_from_address = ?,
         email_reply_to = ?,
         email_subject_prefix = ?,
+        message_delivery_mode = ?,
+        message_provider = ?,
+        sms_from_number = ?,
+        whatsapp_from_number = ?,
         notification_channels_json = ?,
         updated_at = ?
       WHERE id = 'primary'
@@ -128,6 +144,10 @@ export function updateChurchSettingsEntry(input) {
       input.emailFromAddress || current.emailFromAddress,
       input.emailReplyTo || current.emailReplyTo,
       input.emailSubjectPrefix || current.emailSubjectPrefix,
+      input.messageDeliveryMode || current.messageDeliveryMode,
+      input.messageProvider || current.messageProvider,
+      input.smsFromNumber || current.smsFromNumber,
+      input.whatsappFromNumber || current.whatsappFromNumber,
       serializeJson(input.notificationChannels || []),
       now
     );

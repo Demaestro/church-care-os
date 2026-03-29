@@ -219,6 +219,15 @@ export default async function AdminUsersPage({ searchParams }) {
               />
             </div>
 
+            <div className="mt-4">
+              <Field
+                label={pageCopy.fields.phone}
+                name="phone"
+                type="tel"
+                placeholder={pageCopy.placeholders.phone}
+              />
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <SelectField
                 label={pageCopy.fields.role}
@@ -411,6 +420,9 @@ export default async function AdminUsersPage({ searchParams }) {
                     {account.name}
                   </p>
                   <p className="mt-2 text-sm leading-7 text-muted">{account.email}</p>
+                  {account.phone ? (
+                    <p className="text-sm leading-7 text-muted">{account.phone}</p>
+                  ) : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <RolePill role={account.role} language={preferences.language} />
                     <StatusPill active={account.active} copy={copy} />
@@ -445,6 +457,16 @@ export default async function AdminUsersPage({ searchParams }) {
                         name="email"
                         type="email"
                         defaultValue={account.email}
+                      />
+                    </div>
+
+                    <div className="mt-4">
+                      <Field
+                        label={pageCopy.fields.phone}
+                        name="phone"
+                        type="tel"
+                        defaultValue={account.phone}
+                        placeholder={pageCopy.placeholders.phone}
                       />
                     </div>
 

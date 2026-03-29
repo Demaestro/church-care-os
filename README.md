@@ -123,6 +123,15 @@ The app already includes the in-app email system, templates, and outbox logging.
 
 If you are not ready to connect live email yet, the app still works fully in `log-only` mode.
 
+## SMS and WhatsApp delivery status
+
+The app now also includes provider-ready SMS and WhatsApp messaging with a separate outbox log and owner settings.
+
+- `log-only`: records outbound messages in the message outbox but does not send them
+- `twilio`: sends live SMS or WhatsApp once `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and sender numbers are configured
+
+If you are not ready to connect live messaging yet, the app still works fully in `log-only` mode and records every attempted message for review.
+
 ## Provider configs
 
 This repo now includes deployment-ready config for:

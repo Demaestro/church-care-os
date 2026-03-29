@@ -15,6 +15,7 @@ import {
   getUnreadNotificationCountForUser,
   listNotificationsForUser,
 } from "@/lib/notifications-store";
+import { filterNotifications, hasActiveFilters } from "@/lib/search-filters";
 
 const toneClasses = {
   care: "border-[rgba(73,106,77,0.18)] bg-[rgba(73,106,77,0.08)] text-moss",
@@ -29,15 +30,24 @@ export const metadata = {
     "A private inbox for care routing updates, volunteer handoffs, and account changes.",
 };
 
-export default async function NotificationsPage() {
+export default async function NotificationsPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const pageCopy = copy.notifications;
   const user = await requireCurrentUser(["volunteer", "leader", "pastor", "owner"]);
+  const params = await searchParams;
   const notifications = listNotificationsForUser(user);
+  const filters = {
+    query: typeof params?.q === "string" ? params.q.trim() : "",
+    status: typeof params?.status === "string" ? params.status : "all",
+    kind: typeof params?.kind === "string" ? params.kind : "all",
+  };
+  const visibleNotifications = filterNotifications(notifications, filters);
   const unreadCount = getUnreadNotificationCountForUser(user);
-  const unreadNotifications = notifications.filter((item) => !item.read);
-  const readNotifications = notifications.filter((item) => item.read);
+  const unreadNotifications = visibleNotifications.filter((item) => !item.read);
+  const readNotifications = visibleNotifications.filter((item) => item.read);
+  const showClearFilters = hasActiveFilters(filters);
+  const kindOptions = Array.from(new Set(notifications.map((item) => item.kind))).sort();
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10 pb-16 lg:px-10 lg:py-14">
@@ -82,6 +92,58 @@ export default async function NotificationsPage() {
             </Link>
           </div>
         ) : null}
+
+        <form action="/notifications" className="mt-6 rounded-[1.35rem] border border-line bg-canvas p-4">
+          <div className="grid gap-4 lg:grid-cols-[1.25fr_0.8fr_0.85fr_auto]">
+            <Field
+              label={copy.common.searchLabel}
+              name="q"
+              defaultValue={filters.query}
+              placeholder={copy.common.searchPlaceholder}
+            />
+            <SelectField
+              label={pageCopy.filters.status}
+              name="status"
+              defaultValue={filters.status}
+              options={[
+                { value: "all", label: copy.common.allStatuses },
+                { value: "unread", label: copy.common.unreadOnly },
+                { value: "read", label: copy.common.readOnly },
+              ]}
+            />
+            <SelectField
+              label={pageCopy.filters.kind}
+              name="kind"
+              defaultValue={filters.kind}
+              options={[
+                { value: "all", label: copy.common.allKinds },
+                ...kindOptions.map((kind) => ({
+                  value: kind,
+                  label: translateNotificationKind(kind, preferences.language),
+                })),
+              ]}
+            />
+            <div className="flex items-end gap-3">
+              <button
+                type="submit"
+                className="inline-flex min-h-14 items-center justify-center rounded-[1rem] bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f]"
+              >
+                {copy.common.searchLabel}
+              </button>
+              {showClearFilters ? (
+                <a
+                  href="/notifications"
+                  className="inline-flex min-h-14 items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
+                >
+                  {copy.common.clearFilters}
+                </a>
+              ) : null}
+            </div>
+          </div>
+          <p className="mt-4 text-sm leading-7 text-muted">
+            {copy.common.showingResults(visibleNotifications.length, notifications.length)}
+          </p>
+        </form>
       </section>
 
       <section className="mt-8 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
@@ -210,6 +272,40 @@ function MetricCard({ label, value }) {
         {value}
       </p>
     </article>
+  );
+}
+
+function Field({ label, name, defaultValue, placeholder }) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <input
+        type="text"
+        name={name}
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        className="mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground outline-none transition focus:border-moss"
+      />
+    </label>
+  );
+}
+
+function SelectField({ label, name, defaultValue, options }) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        className="mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground outline-none transition focus:border-moss"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

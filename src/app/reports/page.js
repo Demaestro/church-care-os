@@ -7,6 +7,12 @@ import {
   translateSupportNeed,
 } from "@/lib/i18n";
 import { getOperationalReportData } from "@/lib/organization-store";
+import {
+  filterOverdueFollowUps,
+  filterRecentClosures,
+  filterVolunteerLoads,
+  hasActiveFilters,
+} from "@/lib/search-filters";
 
 export const metadata = {
   title: "Reports",
@@ -14,16 +20,24 @@ export const metadata = {
     "Operational reporting for care leaders, pastors, and owners with exportable views.",
 };
 
-export default async function ReportsPage() {
+export default async function ReportsPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const pageCopy = copy.reports;
   await requireCurrentUser(["pastor", "owner"]);
+  const params = await searchParams;
   const report = await getOperationalReportData();
+  const filters = {
+    query: typeof params?.q === "string" ? params.q.trim() : "",
+  };
+  const visibleVolunteerLoads = filterVolunteerLoads(report.volunteerLoads, filters);
+  const visibleOverdueFollowUps = filterOverdueFollowUps(report.overdueFollowUps, filters);
+  const visibleRecentClosures = filterRecentClosures(report.recentClosures, filters);
+  const showClearFilters = hasActiveFilters(filters);
   const needMax = Math.max(...report.needBreakdown.map((item) => item.count), 1);
   const stageMax = Math.max(...report.stageBreakdown.map((item) => item.count), 1);
   const volunteerMax = Math.max(
-    ...report.volunteerLoads.map((item) => item.activeCount),
+    ...visibleVolunteerLoads.map((item) => item.activeCount),
     1
   );
   const summaryCards = [
@@ -94,6 +108,39 @@ export default async function ReportsPage() {
             </article>
           ))}
         </div>
+
+        <form action="/reports" className="mt-6 rounded-[1.35rem] border border-line bg-canvas p-4">
+          <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+            <Field
+              label={copy.common.searchLabel}
+              name="q"
+              defaultValue={filters.query}
+              placeholder={pageCopy.searchPlaceholder}
+            />
+            <div className="flex items-end gap-3">
+              <button
+                type="submit"
+                className="inline-flex min-h-14 items-center justify-center rounded-[1rem] bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f]"
+              >
+                {copy.common.searchLabel}
+              </button>
+              {showClearFilters ? (
+                <a
+                  href="/reports"
+                  className="inline-flex min-h-14 items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
+                >
+                  {copy.common.clearFilters}
+                </a>
+              ) : null}
+            </div>
+          </div>
+          <p className="mt-4 text-sm leading-7 text-muted">
+            {pageCopy.searchSummary(
+              visibleVolunteerLoads.length + visibleOverdueFollowUps.length + visibleRecentClosures.length,
+              report.volunteerLoads.length + report.overdueFollowUps.length + report.recentClosures.length
+            )}
+          </p>
+        </form>
       </section>
 
       <section className="mt-8 grid gap-6 xl:grid-cols-2">
@@ -123,7 +170,7 @@ export default async function ReportsPage() {
       <section className="mt-8 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <DataPanel title={pageCopy.panels.volunteerCapacity}>
           <div className="space-y-4">
-            {report.volunteerLoads.map((volunteer) => (
+            {visibleVolunteerLoads.map((volunteer) => (
               <article
                 key={volunteer.name}
                 className="rounded-[1.25rem] border border-line bg-canvas p-4"
@@ -161,8 +208,8 @@ export default async function ReportsPage() {
 
         <DataPanel title={pageCopy.panels.overdueFollowUps}>
           <div className="space-y-4">
-            {report.overdueFollowUps.length > 0 ? (
-              report.overdueFollowUps.map((item) => (
+            {visibleOverdueFollowUps.length > 0 ? (
+              visibleOverdueFollowUps.map((item) => (
                 <Link
                   key={item.slug}
                   href={`/households/${item.slug}`}
@@ -185,8 +232,8 @@ export default async function ReportsPage() {
       <section className="mt-8 grid gap-6 xl:grid-cols-[1.02fr_0.98fr]">
         <DataPanel title={pageCopy.panels.recentClosures}>
           <div className="space-y-4">
-            {report.recentClosures.length > 0 ? (
-              report.recentClosures.map((item) => (
+            {visibleRecentClosures.length > 0 ? (
+              visibleRecentClosures.map((item) => (
                 <article
                   key={item.id}
                   className="rounded-[1.25rem] border border-line bg-canvas p-4"
@@ -238,6 +285,21 @@ function ExportLink({ href, label }) {
     >
       {label}
     </Link>
+  );
+}
+
+function Field({ label, name, defaultValue, placeholder }) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <input
+        type="text"
+        name={name}
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        className="mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground outline-none transition focus:border-moss"
+      />
+    </label>
   );
 }
 

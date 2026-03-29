@@ -1,4 +1,4 @@
-import { saveChurchSettings, sendTestEmail } from "@/app/actions";
+import { saveChurchSettings, sendTestEmail, sendTestMessage } from "@/app/actions";
 import { FlashBanner } from "@/components/flash-banner";
 import { SubmitButton } from "@/components/submit-button";
 import { requireCurrentUser } from "@/lib/auth";
@@ -6,7 +6,12 @@ import { getAppPreferences } from "@/lib/app-preferences-server";
 import { toDateTimeLocalValue } from "@/lib/care-format";
 import { getOperationsSnapshot } from "@/lib/care-store";
 import { getEmailDeliverySnapshot, listEmailOutbox } from "@/lib/email-service";
-import { getCopy, translateOutboxStatus } from "@/lib/i18n";
+import { getMessageDeliverySnapshot, listMessageOutbox } from "@/lib/message-service";
+import {
+  getCopy,
+  translateMessageChannel,
+  translateOutboxStatus,
+} from "@/lib/i18n";
 import { supportedTimezones } from "@/lib/organization-defaults";
 import { getChurchSettings, listMinistryTeams } from "@/lib/organization-store";
 
@@ -28,7 +33,9 @@ export default async function SettingsPage({ searchParams }) {
     Promise.resolve(listMinistryTeams()),
   ]);
   const emailSnapshot = getEmailDeliverySnapshot();
+  const messageSnapshot = getMessageDeliverySnapshot();
   const outbox = listEmailOutbox(8);
+  const messageOutbox = listMessageOutbox(8);
   const notice = typeof params?.notice === "string" ? params.notice : "";
   const error = typeof params?.error === "string" ? params.error : "";
 
@@ -53,7 +60,15 @@ export default async function SettingsPage({ searchParams }) {
               label={pageCopy.metrics.emailMode}
               value={settings?.emailDeliveryMode || "log-only"}
             />
+            <MetricCard
+              label={pageCopy.metrics.messageMode}
+              value={settings?.messageDeliveryMode || "log-only"}
+            />
             <MetricCard label={pageCopy.metrics.sentEmails} value={emailSnapshot.sentCount} />
+            <MetricCard
+              label={pageCopy.metrics.sentMessages}
+              value={messageSnapshot.sentCount}
+            />
           </div>
         </div>
 
@@ -241,6 +256,60 @@ export default async function SettingsPage({ searchParams }) {
             </div>
           </div>
 
+          <div className="mt-8 border-t border-line pt-6">
+            <SectionHeading
+              eyebrow={pageCopy.sections.messageDelivery.eyebrow}
+              title={pageCopy.sections.messageDelivery.title}
+              body={pageCopy.sections.messageDelivery.body}
+            />
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <SelectField
+                label={pageCopy.fields.messageDeliveryMode}
+                name="messageDeliveryMode"
+                defaultValue={settings?.messageDeliveryMode}
+                options={[
+                  {
+                    value: "log-only",
+                    label: pageCopy.options.logOnly,
+                  },
+                  {
+                    value: "twilio",
+                    label: pageCopy.options.twilio,
+                  },
+                ]}
+              />
+              <SelectField
+                label={pageCopy.fields.messageProvider}
+                name="messageProvider"
+                defaultValue={settings?.messageProvider}
+                options={[
+                  {
+                    value: "twilio",
+                    label: "Twilio",
+                  },
+                ]}
+              />
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <Field
+                label={pageCopy.fields.smsFromNumber}
+                name="smsFromNumber"
+                type="tel"
+                defaultValue={settings?.smsFromNumber}
+                placeholder={pageCopy.placeholders.smsFromNumber}
+              />
+              <Field
+                label={pageCopy.fields.whatsappFromNumber}
+                name="whatsappFromNumber"
+                type="tel"
+                defaultValue={settings?.whatsappFromNumber}
+                placeholder={pageCopy.placeholders.whatsappFromNumber}
+              />
+            </div>
+          </div>
+
           <div className="mt-6">
             <SubmitButton
               idleLabel={pageCopy.buttons.saveSettings}
@@ -299,6 +368,40 @@ export default async function SettingsPage({ searchParams }) {
 
           <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
             <SectionHeading
+              eyebrow={pageCopy.sections.messagePosture.eyebrow}
+              title={pageCopy.sections.messagePosture.title}
+              body={pageCopy.sections.messagePosture.body}
+            />
+
+            <div className="mt-6 grid gap-4">
+              <SnapshotItem label={pageCopy.snapshot.mode} value={messageSnapshot.mode} />
+              <SnapshotItem label={pageCopy.snapshot.provider} value={messageSnapshot.provider} />
+              <SnapshotItem
+                label={pageCopy.snapshot.providerConfigured}
+                value={
+                  messageSnapshot.mode === "log-only"
+                    ? copy.common.notNeededInLogOnlyMode
+                    : messageSnapshot.providerConfigured
+                      ? copy.common.yes
+                      : copy.common.no
+                }
+              />
+              <SnapshotItem
+                label={pageCopy.snapshot.appBaseUrlConfigured}
+                value={messageSnapshot.appBaseUrlConfigured ? copy.common.yes : copy.common.no}
+              />
+              <SnapshotItem label={pageCopy.snapshot.queued} value={messageSnapshot.queuedCount} />
+              <SnapshotItem
+                label={pageCopy.snapshot.loggedOnly}
+                value={messageSnapshot.loggedCount}
+              />
+              <SnapshotItem label={pageCopy.snapshot.sent} value={messageSnapshot.sentCount} />
+              <SnapshotItem label={pageCopy.snapshot.failed} value={messageSnapshot.failedCount} />
+            </div>
+          </article>
+
+          <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
+            <SectionHeading
               eyebrow={pageCopy.sections.liveExperience.eyebrow}
               title={pageCopy.sections.liveExperience.title}
               body={pageCopy.sections.liveExperience.body}
@@ -352,6 +455,45 @@ export default async function SettingsPage({ searchParams }) {
 
           <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
             <SectionHeading
+              eyebrow={pageCopy.sections.messageDeliveryTest.eyebrow}
+              title={pageCopy.sections.messageDeliveryTest.title}
+              body={pageCopy.sections.messageDeliveryTest.body}
+            />
+
+            <form action={sendTestMessage} className="mt-6 space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field
+                  label={pageCopy.fields.recipientPhone}
+                  name="phone"
+                  type="tel"
+                  defaultValue={settings?.supportPhone}
+                  placeholder={pageCopy.placeholders.recipientPhone}
+                />
+                <SelectField
+                  label={pageCopy.fields.messageChannel}
+                  name="channel"
+                  defaultValue="sms"
+                  options={[
+                    { value: "sms", label: pageCopy.options.sms },
+                    { value: "whatsapp", label: pageCopy.options.whatsapp },
+                  ]}
+                />
+              </div>
+              <TextAreaField
+                label={pageCopy.fields.optionalNote}
+                name="note"
+                defaultValue={pageCopy.placeholders.testMessageNote}
+              />
+              <SubmitButton
+                idleLabel={pageCopy.buttons.sendTestMessage}
+                pendingLabel={pageCopy.buttons.queueingMessage}
+                className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
+              />
+            </form>
+          </article>
+
+          <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
+            <SectionHeading
               eyebrow={pageCopy.sections.outbox.eyebrow}
               title={pageCopy.sections.outbox.title}
               body={pageCopy.sections.outbox.body}
@@ -376,6 +518,61 @@ export default async function SettingsPage({ searchParams }) {
                         </p>
                         <p className="mt-1 text-sm leading-7 text-muted">
                           {entry.recipientEmail}
+                        </p>
+                      </div>
+                      <OutboxStatusPill status={entry.status} language={preferences.language} />
+                    </div>
+                    <div className="mt-3 grid gap-2 text-sm text-muted sm:grid-cols-2">
+                      <p>{copy.common.labels.template}: {entry.templateKey}</p>
+                      <p>{copy.common.labels.provider}: {entry.provider}</p>
+                      <p>{copy.common.labels.created}: {entry.createdLabel}</p>
+                      <p>
+                        {copy.common.labels.lastAttempt}:{" "}
+                        {entry.attemptedLabel !== "No time set"
+                          ? entry.attemptedLabel
+                          : copy.common.notAttemptedYet}
+                      </p>
+                    </div>
+                    {entry.errorMessage ? (
+                      <p className="mt-3 rounded-[1rem] border border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)] px-4 py-3 text-sm text-clay">
+                        {entry.errorMessage}
+                      </p>
+                    ) : null}
+                  </article>
+                ))
+              )}
+            </div>
+          </article>
+
+          <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
+            <SectionHeading
+              eyebrow={pageCopy.sections.messageOutbox.eyebrow}
+              title={pageCopy.sections.messageOutbox.title}
+              body={pageCopy.sections.messageOutbox.body}
+            />
+
+            <div className="mt-6 space-y-4">
+              {messageOutbox.length === 0 ? (
+                <PreviewPanel
+                  title={pageCopy.snapshot.noMessageOutboxActivity}
+                  body={pageCopy.snapshot.noMessageOutboxActivityBody}
+                />
+              ) : (
+                messageOutbox.map((entry) => (
+                  <article
+                    key={entry.id}
+                    className="rounded-[1.25rem] border border-line bg-canvas p-4"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <MessageChannelPill channel={entry.channel} language={preferences.language} />
+                          <p className="text-sm font-semibold text-foreground">
+                            {entry.recipientPhone}
+                          </p>
+                        </div>
+                        <p className="mt-2 text-sm leading-7 text-muted">
+                          {entry.body}
                         </p>
                       </div>
                       <OutboxStatusPill status={entry.status} language={preferences.language} />
@@ -511,6 +708,19 @@ function OutboxStatusPill({ status, language }) {
   return (
     <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${className}`}>
       {translateOutboxStatus(status, language)}
+    </span>
+  );
+}
+
+function MessageChannelPill({ channel, language }) {
+  const className =
+    channel === "whatsapp"
+      ? "border border-[rgba(73,106,77,0.16)] bg-[rgba(73,106,77,0.08)] text-moss"
+      : "border border-[rgba(53,111,190,0.16)] bg-[rgba(53,111,190,0.08)] text-[#356fbe]";
+
+  return (
+    <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${className}`}>
+      {translateMessageChannel(channel, language)}
     </span>
   );
 }

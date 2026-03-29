@@ -11,7 +11,7 @@ export function findUserByEmail(email) {
 
   const row = getDatabase()
     .prepare(`
-      SELECT id, name, email, role, password_hash, lane, volunteer_name, active, created_at
+      SELECT id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
       FROM users
       WHERE email = ?
       LIMIT 1
@@ -28,7 +28,7 @@ export function findUserById(id) {
 
   const row = getDatabase()
     .prepare(`
-      SELECT id, name, email, role, password_hash, lane, volunteer_name, active, created_at
+      SELECT id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -41,7 +41,7 @@ export function findUserById(id) {
 export function listUsers() {
   const rows = getDatabase()
     .prepare(`
-      SELECT id, name, email, role, password_hash, lane, volunteer_name, active, created_at
+      SELECT id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
       FROM users
       ORDER BY role, name
     `)
@@ -58,12 +58,13 @@ export function createUserEntry(input) {
 
   db.prepare(`
     INSERT INTO users (
-      id, name, email, role, password_hash, lane, volunteer_name, active, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     userId,
     input.name,
     input.email.trim().toLowerCase(),
+    input.phone || null,
     input.role,
     passwordHash,
     input.lane || null,
@@ -87,6 +88,7 @@ export function updateUserEntry(userId, input) {
       SET
         name = ?,
         email = ?,
+        phone = ?,
         role = ?,
         lane = ?,
         volunteer_name = ?,
@@ -96,6 +98,7 @@ export function updateUserEntry(userId, input) {
     .run(
       input.name ?? existing.name,
       (input.email ?? existing.email).trim().toLowerCase(),
+      input.phone ?? existing.phone ?? null,
       input.role ?? existing.role,
       input.lane ?? existing.lane ?? null,
       input.volunteerName ?? existing.volunteerName ?? null,
@@ -143,6 +146,7 @@ function mapUserRow(row) {
     id: row.id,
     name: row.name,
     email: row.email,
+    phone: row.phone || "",
     role: row.role,
     passwordHash: row.password_hash,
     lane: row.lane || "",

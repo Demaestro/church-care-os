@@ -15,6 +15,7 @@ const initialState = {
     responseWindow: "no-rush",
     submittedBy: "",
     contactEmail: "",
+    contactPhone: "",
     preferredContact: "",
     keepNamePrivate: false,
     markSensitive: true,
@@ -154,6 +155,14 @@ export function RequestIntakeForm({ language = "en", copy }) {
           placeholder={intakeCopy.emailPlaceholder}
           defaultValue={state.values.contactEmail}
           error={state.errors.contactEmail}
+        />
+        <Field
+          label={intakeCopy.phoneLabel}
+          name="contactPhone"
+          type="tel"
+          placeholder={intakeCopy.phonePlaceholder}
+          defaultValue={state.values.contactPhone}
+          error={state.errors.contactPhone}
         />
         <Field
           label={intakeCopy.contactLabel}

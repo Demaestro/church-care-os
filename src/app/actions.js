@@ -52,6 +52,13 @@ import {
   sendEmailToVolunteer,
 } from "@/lib/email-service";
 import {
+  isValidMessagingPhone,
+  normalizePhoneNumber,
+  sendMessageToPhone,
+  sendMessageToRoles,
+  sendMessageToVolunteer,
+} from "@/lib/message-service";
+import {
   createMinistryTeamEntry,
   createRecoveryRequestEntry,
   getChurchSettings,
@@ -166,6 +173,18 @@ async function emailVolunteer(volunteerName, templateKey, context, options = {})
 
 async function emailAddress(email, templateKey, context, options = {}) {
   await sendEmailToAddress(email, templateKey, context, options);
+}
+
+async function messageRoles(roles, channel, templateKey, context, options = {}) {
+  await sendMessageToRoles(roles, channel, templateKey, context, options);
+}
+
+async function messageVolunteer(volunteerName, channel, templateKey, context, options = {}) {
+  await sendMessageToVolunteer(volunteerName, channel, templateKey, context, options);
+}
+
+async function messagePhone(phone, channel, templateKey, context, options = {}) {
+  await sendMessageToPhone(phone, channel, templateKey, context, options);
 }
 
 function buildVolunteerRedirect(volunteerName, tab = "assigned") {
@@ -372,7 +391,9 @@ export async function createCareRequest(prevState, formData) {
   const allowContact = getBoolean(formData, "allowContact");
   const submittedBy = getString(formData, "submittedBy");
   const rawContactEmail = normalizeEmail(getString(formData, "contactEmail"));
+  const rawContactPhone = normalizePhoneNumber(getString(formData, "contactPhone"));
   const contactEmail = allowContact ? rawContactEmail : "";
+  const contactPhone = allowContact ? rawContactPhone : "";
   const preferredContact = getString(formData, "preferredContact");
   const summary = getString(formData, "summary");
   const need = getString(formData, "need");
@@ -393,6 +414,7 @@ export async function createCareRequest(prevState, formData) {
     markSensitive,
     allowContact,
     contactEmail: rawContactEmail,
+    contactPhone: rawContactPhone,
   };
   const settings = getChurchSettings();
   const confirmationMessage =
@@ -407,6 +429,10 @@ export async function createCareRequest(prevState, formData) {
 
   if (allowContact && rawContactEmail && !isValidEmailAddress(rawContactEmail)) {
     errors.contactEmail = copy.recoveryForm.actionMessages.emailInvalid;
+  }
+
+  if (allowContact && rawContactPhone && !isValidMessagingPhone(rawContactPhone)) {
+    errors.contactPhone = intakeCopy.phoneError;
   }
 
   if (Object.keys(errors).length > 0) {
@@ -447,6 +473,7 @@ export async function createCareRequest(prevState, formData) {
   const safePreferredContact =
     preferredContact ||
     (contactEmail ? `Email ${contactEmail}` : "") ||
+    (contactPhone ? `Phone ${contactPhone}` : "") ||
     (allowContact ? "Follow up through church office" : "No direct contact requested");
   const safeSummary =
     summary || "Member asked for support and chose to share more detail later.";
@@ -455,6 +482,7 @@ export async function createCareRequest(prevState, formData) {
     householdName: safeHouseholdName,
     submittedBy: safeSubmittedBy,
     contactEmail,
+    contactPhone,
     preferredContact: safePreferredContact,
     requestFor: values.requestFor,
     need,
@@ -515,6 +543,23 @@ export async function createCareRequest(prevState, formData) {
       },
     }
   );
+  await messageRoles(
+    ["pastor", "owner"],
+    "whatsapp",
+    "care-request-alert",
+    {
+      householdName: safeHouseholdName,
+      need,
+      trackingCode,
+      householdPath: buildHouseholdHref(householdSlug),
+    },
+    {
+      metadata: {
+        trackingCode,
+        householdSlug,
+      },
+    }
+  );
 
   if (allowContact && contactEmail) {
     await emailAddress(
@@ -528,6 +573,27 @@ export async function createCareRequest(prevState, formData) {
           privacyLevel === "pastors-only"
             ? "Visible only to pastor until they choose the next safe handoff."
             : "Visible to pastor and assigned care leads.",
+        statusPath: buildMemberStatusPath(trackingCode),
+      },
+      {
+        recipientName: safeSubmittedBy,
+        metadata: {
+          trackingCode,
+          householdSlug,
+        },
+      }
+    );
+  }
+
+  if (allowContact && contactPhone) {
+    await messagePhone(
+      contactPhone,
+      "sms",
+      "request-received",
+      {
+        trackingCode,
+        need,
+        allowContact,
         statusPath: buildMemberStatusPath(trackingCode),
       },
       {
@@ -676,6 +742,25 @@ export async function assignRequestVolunteer(requestId, householdSlug, formData)
       },
     }
   );
+  await messageVolunteer(
+    volunteerName,
+    "whatsapp",
+    "task-assigned",
+    {
+      householdName,
+      need,
+      laneOwner,
+      assignedBy: user.name,
+      volunteerBrief,
+      volunteerPath: buildVolunteerRedirect(volunteerName),
+    },
+    {
+      metadata: {
+        requestId,
+        householdSlug,
+      },
+    }
+  );
 
   revalidateCarePaths(householdSlug);
   redirect("/leader");
@@ -716,6 +801,24 @@ export async function escalateRequestToPastor(requestId, householdSlug, formData
   });
   await emailRoles(
     ["pastor", "owner"],
+    "request-escalated",
+    {
+      householdName,
+      need,
+      reason,
+      escalatedBy: user.name,
+      householdPath: buildHouseholdHref(householdSlug),
+    },
+    {
+      metadata: {
+        requestId,
+        householdSlug,
+      },
+    }
+  );
+  await messageRoles(
+    ["pastor", "owner"],
+    "whatsapp",
     "request-escalated",
     {
       householdName,
@@ -1050,6 +1153,25 @@ export async function requestAccountRecovery(prevState, formData) {
           },
         }
       );
+      if (matchedUser.phone) {
+        await messagePhone(
+          matchedUser.phone,
+          "sms",
+          "password-reset-link",
+          {
+            email,
+            expiresLabel: formatDateTime(resetToken.expiresAt),
+            resetPath: buildResetPasswordPath(resetToken.token),
+          },
+          {
+            recipientName: matchedUser.name || requesterName,
+            metadata: {
+              recoveryRequestId,
+              userId: matchedUser.id,
+            },
+          }
+        );
+      }
     }
   } else {
     recordAuditLog({
@@ -1072,6 +1194,22 @@ export async function requestAccountRecovery(prevState, formData) {
     });
     await emailRoles(
       ["pastor", "owner"],
+      "recovery-request-alert",
+      {
+        email,
+        requesterName,
+        note,
+      },
+      {
+        metadata: {
+          email,
+          recoveryRequestId,
+        },
+      }
+    );
+    await messageRoles(
+      ["pastor", "owner"],
+      "whatsapp",
       "recovery-request-alert",
       {
         email,
@@ -1192,6 +1330,7 @@ export async function createUserAccount(formData) {
   const actor = await requireCurrentUser(["pastor", "owner"]);
   const name = getString(formData, "name");
   const email = normalizeEmail(getString(formData, "email"));
+  const phone = normalizePhoneNumber(getString(formData, "phone"));
   const role = getString(formData, "role");
   const lane = getString(formData, "lane");
   const password = getString(formData, "password");
@@ -1204,6 +1343,13 @@ export async function createUserAccount(formData) {
 
   if (!isValidEmailAddress(email)) {
     redirectWithError("/admin/users", "Enter a valid email address for the new account.");
+  }
+
+  if (phone && !isValidMessagingPhone(phone)) {
+    redirectWithError(
+      "/admin/users",
+      "Enter a phone number in international format, like +2348012345678."
+    );
   }
 
   if (password.length < 8) {
@@ -1220,6 +1366,7 @@ export async function createUserAccount(formData) {
     const createdUserId = createUserEntry({
       name,
       email,
+      phone,
       role,
       lane,
       password,
@@ -1261,6 +1408,24 @@ export async function createUserAccount(formData) {
         },
       }
     );
+    if (phone) {
+      await messagePhone(
+        phone,
+        "whatsapp",
+        "account-created",
+        {
+          email,
+          role,
+          createdBy: actor.name,
+        },
+        {
+          recipientName: name,
+          metadata: {
+            role,
+          },
+        }
+      );
+    }
   } catch (error) {
     redirectWithError(
       "/admin/users",
@@ -1282,6 +1447,7 @@ export async function updateUserAccess(userId, formData) {
 
   const name = getString(formData, "name");
   const email = normalizeEmail(getString(formData, "email"));
+  const phone = normalizePhoneNumber(getString(formData, "phone"));
   const role = getString(formData, "role");
   const lane = getString(formData, "lane");
   const volunteerName = getString(formData, "volunteerName") || name;
@@ -1295,6 +1461,13 @@ export async function updateUserAccess(userId, formData) {
     redirectWithError("/admin/users", "Select a valid role for that account.");
   }
 
+  if (phone && !isValidMessagingPhone(phone)) {
+    redirectWithError(
+      "/admin/users",
+      "Enter a phone number in international format, like +2348012345678."
+    );
+  }
+
   if (targetUser.id === actor.id && !active) {
     redirectWithError("/admin/users", "You cannot deactivate your own account.");
   }
@@ -1305,6 +1478,7 @@ export async function updateUserAccess(userId, formData) {
     updateUserEntry(userId, {
       name,
       email,
+      phone,
       role,
       lane,
       volunteerName: role === "volunteer" ? volunteerName : "",
@@ -1402,6 +1576,23 @@ export async function resetUserPassword(userId, formData) {
         },
       }
     );
+    if (targetUser.phone) {
+      await messagePhone(
+        targetUser.phone,
+        "sms",
+        "password-reset",
+        {
+          email: targetUser.email,
+          handledBy: actor.name,
+        },
+        {
+          recipientName: targetUser.name,
+          metadata: {
+            recoveryRequestId,
+          },
+        }
+      );
+    }
   } catch (error) {
     redirectWithError(
       "/admin/users",
@@ -1551,6 +1742,8 @@ export async function saveChurchSettings(formData) {
   const billingContactEmail = normalizeEmail(getString(formData, "billingContactEmail"));
   const emailFromAddress = normalizeEmail(getString(formData, "emailFromAddress"));
   const emailReplyTo = normalizeEmail(getString(formData, "emailReplyTo"));
+  const smsFromNumber = normalizePhoneNumber(getString(formData, "smsFromNumber"));
+  const whatsappFromNumber = normalizePhoneNumber(getString(formData, "whatsappFromNumber"));
 
   if (supportEmail && !isValidEmailAddress(supportEmail)) {
     redirectWithError("/settings", "Enter a valid support email address.");
@@ -1566,6 +1759,20 @@ export async function saveChurchSettings(formData) {
 
   if (emailReplyTo && !isValidEmailAddress(emailReplyTo)) {
     redirectWithError("/settings", "Enter a valid reply-to email address.");
+  }
+
+  if (smsFromNumber && !isValidMessagingPhone(smsFromNumber)) {
+    redirectWithError(
+      "/settings",
+      "Enter the SMS sender number in international format, like +15005550006."
+    );
+  }
+
+  if (whatsappFromNumber && !isValidMessagingPhone(whatsappFromNumber)) {
+    redirectWithError(
+      "/settings",
+      "Enter the WhatsApp sender number in international format, like +14155238886."
+    );
   }
 
   try {
@@ -1590,6 +1797,10 @@ export async function saveChurchSettings(formData) {
       emailFromAddress,
       emailReplyTo,
       emailSubjectPrefix: getString(formData, "emailSubjectPrefix"),
+      messageDeliveryMode: getString(formData, "messageDeliveryMode"),
+      messageProvider: getString(formData, "messageProvider"),
+      smsFromNumber,
+      whatsappFromNumber,
       notificationChannels: splitList(getString(formData, "notificationChannels")),
     });
 
@@ -1598,7 +1809,7 @@ export async function saveChurchSettings(formData) {
       action: "admin.settings_updated",
       targetType: "church_settings",
       targetId: "primary",
-      summary: `${actor.name} updated church settings, billing, and email preferences.`,
+      summary: `${actor.name} updated church settings, billing, and delivery preferences.`,
     });
   } catch (error) {
     redirectWithError(
@@ -1651,5 +1862,51 @@ export async function sendTestEmail(formData) {
   redirectWithNotice(
     "/settings",
     "Test email queued. Check the outbox panel below for the final delivery status."
+  );
+}
+
+export async function sendTestMessage(formData) {
+  const actor = await requireCurrentUser(["owner"]);
+  const phone = normalizePhoneNumber(getString(formData, "phone")) || actor.phone;
+  const channel = getString(formData, "channel") === "whatsapp" ? "whatsapp" : "sms";
+  const note = getString(formData, "note");
+  const settings = getChurchSettings();
+
+  if (!phone || !isValidMessagingPhone(phone)) {
+    redirectWithError("/settings", "Enter a valid phone number for the delivery test.");
+  }
+
+  await messagePhone(
+    phone,
+    channel,
+    "test-message",
+    {
+      deliveryMode: settings?.messageDeliveryMode || "log-only",
+      provider: settings?.messageProvider || "twilio",
+      note:
+        note ||
+        `${actor.name} triggered this ${channel} delivery test from the owner settings screen.`,
+    },
+    {
+      recipientName: actor.name,
+      metadata: {
+        requestedBy: actor.id,
+        channel,
+      },
+    }
+  );
+
+  recordAuditLog({
+    ...buildActorLog(actor),
+    action: "admin.message_test_sent",
+    targetType: "message_outbox",
+    targetId: phone,
+    summary: `${actor.name} queued a ${channel} delivery test for ${phone}.`,
+  });
+
+  revalidateCarePaths();
+  redirectWithNotice(
+    "/settings",
+    "Test message queued. Check the outbox panel below for the final delivery status."
   );
 }

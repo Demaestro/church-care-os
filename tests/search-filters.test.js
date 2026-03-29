@@ -1,8 +1,12 @@
 import { describe, expect, test } from "vitest";
 import {
   filterHouseholds,
+  filterNotifications,
   filterRecoveryRequests,
+  filterRecentClosures,
+  filterOverdueFollowUps,
   filterUsers,
+  filterVolunteerLoads,
   hasActiveFilters,
 } from "@/lib/search-filters";
 
@@ -59,6 +63,7 @@ describe("search filters", () => {
       {
         name: "Sister Ngozi Okafor",
         email: "volunteer@grace.demo",
+        phone: "+2348010000003",
         role: "volunteer",
         lane: "Mercy & welfare lane",
         volunteerName: "Sister Ngozi",
@@ -68,7 +73,7 @@ describe("search filters", () => {
 
     expect(
       filterUsers(users, {
-        query: "ngozi mercy",
+        query: "ngozi mercy +234801",
         role: "volunteer",
         status: "inactive",
       })
@@ -110,5 +115,73 @@ describe("search filters", () => {
 
     expect(hasActiveFilters({ query: "", role: "all", status: "active" })).toBe(true);
     expect(hasActiveFilters({ query: "", role: "all", status: "all" })).toBe(false);
+  });
+
+  test("filters notifications by query, read status, and kind", () => {
+    const notifications = [
+      {
+        title: "Volunteer accepted a task",
+        body: "Sister Ngozi accepted an assigned care follow-up.",
+        kind: "task",
+        read: false,
+      },
+      {
+        title: "Password reset link sent",
+        body: "A one-time password reset link was sent.",
+        kind: "account",
+        read: true,
+      },
+    ];
+
+    expect(
+      filterNotifications(notifications, {
+        query: "ngozi follow-up",
+        status: "unread",
+        kind: "task",
+      })
+    ).toHaveLength(1);
+
+    expect(
+      filterNotifications(notifications, {
+        query: "password",
+        status: "read",
+        kind: "account",
+      })[0]?.title
+    ).toBe("Password reset link sent");
+  });
+
+  test("filters report lists by shared search query", () => {
+    const volunteerLoads = [
+      {
+        name: "Sister Ngozi Okafor",
+        team: "Mercy & welfare team",
+        lane: "Mercy & welfare lane",
+        email: "volunteer@grace.demo",
+      },
+      {
+        name: "Brother Peter Obi",
+        team: "Prayer & encouragement team",
+        lane: "Prayer & encouragement lane",
+        email: "peter@grace.demo",
+      },
+    ];
+    const overdueFollowUps = [
+      {
+        name: "Ruth Okonkwo",
+        owner: "Mercy & welfare lane",
+        dueLabel: "2 days overdue",
+      },
+    ];
+    const recentClosures = [
+      {
+        householdName: "Joyce Akin",
+        need: "Meal support",
+        closedLabel: "Today",
+      },
+    ];
+
+    expect(filterVolunteerLoads(volunteerLoads, { query: "ngozi mercy" })).toHaveLength(1);
+    expect(filterOverdueFollowUps(overdueFollowUps, { query: "ruth overdue" })).toHaveLength(1);
+    expect(filterRecentClosures(recentClosures, { query: "joyce meal" })).toHaveLength(1);
   });
 });
