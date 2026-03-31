@@ -6,6 +6,7 @@ import { listUsers } from "@/lib/auth-store";
 import { formatDateTime, formatShortDateTime } from "@/lib/care-format";
 import { getDashboardData, getOperationsSnapshot, listAuditLogs } from "@/lib/care-store";
 import { getDatabase, parseJson, serializeJson } from "@/lib/database";
+import { defaultChurchSettings } from "@/lib/organization-defaults";
 
 export const getChurchSettings = cache(function getChurchSettings() {
   const row = getDatabase()
