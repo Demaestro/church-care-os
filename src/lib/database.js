@@ -932,6 +932,45 @@ function ensureSchemaMigrations(db) {
       ON journey_contacts (journey_id);
   `);
 
+  // Follow-up engine columns
+  addColumnIfMissing(db, "requests", "next_contact_due", "TEXT");
+  addColumnIfMissing(db, "requests", "follow_up_rhythm", "TEXT");
+  addColumnIfMissing(db, "requests", "follow_up_goal", "TEXT");
+  addColumnIfMissing(db, "requests", "discipleship_stage", "TEXT");
+  addColumnIfMissing(db, "requests", "follow_up_template", "TEXT");
+  addColumnIfMissing(db, "requests", "last_contact_outcome", "TEXT");
+  addColumnIfMissing(db, "requests", "follow_up_owner_id", "TEXT");
+  addColumnIfMissing(db, "requests", "follow_up_owner_name", "TEXT");
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS discipleship_records (
+      id                TEXT PRIMARY KEY,
+      organization_id   TEXT NOT NULL,
+      branch_id         TEXT NOT NULL,
+      household_id      TEXT NOT NULL,
+      household_slug    TEXT NOT NULL,
+      household_name    TEXT NOT NULL,
+      stage             TEXT NOT NULL DEFAULT 'new_believer',
+      pathway           TEXT NOT NULL DEFAULT 'standard',
+      assigned_leader_id   TEXT,
+      assigned_leader_name TEXT,
+      small_group_connected INTEGER NOT NULL DEFAULT 0,
+      attending_regularly   INTEGER NOT NULL DEFAULT 0,
+      serving               INTEGER NOT NULL DEFAULT 0,
+      baptized              INTEGER NOT NULL DEFAULT 0,
+      foundation_class      INTEGER NOT NULL DEFAULT 0,
+      mentoring_others      INTEGER NOT NULL DEFAULT 0,
+      next_step         TEXT,
+      notes             TEXT,
+      last_updated_by   TEXT,
+      created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(organization_id, household_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_discipleship_scope
+      ON discipleship_records (organization_id, branch_id, stage);
+  `);
+
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_tracking_code
       ON requests (tracking_code);

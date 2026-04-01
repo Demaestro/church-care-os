@@ -6,13 +6,19 @@ import { formatDateTime, formatShortDateTime } from "@/lib/care-format";
 import { stageDescriptions } from "@/lib/care-copy";
 import {
   getDatabase,
+  getDatabaseDriver,
   getDatabasePath,
   generateTrackingCode,
   parseJson,
   serializeJson,
   withTransaction,
 } from "@/lib/database";
+import {
+  defaultPrimaryBranchId,
+  defaultPrimaryOrganizationId,
+} from "@/lib/organization-defaults";
 import { intakeRateLimit, retentionPolicy } from "@/lib/policies";
+import { buildViewerScope, recordMatchesViewerScope } from "@/lib/workspace-scope";
 
 const defaultPrivacyPreference = {
   visibility: "pastors-and-assigned-leads",
@@ -48,6 +54,57 @@ function normalizeStore(store) {
     households: Array.isArray(store?.households) ? store.households : [],
     requests: Array.isArray(store?.requests) ? store.requests : [],
   };
+}
+
+function applyViewerScopeToStore(store, viewer = null, preferredBranchId = "") {
+  if (!viewer) {
+    return normalizeStore(store);
+  }
+
+  const viewerScope = buildViewerScope(viewer, preferredBranchId);
+
+  return normalizeStore({
+    households: store.households.filter((household) =>
+      recordMatchesViewerScope(household, viewerScope)
+    ),
+    requests: store.requests.filter((request) =>
+      recordMatchesViewerScope(request, viewerScope)
+    ),
+  });
+}
+
+function filterByViewerScope(items, viewer = null, preferredBranchId = "") {
+  if (!viewer) {
+    return Array.isArray(items) ? items : [];
+  }
+
+  const viewerScope = buildViewerScope(viewer, preferredBranchId);
+
+  return (Array.isArray(items) ? items : []).filter((item) =>
+    recordMatchesViewerScope(item, viewerScope)
+  );
+}
+
+function assertRecordAccess(record, viewer = null, preferredBranchId = "") {
+  if (!viewer || !record) {
+    return;
+  }
+
+  const viewerScope = buildViewerScope(viewer, preferredBranchId);
+  if (!recordMatchesViewerScope(record, viewerScope)) {
+    throw new Error("You do not have access to that branch record.");
+  }
+}
+
+function assertVolunteerIdentity(viewer, volunteerName) {
+  if (!viewer || viewer.role !== "volunteer") {
+    return;
+  }
+
+  const actorVolunteerName = viewer.volunteerName || viewer.name;
+  if (actorVolunteerName !== volunteerName) {
+    throw new Error("You can only act on tasks assigned to your volunteer account.");
+  }
 }
 
 function sortByDateAsc(first, second) {
@@ -284,10 +341,10 @@ function buildHouseholdDetail(store, slug) {
   return decorateHousehold(household, store.requests);
 }
 
-function readStore() {
+function readStore(viewer = null, preferredBranchId = "") {
   const db = getDatabase();
   const noteRows = db.prepare(`
-    SELECT id, household_slug, created_at, author, kind, body
+    SELECT id, organization_id, branch_id, household_slug, created_at, author, kind, body
     FROM household_notes
     ORDER BY created_at DESC
   `).all();
@@ -311,6 +368,8 @@ function readStore() {
   const householdRows = db.prepare(`
     SELECT
       id,
+      organization_id,
+      branch_id,
       slug,
       name,
       stage,
@@ -328,6 +387,8 @@ function readStore() {
   const requestRows = db.prepare(`
     SELECT
       id,
+      organization_id,
+      branch_id,
       household_slug,
       household_name,
       need,
@@ -347,43 +408,51 @@ function readStore() {
     FROM requests
   `).all();
 
-  return normalizeStore({
-    households: householdRows.map((row) => ({
-      id: row.id,
-      slug: row.slug,
-      name: row.name,
-      stage: row.stage,
-      risk: row.risk,
-      situation: row.situation,
-      owner: row.owner,
-      nextTouchpoint: row.next_touchpoint,
-      summaryNote: row.summary_note,
-      tags: parseJson(row.tags_json, []),
-      privacyPreference: parseJson(row.privacy_json, defaultPrivacyPreference),
-      pastoralNeed: parseJson(row.pastoral_need_json, null),
-      createdAt: row.created_at,
-      notes: notesByHousehold[row.slug] || [],
-    })),
-    requests: requestRows.map((row) => ({
-      id: row.id,
-      householdSlug: row.household_slug,
-      householdName: row.household_name,
-      need: row.need,
-      summary: row.summary,
-      owner: row.owner,
-      dueAt: row.due_at,
-      tone: row.tone,
-      status: row.status,
-      source: row.source,
-      createdAt: row.created_at,
-      requester: parseJson(row.requester_json, defaultRequester),
-      privacy: parseJson(row.privacy_json, defaultPrivacyPreference),
-      trackingCode: row.tracking_code || "",
-      statusDetail: row.status_detail || "",
-      assignedVolunteer: parseJson(row.assigned_volunteer_json, null),
-      escalation: parseJson(row.escalation_json, null),
-    })),
-  });
+  return applyViewerScopeToStore(
+    normalizeStore({
+      households: householdRows.map((row) => ({
+        id: row.id,
+        organizationId: row.organization_id || defaultPrimaryOrganizationId,
+        branchId: row.branch_id || defaultPrimaryBranchId,
+        slug: row.slug,
+        name: row.name,
+        stage: row.stage,
+        risk: row.risk,
+        situation: row.situation,
+        owner: row.owner,
+        nextTouchpoint: row.next_touchpoint,
+        summaryNote: row.summary_note,
+        tags: parseJson(row.tags_json, []),
+        privacyPreference: parseJson(row.privacy_json, defaultPrivacyPreference),
+        pastoralNeed: parseJson(row.pastoral_need_json, null),
+        createdAt: row.created_at,
+        notes: notesByHousehold[row.slug] || [],
+      })),
+      requests: requestRows.map((row) => ({
+        id: row.id,
+        organizationId: row.organization_id || defaultPrimaryOrganizationId,
+        branchId: row.branch_id || defaultPrimaryBranchId,
+        householdSlug: row.household_slug,
+        householdName: row.household_name,
+        need: row.need,
+        summary: row.summary,
+        owner: row.owner,
+        dueAt: row.due_at,
+        tone: row.tone,
+        status: row.status,
+        source: row.source,
+        createdAt: row.created_at,
+        requester: parseJson(row.requester_json, defaultRequester),
+        privacy: parseJson(row.privacy_json, defaultPrivacyPreference),
+        trackingCode: row.tracking_code || "",
+        statusDetail: row.status_detail || "",
+        assignedVolunteer: parseJson(row.assigned_volunteer_json, null),
+        escalation: parseJson(row.escalation_json, null),
+      })),
+    }),
+    viewer,
+    preferredBranchId
+  );
 }
 
 function getHouseholdRecord(slug) {
@@ -391,6 +460,8 @@ function getHouseholdRecord(slug) {
     .prepare(`
       SELECT
         id,
+        organization_id,
+        branch_id,
         slug,
         name,
         stage,
@@ -415,6 +486,8 @@ function getRequestRecord(id) {
     .prepare(`
       SELECT
         id,
+        organization_id,
+        branch_id,
         household_slug,
         household_name,
         need,
@@ -443,6 +516,8 @@ function getRequestRecordByTrackingCode(trackingCode) {
     .prepare(`
       SELECT
         id,
+        organization_id,
+        branch_id,
         household_slug,
         household_name,
         need,
@@ -469,10 +544,12 @@ function getRequestRecordByTrackingCode(trackingCode) {
 function insertHouseholdNote(db, householdSlug, note) {
   db.prepare(`
     INSERT INTO household_notes (
-      id, household_slug, created_at, author, kind, body
-    ) VALUES (?, ?, ?, ?, ?, ?)
+      id, organization_id, branch_id, household_slug, created_at, author, kind, body
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     note.id || randomUUID(),
+    note.organizationId || defaultPrimaryOrganizationId,
+    note.branchId || defaultPrimaryBranchId,
     householdSlug,
     note.createdAt,
     note.author,
@@ -488,6 +565,8 @@ function mapRequestRecord(record) {
 
   return {
     id: record.id,
+    organizationId: record.organization_id || defaultPrimaryOrganizationId,
+    branchId: record.branch_id || defaultPrimaryBranchId,
     householdSlug: record.household_slug,
     householdName: record.household_name,
     need: record.need,
@@ -514,6 +593,8 @@ function mapHouseholdRecord(record) {
 
   return {
     id: record.id,
+    organizationId: record.organization_id || defaultPrimaryOrganizationId,
+    branchId: record.branch_id || defaultPrimaryBranchId,
     slug: record.slug,
     name: record.name,
     stage: record.stage,
@@ -576,6 +657,8 @@ function buildMemberSafeRequest(request, household) {
 
   return {
     id: request.id,
+    organizationId: request.organizationId,
+    branchId: request.branchId,
     trackingCode: request.trackingCode,
     householdSlug: request.householdSlug,
     householdName,
@@ -740,19 +823,29 @@ function resolveMemberFacingState(request) {
   };
 }
 
-export const getDashboardData = cache(async function getDashboardData() {
-  return buildDashboardData(readStore());
+export const getDashboardData = cache(async function getDashboardData(
+  viewer = null,
+  preferredBranchId = ""
+) {
+  return buildDashboardData(readStore(viewer, preferredBranchId));
 });
 
-export const getHouseholds = cache(async function getHouseholds() {
-  const store = readStore();
+export const getHouseholds = cache(async function getHouseholds(
+  viewer = null,
+  preferredBranchId = ""
+) {
+  const store = readStore(viewer, preferredBranchId);
   return sortHouseholds(
     store.households.map((household) => decorateHousehold(household, store.requests))
   );
 });
 
-export const getHouseholdBySlug = cache(async function getHouseholdBySlug(slug) {
-  return buildHouseholdDetail(readStore(), slug);
+export const getHouseholdBySlug = cache(async function getHouseholdBySlug(
+  slug,
+  viewer = null,
+  preferredBranchId = ""
+) {
+  return buildHouseholdDetail(readStore(viewer, preferredBranchId), slug);
 });
 
 export async function getMemberRequestStatusByTrackingCode(trackingCode) {
@@ -814,7 +907,11 @@ export async function getMemberPortalData(trackingCode, contactValue) {
     store.households.map((household) => [household.slug, household])
   );
   const matchingRequests = sortRequests(
-    store.requests.filter((item) => isSameRequesterContact(item, normalizedContact))
+    store.requests.filter(
+      (item) =>
+        item.organizationId === request.organizationId &&
+        isSameRequesterContact(item, normalizedContact)
+    )
   ).map((item) =>
     buildMemberSafeRequest(item, buildHouseholdDetail(store, item.householdSlug))
   );
@@ -871,17 +968,21 @@ export async function updateMemberContactProfileEntry(trackingCode, contactValue
 
   withTransaction((db) => {
     const rows = db.prepare(`
-      SELECT id, requester_json
+      SELECT id, organization_id, requester_json
       FROM requests
     `).all();
 
     for (const row of rows) {
       const requester = parseJson(row.requester_json, defaultRequester);
       const request = {
+        organizationId: row.organization_id || defaultPrimaryOrganizationId,
         requester,
       };
 
-      if (!isSameRequesterContact(request, matchValue)) {
+      if (
+        request.organizationId !== portal.requests[0]?.organizationId ||
+        !isSameRequesterContact(request, matchValue)
+      ) {
         continue;
       }
 
@@ -908,8 +1009,8 @@ export async function updateMemberContactProfileEntry(trackingCode, contactValue
   };
 }
 
-export async function getFollowUpScheduleData() {
-  const dashboard = await getDashboardData();
+export async function getFollowUpScheduleData(viewer = null, preferredBranchId = "") {
+  const dashboard = await getDashboardData(viewer, preferredBranchId);
   const now = new Date();
   const items = dashboard.households
     .filter((household) => household.nextTouchpoint)
@@ -949,15 +1050,17 @@ export async function getCareStoreHealth() {
   db.prepare("SELECT 1").get();
 
   return {
-    storeMode: "sqlite",
+    storeMode: getDatabaseDriver(),
   };
 }
 
-export function listAuditLogs(limit = 60) {
-  return getDatabase()
+export function listAuditLogs(limit = 60, viewer = null, preferredBranchId = "") {
+  const entries = getDatabase()
     .prepare(`
       SELECT
         id,
+        organization_id,
+        branch_id,
         created_at,
         actor_user_id,
         actor_name,
@@ -974,6 +1077,8 @@ export function listAuditLogs(limit = 60) {
     .all(limit)
     .map((row) => ({
       id: row.id,
+      organizationId: row.organization_id || defaultPrimaryOrganizationId,
+      branchId: row.branch_id || "",
       createdAt: row.created_at,
       actorUserId: row.actor_user_id,
       actorName: row.actor_name,
@@ -985,6 +1090,8 @@ export function listAuditLogs(limit = 60) {
       metadata: parseJson(row.metadata_json, {}),
       createdLabel: formatDateTime(row.created_at),
     }));
+
+  return filterByViewerScope(entries, viewer, preferredBranchId);
 }
 
 export function recordAuditLog(entry) {
@@ -993,11 +1100,13 @@ export function recordAuditLog(entry) {
 
   db.prepare(`
     INSERT INTO audit_logs (
-      id, created_at, actor_user_id, actor_name, actor_role,
+      id, organization_id, branch_id, created_at, actor_user_id, actor_name, actor_role,
       action, target_type, target_id, summary, metadata_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     randomUUID(),
+    entry.organizationId ?? defaultPrimaryOrganizationId,
+    entry.branchId === undefined ? defaultPrimaryBranchId : entry.branchId,
     now,
     entry.actorUserId || null,
     entry.actorName || "System",
@@ -1079,13 +1188,13 @@ export function runRetentionSweep() {
     WHERE status = 'Closed' AND created_at < ?
   `).all(closedCutoff);
 
-  withTransaction(() => {
-    const archiveInsert = db.prepare(`
+  withTransaction((dbTx) => {
+    const archiveInsert = dbTx.prepare(`
       INSERT OR IGNORE INTO request_archive (
         id, request_id, archived_at, request_json
       ) VALUES (?, ?, ?, ?)
     `);
-    const archiveRows = db.prepare(`
+    const archiveRows = dbTx.prepare(`
       SELECT
         id,
         household_slug,
@@ -1131,15 +1240,15 @@ export function runRetentionSweep() {
       );
     }
 
-    db.prepare(`
+    dbTx.prepare(`
       DELETE FROM requests
       WHERE status = 'Closed' AND created_at < ?
     `).run(closedCutoff);
-    db.prepare(`
+    dbTx.prepare(`
       DELETE FROM audit_logs
       WHERE actor_role = 'system' AND created_at < ?
     `).run(auditCutoff);
-    db.prepare(`
+    dbTx.prepare(`
       DELETE FROM rate_limits
       WHERE last_seen_at < ?
     `).run(rateLimitCutoff);
@@ -1154,6 +1263,8 @@ export async function createCareRequestEntry(input) {
   const slug = slugify(input.householdName);
   const now = new Date().toISOString();
   const trackingCode = generateTrackingCode();
+  const organizationId = input.organizationId || defaultPrimaryOrganizationId;
+  const branchId = input.branchId || defaultPrimaryBranchId;
   const tags = normalizeTags(input.tags);
   const owner = input.owner || "Unassigned";
   const noteBody =
@@ -1175,6 +1286,8 @@ export async function createCareRequestEntry(input) {
       db.prepare(`
         UPDATE households
         SET
+          organization_id = ?,
+          branch_id = ?,
           name = ?,
           stage = ?,
           risk = ?,
@@ -1187,6 +1300,8 @@ export async function createCareRequestEntry(input) {
           pastoral_need_json = ?
         WHERE slug = ?
       `).run(
+        organizationId,
+        branchId,
         input.householdName,
         input.stage || currentHousehold.stage,
         input.risk || currentHousehold.risk,
@@ -1212,11 +1327,13 @@ export async function createCareRequestEntry(input) {
     } else {
       db.prepare(`
         INSERT INTO households (
-          id, slug, name, stage, risk, situation, owner, next_touchpoint,
+          id, organization_id, branch_id, slug, name, stage, risk, situation, owner, next_touchpoint,
           summary_note, tags_json, privacy_json, pastoral_need_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         randomUUID(),
+        organizationId,
+        branchId,
         slug,
         input.householdName,
         input.stage || "Assign",
@@ -1243,6 +1360,8 @@ export async function createCareRequestEntry(input) {
     }
 
     insertHouseholdNote(db, slug, {
+      organizationId,
+      branchId,
       id: randomUUID(),
       createdAt: now,
       author: "Intake form",
@@ -1252,12 +1371,14 @@ export async function createCareRequestEntry(input) {
 
     db.prepare(`
       INSERT INTO requests (
-        id, household_slug, household_name, need, summary, owner, due_at, tone,
+        id, organization_id, branch_id, household_slug, household_name, need, summary, owner, due_at, tone,
         status, source, created_at, requester_json, privacy_json, tracking_code,
         status_detail, assigned_volunteer_json, escalation_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       randomUUID(),
+      organizationId,
+      branchId,
       slug,
       input.householdName,
       input.need,
@@ -1289,13 +1410,19 @@ export async function createCareRequestEntry(input) {
   };
 }
 
-export async function updateHouseholdSnapshotEntry(slug, updates) {
+export async function updateHouseholdSnapshotEntry(
+  slug,
+  updates,
+  actor = null,
+  preferredBranchId = ""
+) {
   const householdRecord = getHouseholdRecord(slug);
   if (!householdRecord) {
     throw new Error("Household not found.");
   }
 
   const household = mapHouseholdRecord(householdRecord);
+  assertRecordAccess(household, actor, preferredBranchId);
   const nextTags = normalizeTags(updates.tags);
   const nextStage = updates.stage || household.stage;
   const nextRisk = updates.risk || household.risk;
@@ -1352,6 +1479,8 @@ export async function updateHouseholdSnapshotEntry(slug, updates) {
 
     if (changeBits.length > 0) {
       insertHouseholdNote(db, slug, {
+        organizationId: household.organizationId,
+        branchId: household.branchId,
         id: randomUUID(),
         createdAt: new Date().toISOString(),
         author: "Care board",
@@ -1362,13 +1491,23 @@ export async function updateHouseholdSnapshotEntry(slug, updates) {
   });
 }
 
-export async function addHouseholdNoteEntry(slug, input) {
+export async function addHouseholdNoteEntry(
+  slug,
+  input,
+  actor = null,
+  preferredBranchId = ""
+) {
   const householdRecord = getHouseholdRecord(slug);
   if (!householdRecord) {
     throw new Error("Household not found.");
   }
 
+  const household = mapHouseholdRecord(householdRecord);
+  assertRecordAccess(household, actor, preferredBranchId);
+
   insertHouseholdNote(getDatabase(), slug, {
+    organizationId: household.organizationId,
+    branchId: household.branchId,
     id: randomUUID(),
     createdAt: new Date().toISOString(),
     author: input.author || "Care team",
@@ -1377,13 +1516,19 @@ export async function addHouseholdNoteEntry(slug, input) {
   });
 }
 
-export async function saveFollowUpPlanEntry(slug, input) {
+export async function saveFollowUpPlanEntry(
+  slug,
+  input,
+  actor = null,
+  preferredBranchId = ""
+) {
   const householdRecord = getHouseholdRecord(slug);
   if (!householdRecord) {
     throw new Error("Household not found.");
   }
 
   const household = mapHouseholdRecord(householdRecord);
+  assertRecordAccess(household, actor, preferredBranchId);
   const nextTouchpoint = input.nextTouchpoint || household.nextTouchpoint;
   const nextOwner = input.owner || household.owner || "Unassigned";
 
@@ -1401,6 +1546,8 @@ export async function saveFollowUpPlanEntry(slug, input) {
     `).run(nextOwner, slug);
 
     insertHouseholdNote(db, slug, {
+      organizationId: household.organizationId,
+      branchId: household.branchId,
       id: randomUUID(),
       createdAt: new Date().toISOString(),
       author: input.author || "Care scheduler",
@@ -1412,11 +1559,18 @@ export async function saveFollowUpPlanEntry(slug, input) {
   });
 }
 
-export async function closeCareRequestEntry(requestId, householdSlug) {
+export async function closeCareRequestEntry(
+  requestId,
+  householdSlug,
+  actor = null,
+  preferredBranchId = ""
+) {
   const requestRecord = getRequestRecord(requestId);
   if (!requestRecord) {
     throw new Error("Request not found.");
   }
+  const request = mapRequestRecord(requestRecord);
+  assertRecordAccess(request, actor, preferredBranchId);
 
   withTransaction((db) => {
     db.prepare(`
@@ -1427,6 +1581,8 @@ export async function closeCareRequestEntry(requestId, householdSlug) {
     `).run(requestId);
 
     insertHouseholdNote(db, householdSlug, {
+      organizationId: request.organizationId,
+      branchId: request.branchId,
       id: randomUUID(),
       createdAt: new Date().toISOString(),
       author: "Care board",
@@ -1436,13 +1592,21 @@ export async function closeCareRequestEntry(requestId, householdSlug) {
   });
 }
 
-export async function assignRequestVolunteerEntry(requestId, householdSlug, input) {
+export async function assignRequestVolunteerEntry(
+  requestId,
+  householdSlug,
+  input,
+  actor = null,
+  preferredBranchId = ""
+) {
   const request = mapRequestRecord(getRequestRecord(requestId));
   const household = mapHouseholdRecord(getHouseholdRecord(householdSlug));
 
   if (!request) {
     throw new Error("Request not found.");
   }
+
+  assertRecordAccess(request, actor, preferredBranchId);
 
   if (!input.volunteerName) {
     throw new Error("Volunteer name is required.");
@@ -1492,6 +1656,8 @@ export async function assignRequestVolunteerEntry(requestId, householdSlug, inpu
       );
 
       insertHouseholdNote(db, householdSlug, {
+        organizationId: request.organizationId,
+        branchId: request.branchId,
         id: randomUUID(),
         createdAt: now,
         author: input.assignedBy || "Leader routing view",
@@ -1502,13 +1668,21 @@ export async function assignRequestVolunteerEntry(requestId, householdSlug, inpu
   });
 }
 
-export async function escalateRequestToPastorEntry(requestId, householdSlug, input) {
+export async function escalateRequestToPastorEntry(
+  requestId,
+  householdSlug,
+  input,
+  actor = null,
+  preferredBranchId = ""
+) {
   const request = mapRequestRecord(getRequestRecord(requestId));
   const household = mapHouseholdRecord(getHouseholdRecord(householdSlug));
 
   if (!request) {
     throw new Error("Request not found.");
   }
+
+  assertRecordAccess(request, actor, preferredBranchId);
 
   const now = new Date().toISOString();
   const reason =
@@ -1549,6 +1723,8 @@ export async function escalateRequestToPastorEntry(requestId, householdSlug, inp
       );
 
       insertHouseholdNote(db, householdSlug, {
+        organizationId: request.organizationId,
+        branchId: request.branchId,
         id: randomUUID(),
         createdAt: now,
         author: input.escalatedBy || "Leader routing view",
@@ -1559,12 +1735,21 @@ export async function escalateRequestToPastorEntry(requestId, householdSlug, inp
   });
 }
 
-export async function acceptVolunteerTaskEntry(requestId, householdSlug, volunteerName) {
+export async function acceptVolunteerTaskEntry(
+  requestId,
+  householdSlug,
+  volunteerName,
+  actor = null,
+  preferredBranchId = ""
+) {
   const request = mapRequestRecord(getRequestRecord(requestId));
 
   if (!request) {
     throw new Error("Request not found.");
   }
+
+  assertRecordAccess(request, actor, preferredBranchId);
+  assertVolunteerIdentity(actor, volunteerName);
 
   if (request.status !== "Open") {
     throw new Error("Only open requests can be accepted.");
@@ -1590,6 +1775,8 @@ export async function acceptVolunteerTaskEntry(requestId, householdSlug, volunte
     `).run(serializeJson(assignment), requestId);
 
     insertHouseholdNote(db, householdSlug, {
+      organizationId: request.organizationId,
+      branchId: request.branchId,
       id: randomUUID(),
       createdAt: now,
       author: volunteerName,
@@ -1606,6 +1793,9 @@ export async function declineVolunteerTaskEntry(requestId, householdSlug, input)
   if (!request) {
     throw new Error("Request not found.");
   }
+
+  assertRecordAccess(request, input.actor || null, input.preferredBranchId || "");
+  assertVolunteerIdentity(input.actor || null, input.volunteerName);
 
   if (request.status !== "Open") {
     throw new Error("Only open requests can be declined.");
@@ -1646,6 +1836,8 @@ export async function declineVolunteerTaskEntry(requestId, householdSlug, input)
     }
 
     insertHouseholdNote(db, householdSlug, {
+      organizationId: request.organizationId,
+      branchId: request.branchId,
       id: randomUUID(),
       createdAt: now,
       author: input.volunteerName,
@@ -1655,13 +1847,22 @@ export async function declineVolunteerTaskEntry(requestId, householdSlug, input)
   });
 }
 
-export async function completeVolunteerTaskEntry(requestId, householdSlug, volunteerName) {
+export async function completeVolunteerTaskEntry(
+  requestId,
+  householdSlug,
+  volunteerName,
+  actor = null,
+  preferredBranchId = ""
+) {
   const request = mapRequestRecord(getRequestRecord(requestId));
   const household = mapHouseholdRecord(getHouseholdRecord(householdSlug));
 
   if (!request) {
     throw new Error("Request not found.");
   }
+
+  assertRecordAccess(request, actor, preferredBranchId);
+  assertVolunteerIdentity(actor, volunteerName);
 
   if (request.assignedVolunteer?.name !== volunteerName) {
     throw new Error("This request is not assigned to that volunteer.");
@@ -1693,6 +1894,8 @@ export async function completeVolunteerTaskEntry(requestId, householdSlug, volun
     }
 
     insertHouseholdNote(db, householdSlug, {
+      organizationId: request.organizationId,
+      branchId: request.branchId,
       id: randomUUID(),
       createdAt: now,
       author: volunteerName,
@@ -1702,12 +1905,21 @@ export async function completeVolunteerTaskEntry(requestId, householdSlug, volun
   });
 }
 
-export async function addVolunteerTaskNoteEntry(requestId, householdSlug, input) {
+export async function addVolunteerTaskNoteEntry(
+  requestId,
+  householdSlug,
+  input,
+  actor = null,
+  preferredBranchId = ""
+) {
   const request = mapRequestRecord(getRequestRecord(requestId));
 
   if (!request) {
     throw new Error("Request not found.");
   }
+
+  assertRecordAccess(request, actor, preferredBranchId);
+  assertVolunteerIdentity(actor, input.volunteerName);
 
   if (!input.body) {
     throw new Error("A note body is required.");
@@ -1732,6 +1944,8 @@ export async function addVolunteerTaskNoteEntry(requestId, householdSlug, input)
     `).run(serializeJson(assignment), requestId);
 
     insertHouseholdNote(db, householdSlug, {
+      organizationId: request.organizationId,
+      branchId: request.branchId,
       id: randomUUID(),
       createdAt: now,
       author: input.volunteerName,
@@ -1741,17 +1955,100 @@ export async function addVolunteerTaskNoteEntry(requestId, householdSlug, input)
   });
 }
 
-export function getOperationsSnapshot() {
+// ── Follow-up board queries ───────────────────────────────────────────────────
+
+export function getFollowUpBoard(organizationId, branchId) {
   const db = getDatabase();
-  const householdCount = db.prepare("SELECT COUNT(*) AS count FROM households").get()
-    .count;
-  const openRequestCount = db.prepare(`
-    SELECT COUNT(*) AS count
+  const now = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  const base = branchId
+    ? `organization_id = ? AND branch_id = ? AND status NOT IN ('resolved','archived')`
+    : `organization_id = ? AND status NOT IN ('resolved','archived')`;
+  const params = branchId ? [organizationId, branchId] : [organizationId];
+
+  const all = db.prepare(`
+    SELECT id, organization_id, branch_id, household_name, household_slug,
+           tone, status, created_at, last_activity_at,
+           next_contact_due, follow_up_rhythm, follow_up_goal,
+           follow_up_template, last_contact_outcome,
+           follow_up_owner_name, assigned_volunteer_json
     FROM requests
-    WHERE status = 'Open'
-  `).get().count;
-  const auditLogCount = db.prepare("SELECT COUNT(*) AS count FROM audit_logs").get()
-    .count;
+    WHERE ${base}
+    ORDER BY COALESCE(next_contact_due, created_at) ASC
+    LIMIT 200
+  `).all(...params);
+
+  const overdue = [], dueToday = [], dueThisWeek = [], noContact = [], later = [];
+  const weekFromNow = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 86400000).toISOString();
+
+  for (const r of all) {
+    const due = r.next_contact_due ? r.next_contact_due.slice(0, 10) : null;
+    const noRecentContact = !r.last_activity_at || r.last_activity_at < fourteenDaysAgo;
+
+    if (due && due < now) { overdue.push(r); }
+    else if (due && due === now) { dueToday.push(r); }
+    else if (due && due <= weekFromNow) { dueThisWeek.push(r); }
+    else if (noRecentContact && !due) { noContact.push(r); }
+    else { later.push(r); }
+  }
+
+  return { overdue, dueToday, dueThisWeek, noContact, later };
+}
+
+export function saveFollowUpDetails(requestId, input) {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE requests SET
+      next_contact_due = ?,
+      follow_up_rhythm = ?,
+      follow_up_goal = ?,
+      follow_up_template = ?,
+      discipleship_stage = ?,
+      follow_up_owner_id = ?,
+      follow_up_owner_name = ?,
+      last_activity_at = ?
+    WHERE id = ?
+  `).run(
+    input.nextContactDue || null,
+    input.followUpRhythm || null,
+    input.followUpGoal || null,
+    input.followUpTemplate || null,
+    input.discipleshipStage || null,
+    input.followUpOwnerId || null,
+    input.followUpOwnerName || null,
+    now,
+    requestId
+  );
+}
+
+export function recordFollowUpOutcome(requestId, outcome) {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE requests SET last_contact_outcome = ?, last_activity_at = ? WHERE id = ?
+  `).run(outcome, now, requestId);
+}
+
+export function getOperationsSnapshot(viewer = null, preferredBranchId = "") {
+  const db = getDatabase();
+  const viewerScope = viewer ? buildViewerScope(viewer, preferredBranchId) : null;
+  const householdCount = viewerScope
+    ? readStore(viewer, preferredBranchId).households.length
+    : db.prepare("SELECT COUNT(*) AS count FROM households").get().count;
+  const openRequestCount = viewerScope
+    ? readStore(viewer, preferredBranchId).requests.filter(
+        (request) => request.status === "Open"
+      ).length
+    : db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM requests
+        WHERE status = 'Open'
+      `).get().count;
+  const auditLogCount = viewerScope
+    ? listAuditLogs(999, viewer, preferredBranchId).length
+    : db.prepare("SELECT COUNT(*) AS count FROM audit_logs").get().count;
 
   return {
     databasePath: getDatabasePath(),

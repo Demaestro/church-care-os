@@ -255,6 +255,9 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
       href: "/",
       label: copy.layout.nav.dashboard,
     });
+    operationItems.push({ href: "/follow-up", label: "Follow-up" });
+    operationItems.push({ href: "/inbox", label: "Inbox" });
+    operationItems.push({ href: "/discipleship", label: "Discipleship" });
   }
 
   if (["leader", "pastor", "overseer", "owner"].includes(user.role)) {

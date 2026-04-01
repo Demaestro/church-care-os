@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { requireCurrentUser } from "@/lib/auth";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getHouseholds } from "@/lib/care-store";
 import { getCopy, translateRisk, translateStage } from "@/lib/i18n";
+import { getWorkspaceContext } from "@/lib/organization-store";
 import { filterHouseholds, hasActiveFilters } from "@/lib/search-filters";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 const toneClasses = {
   urgent: "border-[rgba(184,101,76,0.22)] bg-[rgba(184,101,76,0.10)] text-clay",
@@ -20,9 +23,12 @@ export const metadata = {
 export default async function HouseholdsPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
-  await requireCurrentUser(["leader", "pastor", "owner"]);
+  const user = await requireCurrentUser(["leader", "pastor", "overseer", "owner"]);
+  const cookieStore = await cookies();
+  const preferredBranchId = cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || "";
+  const workspace = getWorkspaceContext(user, preferredBranchId);
   const params = await searchParams;
-  const households = await getHouseholds();
+  const households = await getHouseholds(user, preferredBranchId);
   const pageCopy = copy.households;
   const filters = {
     query: typeof params?.q === "string" ? params.q.trim() : "",
@@ -32,6 +38,13 @@ export default async function HouseholdsPage({ searchParams }) {
   };
   const visibleHouseholds = filterHouseholds(households, filters);
   const showClearFilters = hasActiveFilters(filters);
+  const scopeLabel = workspace.activeBranch
+    ? `${workspace.organization.name} / ${workspace.activeBranch.name}`
+    : `${workspace.organization.name} / all visible branches`;
+  const scopedHref = (pathname) =>
+    preferredBranchId
+      ? `${pathname}?branch=${encodeURIComponent(preferredBranchId)}`
+      : pathname;
 
   const urgentCount = households.filter((household) => household.risk === "urgent").length;
   const watchCount = households.filter((household) => household.risk === "watch").length;
@@ -53,11 +66,19 @@ export default async function HouseholdsPage({ searchParams }) {
             <p className="mt-5 text-lg leading-8 text-muted">
               {pageCopy.description}
             </p>
+            <div className="mt-5 inline-flex items-center rounded-full border border-line bg-canvas px-4 py-2 text-sm text-muted">
+              <span className="font-semibold text-foreground">{scopeLabel}</span>
+              <span className="ml-3 text-muted">
+                {workspace.activeBranch
+                  ? "Only this branch is visible in the board below."
+                  : "You are in headquarters view across the branches you oversee."}
+              </span>
+            </div>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/"
+              href={scopedHref("/")}
               className="inline-flex w-fit items-center rounded-full border border-line bg-canvas px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#ece1d1]"
             >
               {pageCopy.backToDashboard}
@@ -167,7 +188,7 @@ export default async function HouseholdsPage({ searchParams }) {
               </button>
               {showClearFilters ? (
                 <Link
-                  href="/households"
+                  href={scopedHref("/households")}
                   className="inline-flex min-h-14 items-center justify-center rounded-[1rem] border border-line bg-canvas px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#ece1d1]"
                 >
                   {copy.common.clearFilters}
@@ -236,7 +257,7 @@ export default async function HouseholdsPage({ searchParams }) {
 
               <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                 <Link
-                  href={`/households/${household.slug}`}
+                  href={scopedHref(`/households/${household.slug}`)}
                   className="inline-flex w-fit items-center rounded-full border border-line bg-canvas px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-[#ece1d1]"
                 >
                   {pageCopy.openTimeline}

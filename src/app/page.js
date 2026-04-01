@@ -1,329 +1,239 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireCurrentUser } from "@/lib/auth";
-import { APP_TIME_ZONE } from "@/lib/care-format";
-import { getDashboardData } from "@/lib/care-store";
-import { getLocaleTag } from "@/lib/app-preferences";
+import { getCopy } from "@/lib/i18n";
 import { getAppPreferences } from "@/lib/app-preferences-server";
-import { getCopy, translateSupportNeed } from "@/lib/i18n";
-import { getChurchSettings } from "@/lib/organization-store";
-import { atRiskMembers } from "@/lib/role-previews";
 
-const metricToneClasses = {
-  default: "text-foreground",
-  clay: "text-clay",
-  moss: "text-moss",
-};
+export const metadata = { title: "Home" };
 
-const caseBadgeClasses = {
-  crisis: "bg-[rgba(184,101,76,0.10)] text-clay",
-  urgent: "bg-[rgba(179,138,69,0.14)] text-[#7a6128]",
-  new: "bg-[rgba(74,135,217,0.12)] text-[#3c6eb9]",
-  routine: "bg-[rgba(34,28,22,0.06)] text-muted",
-};
-
-const riskBarClasses = {
-  high: "bg-clay",
-  medium: "bg-gold",
-  watch: "bg-[#8b7d56]",
-};
-
-export default async function Home() {
+export default async function HomePage() {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
-  const user = await requireCurrentUser(["pastor", "owner"]);
-  const settings = getChurchSettings();
-  const { households, openRequests } = await getDashboardData();
-  const now = new Date();
-  const activeCases = openRequests.slice(0, 5).map((request) => ({
-    id: request.id,
-    initials: getInitials(request.householdName),
-    name: request.householdName,
-    detail: `${translateSupportNeed(request.need, preferences.language)} - ${formatOwnerLabel(
-      request.owner,
-      request.assignedVolunteer?.name
-    )}`,
-    badge: resolveCaseBadge(request),
-    href: `/households/${request.householdSlug}`,
-  }));
-  const followUpRows = [...households]
-    .sort(
-      (first, second) =>
-        new Date(first.nextTouchpoint).valueOf() -
-        new Date(second.nextTouchpoint).valueOf()
-    )
-    .slice(0, 5)
-    .map((household) => ({
-      slug: household.slug,
-      initials: getInitials(household.name),
-      name: household.name,
-      detail: `${household.situation} - ${household.owner || "Unassigned"}`,
-      age: formatFollowUpAge(household.nextTouchpoint, now, copy),
-    }));
-  const overdueCount = households.filter((household) =>
-    isOverdue(household.nextTouchpoint, now)
-  ).length;
-  const resolvedThisMonth = households.filter((household) =>
-    ["Review", "Comfort"].includes(household.stage)
-  ).length;
-  const dashboardDate = new Intl.DateTimeFormat(getLocaleTag(preferences.language), {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: APP_TIME_ZONE,
-  }).format(now);
-  const metrics = [
-    {
-      label: copy.home.metrics.openCases,
-      value: openRequests.length,
-      tone: "default",
-    },
-    {
-      label: copy.home.metrics.overdueFollowUps,
-      value: overdueCount,
-      tone: "default",
-    },
-    {
-      label: copy.home.metrics.atRiskMembers,
-      value: atRiskMembers.length,
-      tone: "clay",
-    },
-    {
-      label: copy.home.metrics.resolvedThisMonth,
-      value: resolvedThisMonth,
-      tone: "moss",
-    },
-  ];
 
+  let user;
+  try {
+    user = await requireCurrentUser([
+      "member","volunteer","leader","pastor","overseer","owner",
+      "branch_admin","general_overseer","hq_care_admin","regional_overseer"
+    ]);
+  } catch {
+    redirect("/login");
+  }
+
+  const role = user.role;
+
+  if (role === "member") {
+    return <MemberHome user={user} />;
+  }
+
+  if (role === "volunteer") {
+    let openTasks = [];
+    try {
+      const careStore = await import("@/lib/care-store");
+      const fn = careStore.listVolunteerTasksForUser || careStore.getVolunteerTasksForUser;
+      if (fn) {
+        const tasks = fn(user.id, user.organizationId, user.branchId);
+        openTasks = (tasks || []).filter(t => t.status !== "completed" && t.status !== "declined");
+      }
+    } catch {}
+    return <VolunteerHome user={user} openTasks={openTasks} />;
+  }
+
+  if (["pastor", "leader"].includes(role)) {
+    const { getFollowUpBoard } = await import("@/lib/care-store");
+    const board = getFollowUpBoard(user.organizationId, user.branchId);
+    return <PastorHome user={user} board={board} />;
+  }
+
+  if (["owner","overseer","general_overseer","hq_care_admin","regional_overseer"].includes(role)) {
+    redirect("/hq");
+  }
+
+  if (role === "branch_admin") {
+    redirect("/admin/branch-users");
+  }
+
+  redirect("/login");
+}
+
+function MemberHome({ user }) {
   return (
-    <div className="mx-auto max-w-6xl px-6 py-10 pb-16 lg:px-10 lg:py-14">
-      <section className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-4xl tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-5xl">
-            {copy.home.greeting(user.name)}
-          </p>
-          <p className="mt-2 text-lg text-muted">
-            {settings?.churchName || "Grace Community Church"} - {dashboardDate}
-          </p>
-        </div>
-        <Link
-          href="/requests/new"
-          className="inline-flex items-center justify-center rounded-[1rem] border border-line bg-paper px-6 py-4 text-xl font-medium text-foreground transition hover:bg-[#f4ecde]"
-        >
-          {copy.home.newCareRequest}
-        </Link>
-      </section>
-
-      <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((metric) => (
-          <article
-            key={metric.label}
-            className="surface-card rounded-[1.6rem] border border-line bg-[#f5f0e6] p-5"
-          >
-            <p className="text-lg text-foreground">{metric.label}</p>
-            <p
-              className={`mt-3 text-5xl tracking-[-0.05em] ${metricToneClasses[metric.tone]}`}
-            >
-              {metric.value}
-            </p>
-          </article>
-        ))}
-      </section>
-
-      <section className="mt-8 grid gap-6 xl:grid-cols-2">
-        <PanelCard
-          title={copy.home.panels.activeCareCases}
-          href="/households"
-          linkLabel={copy.home.panels.seeAll}
-        >
-          <div className="space-y-1">
-            {activeCases.map((item) => (
-              <Link
-                key={item.id}
-                href={item.href}
-                className="flex items-start gap-4 border-b border-line px-1 py-4 transition last:border-b-0 hover:bg-[rgba(34,28,22,0.02)]"
-              >
-                <Avatar initials={item.initials} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-2xl font-medium text-foreground">
-                    {item.name}
-                  </p>
-                  <p className="mt-1 text-lg text-muted">{item.detail}</p>
-                </div>
-                <span
-                  className={`inline-flex rounded-full px-4 py-1.5 text-lg font-medium ${caseBadgeClasses[item.badge.tone]}`}
-                >
-                  {item.badge.label}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </PanelCard>
-
-        <PanelCard
-          title={copy.home.panels.overdueFollowUps}
-          href="/households"
-          linkLabel={copy.home.panels.seeAll}
-        >
-          <div className="space-y-1">
-            {followUpRows.map((item) => (
-              <Link
-                key={item.slug}
-                href={`/households/${item.slug}`}
-                className="flex items-start gap-4 border-b border-line px-1 py-4 transition last:border-b-0 hover:bg-[rgba(34,28,22,0.02)]"
-              >
-                <Avatar initials={item.initials} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-2xl font-medium text-foreground">
-                    {item.name}
-                  </p>
-                  <p className="mt-1 text-lg text-muted">{item.detail}</p>
-                </div>
-                <span className="text-lg font-medium text-clay">{item.age}</span>
-              </Link>
-            ))}
-          </div>
-        </PanelCard>
-      </section>
-
-      <section className="mt-8 surface-card rounded-[1.75rem] border border-line bg-paper p-6 lg:p-7">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
-            {copy.home.panels.atRiskHeading}
-          </h2>
-          <Link
-            href="/permissions"
-            className="text-lg font-medium text-[#356fbe] transition hover:text-[#29578f]"
-          >
-            {copy.home.panels.howCalculated} {"->"}
-          </Link>
-        </div>
-
-        <div className="mt-6 space-y-4">
-          {atRiskMembers.map((member) => (
-            <article
-              key={member.name}
-              className="flex flex-col gap-4 border-b border-line pb-5 last:border-b-0 last:pb-0 lg:flex-row lg:items-center"
-            >
-              <div className="flex min-w-0 flex-1 items-start gap-4">
-                <Avatar initials={member.initials} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-2xl font-medium text-foreground">{member.name}</p>
-                  <div className="mt-3 h-2.5 rounded-full bg-[rgba(34,28,22,0.12)]">
-                    <div
-                      className={`h-full rounded-full ${riskBarClasses[member.tone]}`}
-                      style={{ width: `${member.progress}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-              <p className="text-lg text-clay lg:w-[22rem] lg:text-right">
-                {member.indicator}
-              </p>
-              <button
-                type="button"
-                className="rounded-[1rem] border border-line bg-paper px-6 py-3 text-xl font-medium text-foreground transition hover:bg-[#f4ecde]"
-              >
-                {copy.home.panels.reachOut}
-              </button>
-            </article>
-          ))}
-        </div>
-      </section>
+    <div className="mx-auto max-w-2xl px-6 py-16">
+      <div className="mb-10">
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted">Welcome</p>
+        <h1 className="mt-2 text-3xl font-bold text-foreground">{user.name}</h1>
+        <p className="mt-2 text-base text-muted">How can we support you today?</p>
+      </div>
+      <div className="grid gap-4">
+        <ActionTile href="/requests/new" title="Request care" detail="Let us know what you need. Your request is private and handled with care." icon="🤝" primary />
+        <ActionTile href="/requests/status" title="Track my request" detail="Check the status of a care request you have submitted." icon="🔍" />
+        <ActionTile href="/member" title="My profile" detail="Update your contact details and preferences." icon="👤" />
+      </div>
     </div>
   );
 }
 
-function PanelCard({ title, href, linkLabel, children }) {
+function VolunteerHome({ user, openTasks }) {
+  const crisis = openTasks.filter(t => t.tone === "crisis");
+  const rest = openTasks.filter(t => t.tone !== "crisis");
   return (
-    <section className="surface-card rounded-[1.75rem] border border-line bg-paper p-6">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
-          {title}
-        </h2>
-        <Link
-          href={href}
-          className="text-lg font-medium text-[#356fbe] transition hover:text-[#29578f]"
-        >
-          {linkLabel} {"->"}
+    <div className="mx-auto max-w-3xl px-6 py-12">
+      <div className="mb-8 flex items-end justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted">Volunteer</p>
+          <h1 className="mt-1 text-2xl font-bold text-foreground">{user.name}</h1>
+        </div>
+        {openTasks.length > 0 && (
+          <span className="rounded-full border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] px-3 py-1 text-xs font-semibold text-moss">
+            {openTasks.length} open task{openTasks.length !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+      {openTasks.length === 0 ? (
+        <div className="rounded-[1.5rem] border border-line bg-canvas px-8 py-16 text-center">
+          <p className="text-4xl">✓</p>
+          <p className="mt-4 text-lg font-semibold text-foreground">All caught up</p>
+          <p className="mt-2 text-sm text-muted">No open tasks assigned to you right now.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {crisis.length > 0 && (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-clay">Urgent</p>
+              {crisis.map(t => <VolunteerTaskRow key={t.id} task={t} />)}
+            </>
+          )}
+          {rest.length > 0 && (
+            <>
+              {crisis.length > 0 && <div className="pt-2" />}
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Your tasks</p>
+              {rest.map(t => <VolunteerTaskRow key={t.id} task={t} />)}
+            </>
+          )}
+        </div>
+      )}
+      <div className="mt-8">
+        <Link href="/volunteer" className="text-sm font-medium text-moss hover:underline">View all volunteer tasks →</Link>
+      </div>
+    </div>
+  );
+}
+
+function VolunteerTaskRow({ task }) {
+  const toneClass = {
+    crisis: "border-red-200 bg-red-50 text-red-700",
+    urgent: "border-amber-200 bg-amber-50 text-amber-700",
+    routine: "border-line bg-canvas text-muted",
+  }[task.tone || "routine"] || "border-line bg-canvas text-muted";
+
+  const slug = task.householdSlug || task.household_slug || "";
+  const name = task.householdName || task.household_name || "Household";
+  return (
+    <Link href={slug ? `/households/${slug}` : "/volunteer"} className="flex items-center justify-between rounded-[1.2rem] border border-line bg-paper px-5 py-4 transition hover:bg-canvas">
+      <div>
+        <p className="text-sm font-semibold text-foreground">{name}</p>
+        <p className="mt-0.5 text-xs text-muted">{task.taskType || task.task_type || task.requestType || "Care task"}</p>
+      </div>
+      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${toneClass}`}>{task.tone || "routine"}</span>
+    </Link>
+  );
+}
+
+function PastorHome({ user, board }) {
+  const urgentItems = [...board.overdue, ...board.dueToday].slice(0, 8);
+  const weekItems = board.dueThisWeek.slice(0, 6);
+  const noContactItems = board.noContact.slice(0, 5);
+  const urgentCount = board.overdue.length + board.dueToday.length;
+
+  return (
+    <div className="mx-auto max-w-4xl px-6 py-12">
+      <div className="mb-10 flex items-end justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted">Care Overview</p>
+          <h1 className="mt-1 text-2xl font-bold text-foreground">{user.name}</h1>
+        </div>
+        <Link href="/follow-up" className="inline-flex items-center gap-2 rounded-full border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] px-4 py-2 text-sm font-semibold text-moss transition hover:bg-[var(--soft-fill-strong)]">
+          Full follow-up board →
         </Link>
       </div>
-      <div className="mt-4">{children}</div>
-    </section>
+
+      {urgentCount > 0 && (
+        <div className="mb-8 rounded-[1.5rem] border border-[rgba(220,38,38,0.18)] bg-[rgba(220,38,38,0.04)] px-6 py-5">
+          <p className="mb-4 text-sm font-semibold text-clay">
+            {urgentCount} follow-up{urgentCount !== 1 ? "s" : ""} need attention
+          </p>
+          <div className="space-y-2">
+            {urgentItems.map(r => <FollowUpRow key={r.id} record={r} />)}
+          </div>
+        </div>
+      )}
+
+      {weekItems.length > 0 && (
+        <section className="mb-8">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-muted">Due this week</p>
+          <div className="space-y-2">{weekItems.map(r => <FollowUpRow key={r.id} record={r} />)}</div>
+        </section>
+      )}
+
+      {noContactItems.length > 0 && (
+        <section className="mb-8">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-muted">No contact in 14+ days</p>
+          <div className="space-y-2">{noContactItems.map(r => <FollowUpRow key={r.id} record={r} />)}</div>
+        </section>
+      )}
+
+      {urgentCount === 0 && weekItems.length === 0 && noContactItems.length === 0 && (
+        <div className="mb-8 rounded-[1.5rem] border border-line bg-canvas px-8 py-12 text-center">
+          <p className="text-3xl">✓</p>
+          <p className="mt-3 text-base font-semibold text-foreground">All follow-ups are on track</p>
+          <p className="mt-1 text-sm text-muted">No overdue or at-risk cases right now.</p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <QuickLink href="/follow-up" label="Follow-up board" />
+        <QuickLink href="/inbox" label="Pastoral inbox" />
+        <QuickLink href="/new-members" label="New members" />
+        <QuickLink href="/households" label="Households" />
+        <QuickLink href="/discipleship" label="Discipleship" />
+        <QuickLink href="/schedule" label="Schedule" />
+      </div>
+    </div>
   );
 }
 
-function Avatar({ initials }) {
+function FollowUpRow({ record }) {
+  const slug = record.household_slug || record.householdSlug || "";
+  const name = record.household_name || record.householdName || "Household";
+  const due = record.next_contact_due;
+  const dueLabel = due
+    ? new Date(due).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+    : null;
   return (
-    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[rgba(184,101,76,0.10)] text-xl font-semibold text-clay">
-      {initials}
-    </span>
+    <Link href={slug ? `/households/${slug}` : "/follow-up"} className="flex items-center justify-between rounded-[1.1rem] border border-line bg-paper px-5 py-3.5 transition hover:bg-canvas">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-foreground">{name}</p>
+        {record.follow_up_goal && <p className="mt-0.5 truncate text-xs text-muted">{record.follow_up_goal}</p>}
+      </div>
+      {dueLabel && <p className="ml-4 shrink-0 text-xs text-muted">{dueLabel}</p>}
+    </Link>
   );
 }
 
-function getInitials(value) {
-  return value
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
+function ActionTile({ href, title, detail, icon, primary = false }) {
+  return (
+    <Link href={href} className={`block rounded-[1.5rem] border p-6 transition ${primary ? "border-[var(--soft-accent-border)] bg-[var(--soft-fill)] hover:bg-[var(--soft-fill-strong)]" : "border-line bg-canvas hover:bg-paper"}`}>
+      <span className="text-2xl">{icon}</span>
+      <p className={`mt-3 text-base font-semibold ${primary ? "text-moss" : "text-foreground"}`}>{title}</p>
+      <p className="mt-1 text-sm leading-6 text-muted">{detail}</p>
+    </Link>
+  );
 }
 
-function formatOwnerLabel(owner, volunteerName) {
-  if (volunteerName) {
-    return `Assigned to ${owner} / ${volunteerName}`;
-  }
-
-  return owner === "Unassigned" ? "No assignment yet" : `Assigned to ${owner}`;
-}
-
-function resolveCaseBadge(request) {
-  if (request.tone === "urgent" && request.owner === "Pastoral staff") {
-    return { label: "Crisis", tone: "crisis" };
-  }
-
-  if (request.owner === "Unassigned") {
-    return { label: "New", tone: "new" };
-  }
-
-  if (request.tone === "urgent") {
-    return { label: "Urgent", tone: "urgent" };
-  }
-
-  return { label: "Routine", tone: "routine" };
-}
-
-function isOverdue(value, now) {
-  const date = new Date(value);
-  return !Number.isNaN(date.valueOf()) && date.valueOf() < now.valueOf();
-}
-
-function formatFollowUpAge(value, now, copy = null) {
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) {
-    return copy?.home?.dates?.noDate || "No date";
-  }
-
-  const diff = date.valueOf() - now.valueOf();
-  const dayDiff = Math.round(diff / (24 * 60 * 60 * 1000));
-
-  if (diff < 0) {
-    const overdueDays = Math.max(1, Math.ceil(Math.abs(diff) / (24 * 60 * 60 * 1000)));
-    return copy?.home?.dates?.overdueDays
-      ? copy.home.dates.overdueDays(overdueDays)
-      : `${overdueDays} day${overdueDays === 1 ? "" : "s"} overdue`;
-  }
-
-  if (dayDiff === 0) {
-    return copy?.home?.dates?.dueToday || "Due today";
-  }
-
-  if (dayDiff === 1) {
-    return copy?.home?.dates?.dueTomorrow || "Due tomorrow";
-  }
-
-  return copy?.home?.dates?.dueInDays
-    ? copy.home.dates.dueInDays(dayDiff)
-    : `Due in ${dayDiff} days`;
+function QuickLink({ href, label }) {
+  return (
+    <Link href={href} className="rounded-[1.1rem] border border-line bg-canvas px-4 py-3 text-sm font-medium text-foreground transition hover:border-[var(--soft-accent-border)] hover:bg-paper hover:text-moss">
+      {label}
+    </Link>
+  );
 }
