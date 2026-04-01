@@ -10,7 +10,7 @@ const initialState = {
 
 export function LoginForm({ copy }) {
   const [state, formAction, pending] = useActionState(login, initialState);
-  const loginCopy = copy.loginForm;
+  const loginCopy = copy;
 
   return (
     <form action={formAction} className="space-y-5">
@@ -38,7 +38,7 @@ export function LoginForm({ copy }) {
       <button
         type="submit"
         disabled={pending}
-        className="inline-flex w-full items-center justify-center rounded-[1.15rem] bg-foreground px-6 py-4 text-lg font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
+        className="inline-flex w-full items-center justify-center rounded-[1.15rem] bg-[linear-gradient(135deg,#2563eb,#4f46e5)] px-6 py-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {pending ? loginCopy.signingIn : loginCopy.signIn}
       </button>

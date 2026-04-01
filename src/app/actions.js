@@ -3396,3 +3396,87 @@ export async function saveServiceSchedule(formData) {
   recordAuditLog({ ...buildActorLog(user), action: "settings.service_schedule_updated", targetType: "settings", targetId: organizationId, summary: `${user.name} updated the service schedule.` });
   redirect("/settings/service?notice=Service+schedule+saved");
 }
+
+// ── Self-registration (public — no auth required) ─────────────────────────────
+
+export async function selfRegister(formData) {
+  const rateLimit = consumeRateLimit(await getRequestFingerprint());
+  if (!rateLimit.allowed) {
+    return { error: "Too many requests. Please wait a moment and try again." };
+  }
+
+  const name        = getString(formData, "name").trim();
+  const email       = normalizeEmail(getString(formData, "email"));
+  const phone       = normalizePhoneNumber(getString(formData, "phone") || "");
+  const password    = getString(formData, "password");
+  const birthday    = getString(formData, "birthday") || null;
+  const gender      = getString(formData, "gender") || "unspecified";
+  const memberType  = getString(formData, "memberType") || "member";
+  const organizationId = getString(formData, "organizationId");
+  const branchId       = getString(formData, "branchId");
+
+  if (!name)  return { error: "Full name is required." };
+  if (!email) return { error: "A valid email address is required." };
+  if (!isValidEmailAddress(email)) return { error: "Please enter a valid email address." };
+  if (!password || password.length < 8) return { error: "Password must be at least 8 characters." };
+  if (!organizationId || !branchId) return { error: "Please select your church and branch." };
+
+  // Check email not already taken
+  const existing = findUserByEmail(email);
+  if (existing) return { error: "An account with this email already exists. Try signing in." };
+
+  const userId = createUserEntry({
+    name,
+    email,
+    phone: phone || null,
+    role: "member",
+    password,
+    active: true,
+    organizationId,
+    branchId,
+    accessScope: "branch",
+    managedBranchIds: [],
+  });
+
+  // Save birthday, gender, member_type via direct DB update
+  try {
+    const { getDatabase } = await import("@/lib/database");
+    const db = getDatabase();
+    db.prepare(`UPDATE users SET birthday = ?, gender = ?, member_type = ? WHERE id = ?`)
+      .run(birthday, gender, memberType, userId);
+  } catch {}
+
+  // If new member, auto-start the 30-day journey
+  if (memberType === "new_member") {
+    try {
+      const { createJourneyEntry } = await import("@/lib/new-member-store");
+      const journeyId = createJourneyEntry({ organizationId, branchId, memberName: name, memberEmail: email, memberPhone: phone || "", gender, birthday });
+      createNotifications({
+        organizationId, branchId,
+        roles: ["volunteer", "leader", "pastor"],
+        kind: "alert",
+        title: "New member joined",
+        body: `${name} just created an account as a new member. Please follow up within 48 hours.`,
+        href: `/new-members/${journeyId}`,
+        metadata: { journeyId, memberName: name },
+      });
+    } catch {}
+  }
+
+  // Auto sign-in
+  const newUser = findUserByEmail(email);
+  if (newUser) {
+    touchUserLoginEntry(newUser.id);
+    await createSession(newUser);
+  }
+
+  recordAuditLog({
+    actorId: userId, actorName: name, actorRole: "member",
+    organizationId, branchId,
+    action: "auth.self_registered",
+    targetType: "user", targetId: userId,
+    summary: `${name} self-registered as a member.`,
+  });
+
+  return { ok: true };
+}
