@@ -129,6 +129,13 @@ import {
   defaultPrimaryOrganizationId,
 } from "@/lib/organization-defaults";
 import { mfaRequiredRoles } from "@/lib/policies";
+import {
+  createJourneyEntry,
+  logJourneyContact,
+  completeJourney,
+  dropJourney,
+  upsertServiceSchedule,
+} from "@/lib/new-member-store";
 
 function getString(formData, key) {
   const value = formData.get(key);
@@ -3310,4 +3317,82 @@ export async function uploadHouseholdAttachment(householdSlug, formData) {
 
   revalidateCarePaths(householdSlug);
   redirectWithNotice(redirectPath, "Attachment uploaded.");
+}
+
+// ── New Member Journey actions ────────────────────────────────────────────────
+
+export async function registerNewMember(prevState, formData) {
+  const user = await requireCurrentUser(["pastor","overseer","owner","branch_admin","leader","volunteer","general_overseer"]);
+  const organizationId = getString(formData, "organizationId") || user.organizationId;
+  const branchId = getString(formData, "branchId") || user.branchId;
+  const memberName  = getString(formData, "memberName");
+  const memberEmail = getString(formData, "memberEmail");
+  const memberPhone = getString(formData, "memberPhone");
+  const gender      = getString(formData, "gender") || "unspecified";
+  const birthday    = getString(formData, "birthday");
+  if (!memberName) return { message: "Member name is required.", errors: { memberName: "Required" } };
+  const id = createJourneyEntry({ organizationId, branchId, memberName, memberEmail, memberPhone, gender, birthday });
+  createNotifications({
+    organizationId, branchId,
+    roles: ["volunteer", "leader", "pastor"],
+    kind: "alert",
+    title: "New member registered",
+    body: `${memberName} has just registered as a new member. Please follow up within 48 hours.`,
+    href: `/new-members/${id}`,
+    metadata: { journeyId: id, memberName },
+  });
+  recordAuditLog({ ...buildActorLog(user), action: "new_member.registered", targetType: "journey", targetId: id, summary: `${user.name} registered new member ${memberName}.` });
+  redirect(`/new-members/${id}?notice=New+member+registered`);
+}
+
+export async function logContact(formData) {
+  const user = await requireCurrentUser(["pastor","overseer","owner","branch_admin","leader","volunteer","general_overseer","regional_overseer"]);
+  const journeyId        = getString(formData, "journeyId");
+  const contactMethod    = getString(formData, "contactMethod") || "call";
+  const outcome          = getString(formData, "outcome") || "reached";
+  const notes            = getString(formData, "notes");
+  const organizationId   = getString(formData, "organizationId") || user.organizationId;
+  const branchId         = getString(formData, "branchId") || user.branchId;
+  if (!journeyId) return;
+  logJourneyContact({ journeyId, organizationId, branchId, contactedByUserId: user.id, contactedByName: user.name, contactMethod, outcome, notes });
+  recordAuditLog({ ...buildActorLog(user), action: "new_member.contact_logged", targetType: "journey", targetId: journeyId, summary: `${user.name} logged a ${contactMethod} contact.` });
+  revalidatePath(`/new-members/${journeyId}`);
+  redirect(`/new-members/${journeyId}?notice=Contact+logged`);
+}
+
+export async function completeNewMemberJourney(formData) {
+  const user = await requireCurrentUser(["pastor","overseer","owner","branch_admin","leader","general_overseer"]);
+  const journeyId = getString(formData, "journeyId");
+  if (!journeyId) return;
+  completeJourney(journeyId);
+  recordAuditLog({ ...buildActorLog(user), action: "new_member.completed", targetType: "journey", targetId: journeyId, summary: `${user.name} marked new member journey as integrated.` });
+  redirect(`/new-members/${journeyId}?notice=Member+marked+as+integrated`);
+}
+
+export async function dropNewMemberJourney(formData) {
+  const user = await requireCurrentUser(["pastor","overseer","owner","branch_admin","leader","general_overseer"]);
+  const journeyId = getString(formData, "journeyId");
+  if (!journeyId) return;
+  dropJourney(journeyId, `Dropped by ${user.name}`);
+  recordAuditLog({ ...buildActorLog(user), action: "new_member.dropped", targetType: "journey", targetId: journeyId, summary: `${user.name} marked new member journey as dropped.` });
+  redirect(`/new-members?notice=Member+marked+as+dropped`);
+}
+
+export async function saveServiceSchedule(formData) {
+  const user = await requireCurrentUser(["pastor","overseer","owner","branch_admin","general_overseer"]);
+  const organizationId = getString(formData, "organizationId") || user.organizationId;
+  const branchId       = getString(formData, "branchId") || user.branchId;
+  upsertServiceSchedule({
+    organizationId, branchId,
+    serviceName:           getString(formData, "serviceName") || "Sunday Service",
+    dayOfWeek:             parseInt(getString(formData, "dayOfWeek") || "0"),
+    serviceTime:           getString(formData, "serviceTime") || "09:00",
+    location:              getString(formData, "location"),
+    address:               getString(formData, "address"),
+    reminderThursday:      formData.get("reminderThursday") === "on",
+    reminderSaturday:      formData.get("reminderSaturday") === "on",
+    reminderSundayMorning: formData.get("reminderSundayMorning") === "on",
+  });
+  recordAuditLog({ ...buildActorLog(user), action: "settings.service_schedule_updated", targetType: "settings", targetId: organizationId, summary: `${user.name} updated the service schedule.` });
+  redirect("/settings/service?notice=Service+schedule+saved");
 }

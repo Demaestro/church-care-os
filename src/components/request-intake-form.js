@@ -30,7 +30,7 @@ export function RequestIntakeForm({ language = "en", copy }) {
     createCareRequest,
     initialState
   );
-  const intakeCopy = copy.intakeForm;
+  const intakeCopy = copy;
 
   if (state.submitted) {
     return (
@@ -171,6 +171,44 @@ export function RequestIntakeForm({ language = "en", copy }) {
           defaultValue={state.values.preferredContact}
           error={state.errors.preferredContact}
         />
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-foreground">
+            Date of Birth <span className="text-muted">(optional)</span>
+          </label>
+          <input
+            type="date"
+            name="birthday"
+            defaultValue={state.values.birthday}
+            className="block w-full rounded-[0.9rem] border border-line bg-paper px-4 py-3 text-sm text-foreground focus:border-[var(--soft-accent-border)] focus:outline-none"
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-foreground">Gender</label>
+          <select
+            name="gender"
+            defaultValue={state.values.gender || "unspecified"}
+            className="block w-full rounded-[0.9rem] border border-line bg-paper px-4 py-3 text-sm text-foreground focus:border-[var(--soft-accent-border)] focus:outline-none"
+          >
+            <option value="unspecified">Prefer not to say</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
+        </div>
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-foreground">Membership Type</label>
+          <select
+            name="memberType"
+            defaultValue={state.values.memberType || "member"}
+            className="block w-full rounded-[0.9rem] border border-line bg-paper px-4 py-3 text-sm text-foreground focus:border-[var(--soft-accent-border)] focus:outline-none"
+          >
+            <option value="member">Regular Member</option>
+            <option value="new_member">New Member</option>
+            <option value="visitor">Visitor</option>
+          </select>
+          <p className="text-xs text-muted">
+            Select &quot;New Member&quot; to enrol in our 30-day welcome journey with dedicated follow-up.
+          </p>
+        </div>
       </section>
 
       <section className="rounded-[1.75rem] bg-canvas p-6">

@@ -862,6 +862,76 @@ function ensureSchemaMigrations(db) {
   );
   addColumnIfMissing(db, "requests", "last_activity_at", "TEXT");
   addColumnIfMissing(db, "requests", "assigned_volunteer_json", "TEXT");
+
+  // New member journey columns
+  addColumnIfMissing(db, "users", "birthday", "TEXT");
+  addColumnIfMissing(db, "users", "gender", "TEXT NOT NULL DEFAULT 'unspecified'");
+  addColumnIfMissing(db, "users", "member_type", "TEXT NOT NULL DEFAULT 'member'");
+  addColumnIfMissing(db, "households", "birthday", "TEXT");
+  addColumnIfMissing(db, "households", "gender", "TEXT NOT NULL DEFAULT 'unspecified'");
+  addColumnIfMissing(db, "households", "member_type", "TEXT NOT NULL DEFAULT 'member'");
+
+  // New member journey tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS new_member_journeys (
+      id                TEXT PRIMARY KEY,
+      organization_id   TEXT NOT NULL,
+      branch_id         TEXT NOT NULL,
+      member_name       TEXT NOT NULL,
+      member_email      TEXT,
+      member_phone      TEXT,
+      gender            TEXT NOT NULL DEFAULT 'unspecified',
+      birthday          TEXT,
+      status            TEXT NOT NULL DEFAULT 'active',
+      registered_at     TEXT NOT NULL DEFAULT (datetime('now')),
+      last_contact_at   TEXT,
+      contact_count     INTEGER NOT NULL DEFAULT 0,
+      touchpoints_sent  TEXT NOT NULL DEFAULT '[]',
+      assigned_volunteer_id   TEXT,
+      assigned_volunteer_name TEXT,
+      completed_at      TEXT,
+      dropped_at        TEXT,
+      drop_reason       TEXT,
+      created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS journey_contacts (
+      id                    TEXT PRIMARY KEY,
+      journey_id            TEXT NOT NULL,
+      organization_id       TEXT NOT NULL,
+      branch_id             TEXT NOT NULL,
+      contacted_by_user_id  TEXT NOT NULL,
+      contacted_by_name     TEXT NOT NULL,
+      contact_method        TEXT NOT NULL DEFAULT 'call',
+      outcome               TEXT NOT NULL DEFAULT 'reached',
+      notes                 TEXT,
+      contacted_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS service_schedules (
+      id                      TEXT PRIMARY KEY,
+      organization_id         TEXT NOT NULL,
+      branch_id               TEXT NOT NULL,
+      service_name            TEXT NOT NULL DEFAULT 'Sunday Service',
+      day_of_week             INTEGER NOT NULL DEFAULT 0,
+      service_time            TEXT NOT NULL DEFAULT '09:00',
+      location                TEXT,
+      address                 TEXT,
+      reminder_thursday       INTEGER NOT NULL DEFAULT 1,
+      reminder_saturday       INTEGER NOT NULL DEFAULT 1,
+      reminder_sunday_morning INTEGER NOT NULL DEFAULT 1,
+      created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at              TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(organization_id, branch_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_journeys_scope
+      ON new_member_journeys (organization_id, branch_id, status);
+    CREATE INDEX IF NOT EXISTS idx_journey_contacts_journey
+      ON journey_contacts (journey_id);
+  `);
+
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_tracking_code
       ON requests (tracking_code);

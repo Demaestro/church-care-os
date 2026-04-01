@@ -88,7 +88,9 @@ export async function POST(request) {
   }
 
   const db = getDatabase();
-  const now = new Date().toISOString();
+  const nowDate = new Date();
+  const now = nowDate.toISOString();
+  const nowMs = nowDate.getTime();
 
   // ── load all open (non-resolved, non-archived) requests ─────────────────
   const openRequests = db
@@ -170,11 +172,117 @@ export async function POST(request) {
     }
   }
 
+  // ── New Member Journey touchpoints ─────────────────────────────────────────
+
+  const JOURNEY_TOUCHPOINTS = [
+    { key: "day2",  minHours: 48,  roles: ["volunteer","leader"],            title: "Follow up new member",          body: (name) => `${name} registered 2 days ago. Please make your first contact call or visit.` },
+    { key: "day5",  minHours: 120, roles: ["leader","pastor"],               title: "Check in: new member Day 5",    body: (name) => `${name} is 5 days into their welcome journey. Please ensure someone has connected.` },
+    { key: "day12", minHours: 288, roles: ["pastor"],                        title: "New member 12-day check",       body: (name) => `${name} has been with us 12 days. A personal check-in from the pastor is recommended.` },
+    { key: "day21", minHours: 504, roles: ["pastor","leader"],               title: "New member 21-day review",      body: (name) => `${name} is at Day 21 of their welcome journey. Please assess integration progress.` },
+    { key: "day30", minHours: 720, roles: ["pastor","owner","branch_admin"], title: "New member 30-day milestone",   body: (name) => `${name}'s 30-day welcome journey is complete. Please mark them as integrated or review their status.` },
+  ];
+
+  const activeJourneys = db.prepare(`
+    SELECT * FROM new_member_journeys
+    WHERE status = 'active'
+    ORDER BY registered_at ASC
+  `).all();
+
+  let journeysSent = 0;
+  const journeyResults = [];
+
+  for (const journey of activeJourneys) {
+    const registeredAt = new Date(journey.registered_at);
+    const ageHours = (nowMs - registeredAt.getTime()) / (1000 * 60 * 60);
+    const sentTouchpoints = parseJson(journey.touchpoints_sent, []);
+
+    for (const tp of JOURNEY_TOUCHPOINTS) {
+      if (ageHours < tp.minHours) continue;
+      if (sentTouchpoints.includes(tp.key)) continue;
+
+      const sent = createNotifications({
+        organizationId: journey.organization_id,
+        branchId: journey.branch_id,
+        roles: tp.roles,
+        kind: "alert",
+        title: tp.title,
+        body: tp.body(journey.member_name),
+        href: `/new-members/${journey.id}`,
+        metadata: { journeyId: journey.id, memberName: journey.member_name, touchpoint: tp.key },
+      });
+
+      const updatedTouchpoints = [...sentTouchpoints, tp.key];
+      db.prepare(`UPDATE new_member_journeys SET touchpoints_sent = ?, updated_at = ? WHERE id = ?`)
+        .run(serializeJson(updatedTouchpoints), now, journey.id);
+
+      journeysSent += sent;
+      journeyResults.push({ journeyId: journey.id, memberName: journey.member_name, touchpoint: tp.key, sent });
+    }
+
+    // 48-hour escalation: no contact at all after 2 days
+    if (ageHours >= 48 && !journey.last_contact_at && !sentTouchpoints.includes("escalate48h")) {
+      createNotifications({
+        organizationId: journey.organization_id,
+        branchId: journey.branch_id,
+        roles: ["pastor", "branch_admin"],
+        kind: "urgent",
+        title: "New member has not been contacted",
+        body: `${journey.member_name} registered 48 hours ago and has not been contacted yet. Immediate follow-up needed.`,
+        href: `/new-members/${journey.id}`,
+        metadata: { journeyId: journey.id, memberName: journey.member_name, touchpoint: "escalate48h" },
+      });
+      const updatedTouchpoints = [...sentTouchpoints, "escalate48h"];
+      db.prepare(`UPDATE new_member_journeys SET touchpoints_sent = ?, updated_at = ? WHERE id = ?`)
+        .run(serializeJson(updatedTouchpoints), now, journey.id);
+    }
+  }
+
+  // ── Sunday Service Reminders ────────────────────────────────────────────────
+  // Fire reminders on Thursday (day 4), Saturday (day 6), and Sunday morning (day 0)
+  const todayDay = new Date().getDay(); // 0=Sun, 4=Thu, 6=Sat
+  const isReminderDay = [0, 4, 6].includes(todayDay);
+  let serviceRemindersSent = 0;
+
+  if (isReminderDay) {
+    const schedules = db.prepare(`SELECT * FROM service_schedules`).all();
+    for (const schedule of schedules) {
+      const shouldFire =
+        (todayDay === 4 && schedule.reminder_thursday) ||
+        (todayDay === 6 && schedule.reminder_saturday) ||
+        (todayDay === 0 && schedule.reminder_sunday_morning);
+
+      if (!shouldFire) continue;
+
+      // Only send to new members (active journeys in this branch)
+      const newMembers = db.prepare(`
+        SELECT id, member_name FROM new_member_journeys
+        WHERE organization_id = ? AND branch_id = ? AND status = 'active'
+      `).all(schedule.organization_id, schedule.branch_id);
+
+      if (newMembers.length === 0) continue;
+
+      const dayLabel = todayDay === 4 ? "this Sunday" : todayDay === 6 ? "tomorrow" : "today";
+      const sent = createNotifications({
+        organizationId: schedule.organization_id,
+        branchId: schedule.branch_id,
+        roles: ["volunteer", "leader", "pastor"],
+        kind: "info",
+        title: `Reminder: ${schedule.service_name} is ${dayLabel}`,
+        body: `${schedule.service_name} is at ${schedule.service_time}${schedule.location ? ` — ${schedule.location}` : ""}. ${newMembers.length} new member(s) may need a personal invite.`,
+        href: "/new-members",
+      });
+      serviceRemindersSent += sent;
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     requestsScanned: openRequests.length,
     remindersSent: totalSent,
     details: results,
+    journeyTouchpointsSent: journeysSent,
+    journeyDetails: journeyResults,
+    serviceRemindersSent,
     runAt: now,
   });
 }

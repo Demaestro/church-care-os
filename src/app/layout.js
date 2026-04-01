@@ -296,6 +296,10 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
       label: copy.layout.nav.people,
     });
     oversightItems.push({
+      href: "/new-members",
+      label: "New Members",
+    });
+    oversightItems.push({
       href: "/reports",
       label: copy.layout.nav.reports,
     });
@@ -306,10 +310,19 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
   }
 
   if (
-    ["general_overseer", "hq_care_admin", "regional_overseer", "overseer", "owner"].includes(
-      user.role
-    )
+    ["general_overseer", "hq_care_admin", "regional_overseer"].includes(user.role)
   ) {
+    oversightItems.unshift({
+      href: "/hq",
+      label: "HQ Dashboard",
+    });
+    oversightItems.push({
+      href: "/new-members",
+      label: "New Members",
+    });
+  }
+
+  if (["overseer", "owner"].includes(user.role)) {
     oversightItems.unshift({
       href: "/hq",
       label: "HQ Dashboard",
@@ -320,6 +333,10 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
     oversightItems.push({
       href: "/admin/branch-users",
       label: "Branch People",
+    });
+    oversightItems.push({
+      href: "/new-members",
+      label: "New Members",
     });
   }
 
