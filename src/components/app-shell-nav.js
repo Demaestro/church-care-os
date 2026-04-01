@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   logout,
@@ -178,12 +178,27 @@ function DesktopMenu({
   accent = false,
 }) {
   const open = openKey === menuKey;
+  const closeTimer = useRef(null);
+
+  function handleMouseEnter() {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    setOpenKey(menuKey);
+  }
+
+  function handleMouseLeave() {
+    closeTimer.current = setTimeout(() => {
+      setOpenKey((current) => (current === menuKey ? null : current));
+    }, 120);
+  }
 
   return (
     <div
       className="relative"
-      onMouseEnter={() => setOpenKey(menuKey)}
-      onMouseLeave={() => setOpenKey((current) => (current === menuKey ? null : current))}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       <button
         type="button"
@@ -201,7 +216,7 @@ function DesktopMenu({
       </button>
 
       <div
-        className={`absolute right-0 top-full z-50 mt-3 transition ${
+        className={`absolute right-0 top-full z-50 mt-1 transition ${
           open
             ? "pointer-events-auto translate-y-0 opacity-100"
             : "pointer-events-none -translate-y-1 opacity-0"
