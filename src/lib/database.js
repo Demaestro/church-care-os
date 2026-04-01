@@ -624,8 +624,6 @@ function createSchema(db) {
 
     CREATE INDEX IF NOT EXISTS idx_regions_org_active
       ON regions (organization_id, active, name);
-    CREATE INDEX IF NOT EXISTS idx_branches_org_region
-      ON branches (organization_id, region_id, active, name);
     CREATE INDEX IF NOT EXISTS idx_branch_settings_branch
       ON branch_settings (organization_id, branch_id);
     CREATE INDEX IF NOT EXISTS idx_auth_invites_email
@@ -644,6 +642,14 @@ function createSchema(db) {
 function ensureSchemaMigrations(db) {
   seedOrganizations(db);
   seedRegions(db);
+
+  // These columns must exist on branches BEFORE seedBranches runs its INSERT.
+  addColumnIfMissing(db, "branches", "region_id", "TEXT");
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_branches_org_region
+      ON branches (organization_id, region_id, active, name);
+  `);
+
   seedBranches(db);
 
   addColumnIfMissing(
@@ -716,7 +722,8 @@ function ensureSchemaMigrations(db) {
     "mfa_backup_codes_json",
     `TEXT NOT NULL DEFAULT '[]'`
   );
-  addColumnIfMissing(db, "branches", "region_id", "TEXT");
+  // region_id migration and its index are handled at the top of this
+  // function, before seedBranches runs. Nothing more needed here.
   addColumnIfMissing(
     db,
     "audit_logs",
