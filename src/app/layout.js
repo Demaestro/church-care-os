@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { getCurrentUser, getUserLandingPage } from "@/lib/auth";
 import { AppShellNav } from "@/components/app-shell-nav";
+import { LanguageSelect } from "@/components/language-select";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import {
   getCopy,
@@ -149,39 +150,51 @@ export default async function RootLayout({ children }) {
           </div>
 
           <header className="sticky top-0 z-40 border-b border-line bg-[var(--header-bg)] shadow-[var(--header-shadow)] backdrop-blur-2xl">
-            <div className="mx-auto max-w-7xl px-6 py-4 lg:px-10">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <Link href="/" className="flex items-center gap-3 group">
+            <div className="mx-auto max-w-7xl px-6 lg:px-10">
+              <div className="flex h-16 items-center justify-between gap-4">
+                {/* ── Brand logo ── */}
+                <Link href="/" className="flex flex-shrink-0 items-center gap-3 group">
                   <span
-                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl text-sm font-bold tracking-[0.12em] text-white transition-all duration-200 group-hover:scale-105"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold tracking-wide text-white transition-all duration-200 group-hover:scale-105"
                     style={{
-                      background: "linear-gradient(135deg, var(--moss) 0%, #1e40af 100%)",
-                      boxShadow: "0 4px 14px rgba(29,78,216,0.36)",
+                      background: "linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)",
+                      boxShadow: "0 3px 12px rgba(37,99,235,0.38)",
                     }}
                   >
                     CC
                   </span>
-                  <span>
-                    <span className="block text-[0.66rem] font-semibold uppercase tracking-[0.26em] text-muted">
+                  <span className="hidden sm:block">
+                    <span className="block text-[0.6rem] font-bold uppercase tracking-[0.28em] text-muted leading-none">
                       {copy.layout.brandKicker}
                     </span>
-                    <span className="block text-[0.9rem] font-bold text-foreground leading-tight">
+                    <span className="block text-[0.875rem] font-bold text-foreground leading-tight mt-0.5">
                       {copy.layout.brandTitle}
                     </span>
                   </span>
                 </Link>
 
-                <AppShellNav
-                  sections={navSections}
-                  currentLanguage={preferences.language}
-                  currentDisplayMode={preferences.displayMode}
-                  currentTheme={preferences.theme}
-                  languageOptions={languageOptions}
-                  displayModeOptions={displayModeOptions}
-                  copy={copy.layout}
-                  workspaceSwitcher={workspaceSwitcher}
-                  userSummary={userSummary}
-                />
+                {/* ── Nav menus (centre/right) ── */}
+                <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+                  <AppShellNav
+                    sections={navSections}
+                    currentLanguage={preferences.language}
+                    currentDisplayMode={preferences.displayMode}
+                    currentTheme={preferences.theme}
+                    languageOptions={languageOptions}
+                    displayModeOptions={displayModeOptions}
+                    copy={copy.layout}
+                    workspaceSwitcher={workspaceSwitcher}
+                    userSummary={userSummary}
+                  />
+
+                  {/* ── Language dropdown — always visible in the bar ── */}
+                  <LanguageSelect
+                    currentLanguage={preferences.language}
+                    currentDisplayMode={preferences.displayMode}
+                    currentTheme={preferences.theme}
+                    languageOptions={languageOptions}
+                  />
+                </div>
               </div>
             </div>
           </header>

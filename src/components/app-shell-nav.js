@@ -34,95 +34,118 @@ export function AppShellNav({
   );
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-3 xl:w-full">
-      <div className="hidden xl:flex xl:w-full xl:items-start xl:justify-between">
-        <div className="flex min-w-0 items-center gap-2">
-          {visibleSections.map((section) => (
-            <DesktopMenu
-              key={section.label}
-              menuKey={section.label}
-              label={section.label}
-              openKey={desktopOpenKey}
-              setOpenKey={setDesktopOpenKey}
-            >
-              <NavMenuList
-                items={section.items}
-                pathname={pathname}
-                onNavigate={() => setDesktopOpenKey(null)}
-              />
-            </DesktopMenu>
-          ))}
-
-          {workspaceSwitcher ? (
-            <DesktopMenu
-              menuKey="workspace"
-              label={workspaceSwitcher.menuLabel}
-              openKey={desktopOpenKey}
-              setOpenKey={setDesktopOpenKey}
-              wide
-            >
-              <WorkspaceMenuPanel
-                workspaceSwitcher={workspaceSwitcher}
-                onNavigate={() => setDesktopOpenKey(null)}
-              />
-            </DesktopMenu>
-          ) : null}
-
+    <div className="flex min-w-0 items-center gap-2">
+      {/* ── Desktop nav menus ── */}
+      <div className="hidden items-center gap-1 xl:flex">
+        {visibleSections.map((section) => (
           <DesktopMenu
-            menuKey="language"
-            label={copy.languageLabel}
+            key={section.label}
+            menuKey={section.label}
+            label={section.label}
+            openKey={desktopOpenKey}
+            setOpenKey={setDesktopOpenKey}
+          >
+            <NavMenuList
+              items={section.items}
+              pathname={pathname}
+              onNavigate={() => setDesktopOpenKey(null)}
+            />
+          </DesktopMenu>
+        ))}
+
+        {workspaceSwitcher ? (
+          <DesktopMenu
+            menuKey="workspace"
+            label={workspaceSwitcher.menuLabel}
             openKey={desktopOpenKey}
             setOpenKey={setDesktopOpenKey}
             wide
           >
-            <LanguageMenuPanel
-              currentLanguage={currentLanguage}
-              currentDisplayMode={currentDisplayMode}
-              languageOptions={languageOptions}
-              displayModeOptions={displayModeOptions}
-              copy={copy}
+            <WorkspaceMenuPanel
+              workspaceSwitcher={workspaceSwitcher}
+              onNavigate={() => setDesktopOpenKey(null)}
             />
           </DesktopMenu>
-        </div>
+        ) : null}
+      </div>
 
-        <div className="ml-6 flex shrink-0 items-start gap-3">
-          {userSummary ? (
-            <DesktopMenu
-              menuKey="account"
-              label={userSummary.buttonLabel}
-              accent
-              openKey={desktopOpenKey}
-              setOpenKey={setDesktopOpenKey}
-            >
-              <AccountMenuPanel copy={copy} userSummary={userSummary} />
-            </DesktopMenu>
-          ) : null}
+      {/* ── Right-side controls: theme toggle + account ── */}
+      <div className="flex items-center gap-2">
+        <ThemeToggleButton
+          currentTheme={currentTheme}
+          redirectTo={redirectTo}
+          copy={copy}
+        />
 
-          <div className="flex min-w-[10.75rem] flex-col items-end gap-2">
-            <ThemeToggleButton
-              currentTheme={currentTheme}
-              redirectTo={redirectTo}
-              copy={copy}
-            />
+        {userSummary ? (
+          <DesktopMenu
+            menuKey="account"
+            label={userSummary.buttonLabel}
+            accent
+            openKey={desktopOpenKey}
+            setOpenKey={setDesktopOpenKey}
+          >
+            <AccountMenuPanel copy={copy} userSummary={userSummary} />
+          </DesktopMenu>
+        ) : (
+          <Link
+            href="/login"
+            className="inline-flex h-10 items-center justify-center rounded-full border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] px-4 text-sm font-semibold text-moss transition hover:bg-[var(--soft-fill-strong)]"
+          >
+            {copy.signIn}
+          </Link>
+        )}
 
-            {userSummary ? (
-              <Link
-                href={userSummary.switchHref}
-                className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-foreground px-5 py-2 text-sm font-semibold text-paper transition hover:opacity-90"
-              >
-                {copy.switchAccount}
-              </Link>
-            ) : (
-              <Link
-                href="/login"
-                className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] px-4 py-2 text-sm font-semibold text-moss transition hover:bg-[var(--soft-fill-strong)]"
-              >
-                {copy.signIn}
-              </Link>
-            )}
-          </div>
+        {/* ── Mobile hamburger ── */}
+        <div className="xl:hidden">
+          <MobileMenuButton
+            label="Menu"
+            active={mobileOpenKey === "__mobile__"}
+            onClick={() =>
+              setMobileOpenKey((current) =>
+                current === "__mobile__" ? null : "__mobile__"
+              )
+            }
+          />
         </div>
       </div>
+
+      {/* ── Mobile expanded drawer ── */}
+      {mobileOpenKey === "__mobile__" && (
+        <div
+          className="absolute left-0 right-0 top-full z-50 border-b border-line bg-paper px-6 py-4 shadow-[var(--menu-shadow)] xl:hidden"
+          style={{ top: "100%" }}
+        >
+          <div className="space-y-3">
+            {visibleSections.map((section) => (
+              <div key={section.label}>
+                <p className="eyebrow mb-2">{section.label}</p>
+                <NavMenuList
+                  items={section.items}
+                  pathname={pathname}
+                  stacked
+                  onNavigate={() => setMobileOpenKey(null)}
+                />
+              </div>
+            ))}
+
+            {workspaceSwitcher ? (
+              <div>
+                <p className="eyebrow mb-2">{workspaceSwitcher.eyebrow}</p>
+                <WorkspaceMenuPanel workspaceSwitcher={workspaceSwitcher} />
+              </div>
+            ) : null}
+
+            {userSummary ? (
+              <div>
+                <p className="eyebrow mb-2">Account</p>
+                <AccountMenuPanel copy={copy} userSummary={userSummary} mobile />
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+    </div>
 
       <div className="xl:hidden">
         <div className="flex flex-wrap items-center gap-2">
@@ -229,38 +252,20 @@ export function AppShellNav({
   );
 }
 
-function ThemeToggleButton({
-  currentTheme,
-  redirectTo,
-  copy,
-  mobile = false,
-}) {
+function ThemeToggleButton({ currentTheme, redirectTo, copy }) {
   const darkMode = currentTheme === "dark";
 
   return (
-    <form action={toggleThemePreference} className={mobile ? "shrink-0" : ""}>
+    <form action={toggleThemePreference}>
       <input type="hidden" name="redirectTo" value={redirectTo} />
       <input type="hidden" name="theme" value={darkMode ? "light" : "dark"} />
       <button
         type="submit"
-        aria-pressed={darkMode}
-        className={`inline-flex min-h-11 items-center gap-3 rounded-full border border-line bg-[var(--header-pill-bg)] px-4 py-2 text-sm font-medium text-foreground transition hover:bg-paper ${
-          mobile ? "px-4 py-3" : "self-end"
-        }`}
+        aria-label={copy.themeToggleLabel}
+        title={copy.themeToggleLabel}
+        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-line bg-[var(--header-pill-bg)] text-base text-foreground transition hover:border-[var(--soft-accent-border)] hover:bg-paper"
       >
-        <span>{copy.themeToggleLabel}</span>
-        <span
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-            darkMode ? "bg-[var(--moss)]" : "bg-[var(--line)]"
-          }`}
-          style={darkMode ? { opacity: 0.85 } : {}}
-        >
-          <span
-            className={`absolute top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 rounded-full bg-paper shadow-[0_4px_14px_rgba(0,0,0,0.18)] transition ${
-              darkMode ? "left-[1.4rem]" : "left-1"
-            }`}
-          />
-        </span>
+        {darkMode ? "☀️" : "🌙"}
       </button>
     </form>
   );
