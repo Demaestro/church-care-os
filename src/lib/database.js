@@ -15,6 +15,7 @@ import {
   defaultPrimaryBranchId,
   defaultPrimaryOrganizationId,
   defaultRegions,
+  permanentPastorAccounts,
 } from "@/lib/organization-defaults";
 import { demoAuthUsers, retentionPolicy } from "@/lib/policies";
 import {
@@ -1256,14 +1257,15 @@ function bootstrapDatabase(db) {
     seedOrganizations(db);
   }
 
-  if (!hasBranches) {
-    seedBranches(db);
-  }
+  // Always run seedBranches — INSERT OR IGNORE is idempotent,
+  // so new branches added to defaultBranches are picked up on restart.
+  seedBranches(db);
 
   seedBranchSettings(db);
   seedTeams(db);
   seedChurchSettings(db);
   seedUsers(db);
+  seedPermanentPastors(db);
 
   seedDemoBranchCoverage(db);
 }
@@ -1388,6 +1390,32 @@ function seedChurchSettings(db) {
       settings.smsFromNumber,
       settings.whatsappFromNumber,
       serializeJson(settings.notificationChannels),
+      now
+    );
+  }
+}
+
+function seedPermanentPastors(db) {
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO users (
+      id, organization_id, branch_id, name, email, role, access_scope,
+      title, managed_branch_ids_json, password_hash, active, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const now = new Date().toISOString();
+  for (const u of permanentPastorAccounts) {
+    insert.run(
+      u.id,
+      u.organizationId,
+      u.branchId,
+      u.name,
+      u.email.toLowerCase(),
+      u.role,
+      u.accessScope || "branch",
+      u.title || null,
+      serializeJson([u.branchId]),
+      hashPassword(u.password),
+      1,
       now
     );
   }
