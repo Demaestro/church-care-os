@@ -1,8 +1,12 @@
 import path from "node:path";
 import { cookies } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
-import { readAttachmentBuffer } from "@/lib/attachment-store";
+import { readAttachmentPayload } from "@/lib/attachment-store";
 import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
+
+export const runtime = "nodejs";
+export const preferredRegion = "home";
+export const maxDuration = 300;
 
 export async function GET(_request, context) {
   const user = await getCurrentUser();
@@ -17,7 +21,7 @@ export async function GET(_request, context) {
   const preferredBranchId = (await cookies()).get(WORKSPACE_BRANCH_COOKIE)?.value || "";
 
   try {
-    const result = readAttachmentBuffer(id, user, preferredBranchId);
+    const result = await readAttachmentPayload(id, user, preferredBranchId);
     if (!result) {
       return new Response("Attachment not found.", { status: 404 });
     }
@@ -28,13 +32,14 @@ export async function GET(_request, context) {
       extension
     )}${extension}`.replace(/["\r\n]+/g, "");
 
-    return new Response(result.buffer, {
+    return new Response(result.body, {
       status: 200,
       headers: {
-        "Content-Type": result.attachment.mimeType || "application/octet-stream",
-        "Content-Length": String(result.buffer.byteLength),
+        "Content-Type": result.contentType || result.attachment.mimeType || "application/octet-stream",
+        "Content-Length": String(result.contentLength || 0),
         "Content-Disposition": `attachment; filename="${safeName}"`,
         "Cache-Control": "private, max-age=0, must-revalidate",
+        ...(result.etag ? { ETag: result.etag } : {}),
       },
     });
   } catch (error) {

@@ -1,6 +1,6 @@
 # Church Care OS
 
-Church Care OS is a Next.js 16 care coordination app for pastors, ministry leaders, volunteers, and headquarters oversight teams. The app currently runs on a local SQLite database at `data/care.db`, with automatic backup scripts, branch-scoped internal routes, MFA-capable sign-in, a public member intake flow, and migration tooling for PostgreSQL.
+Church Care OS is a Next.js 16 care coordination app for pastors, ministry leaders, volunteers, and headquarters oversight teams. The app supports a local SQLite runtime for development and single-host installs, plus a PostgreSQL runtime path for cloud deployments. It includes branch-scoped internal routes, MFA-capable sign-in, a public member intake flow, private attachment support, and migration tooling for PostgreSQL.
 
 Core product surfaces already included:
 
@@ -185,19 +185,31 @@ Provider-specific setup notes live in `DEPLOY.md`.
 
 ## Hosting guidance
 
-This app is not a good fit for serverless hosting yet because it writes to a local SQLite file at runtime. In production, set `CARE_DB_PATH` explicitly and point it at persistent storage. Until the data layer moves to a managed database, prefer:
+This app has two deployment shapes:
 
-- A VPS or VM running `npm run start`
-- Docker on a single host
-- A container platform with a persistent disk or volume
+- single-host Node runtime using SQLite + persistent disk
+- stateless cloud runtime using PostgreSQL + private object storage
 
-Avoid Vercel or other ephemeral serverless targets for now.
+For Vercel or other serverless hosts, do not use SQLite or local uploads. Set:
+
+- `CARE_DATABASE_DRIVER=postgres`
+- `DATABASE_URL=postgres://...`
+- `CARE_ATTACHMENT_BACKEND=vercel-blob`
+- `BLOB_READ_WRITE_TOKEN=...`
+- `CRON_SECRET=...`
+
+The repo now includes Vercel cron scheduling in `vercel.json` for:
+
+- hourly follow-up reminders
+- ten-minute delivery queue draining
+
+That cron frequency usually means a paid Vercel plan is the realistic target for production care workflows.
 
 ## Operations notes
 
 - Put a reverse proxy such as Nginx or Caddy in front of the Next.js server for TLS, rate limiting, and request buffering.
 - Run only one app instance with the current SQLite file. Multiple replicas will drift unless the data layer is replaced.
-- Internal routes now require login; only `/requests/new`, `/permissions`, `/login`, and `/health` should stay public.
+- Internal routes now require login; only `/requests/new`, `/permissions`, `/login`, `/register`, and `/health` should stay public.
 - If you later scale beyond one instance, set a stable `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` during build and move app data into a shared database.
 
 ## Verification

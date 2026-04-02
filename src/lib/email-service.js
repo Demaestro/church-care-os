@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { listUsers } from "@/lib/auth-store";
 import { formatDateTime } from "@/lib/care-format";
 import { getDatabase, parseJson, serializeJson } from "@/lib/database";
+import { resolveAppBaseUrl } from "@/lib/deployment-environment";
 import { renderEmailTemplate } from "@/lib/email-templates";
 import { enqueueJob } from "@/lib/job-store";
 import {
@@ -20,7 +21,7 @@ export function isValidEmailAddress(value) {
 }
 
 function getAppBaseUrl() {
-  return String(process.env.APP_BASE_URL || "").trim().replace(/\/+$/, "");
+  return resolveAppBaseUrl();
 }
 
 function getProviderSecretStatus(provider) {

@@ -21,6 +21,10 @@ import { NextResponse } from "next/server";
 import { getDatabase, parseJson, serializeJson } from "@/lib/database";
 import { createNotifications } from "@/lib/notifications-store";
 
+export const runtime = "nodejs";
+export const preferredRegion = "home";
+export const maxDuration = 300;
+
 // ── reminder schedule ────────────────────────────────────────────────────────
 
 const REMINDER_DAYS = [1, 3, 5, 7];
@@ -287,11 +291,6 @@ export async function POST(request) {
   });
 }
 
-// Allow GET for quick health-check / manual trigger in development
 export async function GET(request) {
-  const isDev = process.env.NODE_ENV !== "production";
-  if (!isDev) {
-    return NextResponse.json({ error: "Use POST in production" }, { status: 405 });
-  }
   return POST(request);
 }

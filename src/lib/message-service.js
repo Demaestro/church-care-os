@@ -5,6 +5,7 @@ import { Buffer } from "node:buffer";
 import { listUsers } from "@/lib/auth-store";
 import { formatDateTime } from "@/lib/care-format";
 import { getDatabase, parseJson, serializeJson } from "@/lib/database";
+import { resolveAppBaseUrl } from "@/lib/deployment-environment";
 import { enqueueJob } from "@/lib/job-store";
 import { renderMessageTemplate } from "@/lib/message-templates";
 import {
@@ -37,7 +38,7 @@ export function isValidMessagingPhone(value) {
 }
 
 function getAppBaseUrl() {
-  return String(process.env.APP_BASE_URL || "").trim().replace(/\/+$/, "");
+  return resolveAppBaseUrl();
 }
 
 function getProviderSecretStatus(provider) {

@@ -1,19 +1,19 @@
 import "server-only";
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import { formatDateTime } from "@/lib/care-format";
+import {
+  getAttachmentStorageBackend,
+  readAttachmentObject,
+  storeAttachmentObject,
+} from "@/lib/blob-storage";
 import { getDatabase } from "@/lib/database";
 import {
   buildViewerScope,
   recordMatchesViewerScope,
 } from "@/lib/workspace-scope";
 import { defaultPrimaryBranchId, defaultPrimaryOrganizationId } from "@/lib/organization-defaults";
-
-const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-const defaultUploadsRoot = path.resolve(moduleDir, "..", "..", "data", "uploads");
 
 const allowedMimeTypes = new Set([
   "application/pdf",
@@ -22,12 +22,6 @@ const allowedMimeTypes = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "text/plain",
 ]);
-
-function getUploadsRoot() {
-  const basePath = process.env.CARE_UPLOADS_PATH || defaultUploadsRoot;
-  mkdirSync(basePath, { recursive: true });
-  return basePath;
-}
 
 function sanitizeFileName(value) {
   return String(value || "attachment")
@@ -54,6 +48,7 @@ function mapAttachmentRow(row) {
     fileSize: Number(row.file_size || 0),
     purpose: row.purpose,
     visibility: row.visibility,
+    storageBackend: row.storage_backend || "local",
     uploadedByUserId: row.uploaded_by_user_id || "",
     uploadedByName: row.uploaded_by_name,
     uploadedByRole: row.uploaded_by_role,
@@ -145,16 +140,27 @@ export function getAttachmentById(id, viewer = null, preferredBranchId = "") {
   return mapAttachmentRow(row);
 }
 
-export function readAttachmentBuffer(id, viewer = null, preferredBranchId = "") {
+export async function readAttachmentPayload(id, viewer = null, preferredBranchId = "") {
   const attachment = getAttachmentById(id, viewer, preferredBranchId);
   if (!attachment) {
     return null;
   }
 
-  const fullPath = path.join(getUploadsRoot(), attachment.storedName);
+  const storedObject = await readAttachmentObject({
+    storedName: attachment.storedName,
+    storageBackend: attachment.storageBackend,
+  });
+
+  if (!storedObject) {
+    return null;
+  }
+
   return {
     attachment,
-    buffer: readFileSync(fullPath),
+    body: storedObject.body,
+    contentLength: storedObject.contentLength,
+    contentType: storedObject.contentType || attachment.mimeType,
+    etag: storedObject.etag || "",
   };
 }
 
@@ -212,11 +218,20 @@ export async function saveHouseholdAttachment({
 
   const id = randomUUID();
   const extension = path.extname(originalName) || "";
-  const storedName = `${id}${extension}`;
+  const storageKey = [
+    "attachments",
+    household.organization_id,
+    household.branch_id,
+    `${id}${extension}`,
+  ].join("/");
   const now = new Date().toISOString();
   const buffer = Buffer.from(await file.arrayBuffer());
-
-  writeFileSync(path.join(getUploadsRoot(), storedName), buffer);
+  const storage = await storeAttachmentObject({
+    storageKey,
+    mimeType,
+    buffer,
+    storageBackend: getAttachmentStorageBackend(),
+  });
 
   getDatabase()
     .prepare(`
@@ -228,6 +243,7 @@ export async function saveHouseholdAttachment({
         request_id,
         original_name,
         stored_name,
+        storage_backend,
         mime_type,
         file_size,
         purpose,
@@ -236,7 +252,7 @@ export async function saveHouseholdAttachment({
         uploaded_by_name,
         uploaded_by_role,
         created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
       id,
@@ -245,7 +261,8 @@ export async function saveHouseholdAttachment({
       householdSlug,
       requestId || null,
       originalName,
-      storedName,
+      storage.storedName,
+      storage.storageBackend,
       mimeType,
       fileSize,
       purpose || "Case attachment",

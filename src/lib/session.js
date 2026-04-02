@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { shouldUseSecureTransport } from "@/lib/deployment-environment";
 import { roleLandingPages } from "@/lib/policies";
 import { safeEqualValue, signValue } from "@/lib/auth-crypto";
 
@@ -21,16 +22,7 @@ export function shouldUseSecureCookies() {
     return false;
   }
 
-  const appBaseUrl = String(process.env.APP_BASE_URL || "").trim();
-  if (appBaseUrl) {
-    try {
-      return new URL(appBaseUrl).protocol === "https:";
-    } catch {
-      return process.env.NODE_ENV === "production";
-    }
-  }
-
-  return process.env.NODE_ENV === "production";
+  return shouldUseSecureTransport();
 }
 
 function getSessionSecret() {

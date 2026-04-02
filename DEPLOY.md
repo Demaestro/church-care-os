@@ -1,19 +1,23 @@
 # Deployment Guide
 
-Church Care OS now stores live care data in a SQLite database file. Every production target still needs persistent disk and should run as a single app instance.
+Church Care OS supports two production shapes:
+
+- SQLite on a single long-lived host with persistent disk
+- PostgreSQL plus object storage on a stateless cloud platform
 
 ## Shared deployment rules
 
-- Run one application instance only.
-- Keep `care.db` on persistent storage.
-- Keep uploaded attachments on persistent storage too by setting `CARE_UPLOADS_PATH`.
-- Set `CARE_DB_PATH` explicitly in production.
+- If you use SQLite, run one application instance only.
+- If you use SQLite, keep `care.db` on persistent storage.
+- If you use local uploads, keep attachments on persistent storage too by setting `CARE_UPLOADS_PATH`.
+- Set `CARE_DB_PATH` explicitly in SQLite production deployments.
 - Put a reverse proxy or provider edge in front of the app.
 - Use `/health` as the deployment health check.
-- Run `npm run db:init` once if you want to bootstrap the SQLite file before first traffic.
-- Move to a real database before attempting multi-instance scale.
+- Run `npm run db:init` once if you want to bootstrap a SQLite file before first traffic.
+- Use PostgreSQL before attempting multi-instance or serverless scale.
 - Run scheduled backups and occasional restore drills.
-- Run a background worker with `npm run jobs:work` if you want queued delivery processing outside the web process.
+- Run a background worker with `npm run jobs:work` if you want queued delivery processing outside the web process on a traditional host.
+- On Vercel, use the cron routes in `vercel.json` instead of a forever worker process.
 - If email is not configured yet, leave the app in `log-only` delivery mode and connect the provider later.
 
 Recommended production env vars:
@@ -22,16 +26,49 @@ Recommended production env vars:
 - `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`
 - `CARE_DB_PATH`
 - `CARE_UPLOADS_PATH`
+- `CARE_ATTACHMENT_BACKEND`
 - `HOSTNAME=0.0.0.0`
 - `PORT=3000`
 - `APP_BASE_URL`
 - `BACKUP_DIR` if you want backups outside the default data folder
 - `BACKUP_MAX_AGE_HOURS=26`
 - `CARE_DATABASE_DRIVER=sqlite`
-- `DATABASE_URL` only when you are exporting to / importing from PostgreSQL
+- `DATABASE_URL` when you are running PostgreSQL
 - `PGSSLMODE=require` when your PostgreSQL host requires TLS
+- `BLOB_READ_WRITE_TOKEN` when you are using Vercel Blob storage
+- `CRON_SECRET` when you are using cron-triggered routes
 - `RESEND_API_KEY` only when you are ready for live email
 - `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` only when you are ready for live messaging
+
+## Vercel
+
+Use this shape when you want preview deployments, a phone-friendly live URL, and stateless hosting.
+
+Required runtime choices:
+
+- `CARE_DATABASE_DRIVER=postgres`
+- `DATABASE_URL=postgres://...`
+- `CARE_ATTACHMENT_BACKEND=vercel-blob`
+- `BLOB_READ_WRITE_TOKEN=...`
+- `CRON_SECRET=...`
+
+What is already configured:
+
+- Vercel cron schedule in `vercel.json`
+- GET-compatible cron routes at `/api/cron/reminders` and `/api/cron/jobs`
+- preview-safe app base URL resolution for links sent from non-production deployments
+- private attachment storage support through Vercel Blob
+
+What you still need to do:
+
+1. Create a Vercel project from the repo.
+2. Attach a PostgreSQL database and set `DATABASE_URL`.
+3. Attach a Blob store and set `BLOB_READ_WRITE_TOKEN`.
+4. Set `CARE_DATABASE_DRIVER=postgres`.
+5. Set `CARE_ATTACHMENT_BACKEND=vercel-blob`.
+6. Set `CRON_SECRET` to a long random value.
+7. Set `APP_BASE_URL` to your production domain for the production environment only.
+8. Keep preview deployments on separate preview URLs and do not point them at production data.
 
 ## Render
 
@@ -145,7 +182,7 @@ npm run db:restore -- --from /absolute/path/to/backup.sqlite
 
 ## PostgreSQL migration path
 
-The app runtime still uses SQLite today, but the repo now includes a migration/export path for moving production data forward:
+The repo includes a migration/export path for moving data into PostgreSQL:
 
 ```bash
 npm run db:export

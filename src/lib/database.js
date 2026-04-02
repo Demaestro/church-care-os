@@ -569,6 +569,7 @@ function createSchema(db) {
       request_id TEXT REFERENCES requests(id) ON DELETE SET NULL,
       original_name TEXT NOT NULL,
       stored_name TEXT NOT NULL,
+      storage_backend TEXT NOT NULL DEFAULT 'local',
       mime_type TEXT NOT NULL,
       file_size INTEGER NOT NULL,
       purpose TEXT NOT NULL,
@@ -861,6 +862,12 @@ function ensureSchemaMigrations(db) {
   );
   addColumnIfMissing(db, "requests", "last_activity_at", "TEXT");
   addColumnIfMissing(db, "requests", "assigned_volunteer_json", "TEXT");
+  addColumnIfMissing(
+    db,
+    "household_attachments",
+    "storage_backend",
+    `TEXT NOT NULL DEFAULT 'local'`
+  );
 
   // New member journey columns
   addColumnIfMissing(db, "users", "birthday", "TEXT");

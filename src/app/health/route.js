@@ -1,4 +1,6 @@
+import { getAttachmentStorageBackend } from "@/lib/blob-storage";
 import { getDatabaseHealth } from "@/lib/database";
+import { getDeploymentStage, isVercelDeployment } from "@/lib/deployment-environment";
 
 export async function GET() {
   try {
@@ -8,6 +10,9 @@ export async function GET() {
       {
         status: "ok",
         timestamp: new Date().toISOString(),
+        attachmentBackend: getAttachmentStorageBackend(),
+        deploymentStage: getDeploymentStage(),
+        vercel: isVercelDeployment(),
         ...store,
       },
       {

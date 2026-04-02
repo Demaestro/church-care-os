@@ -333,6 +333,7 @@ CREATE TABLE IF NOT EXISTS household_attachments (
   request_id text REFERENCES requests(id) ON DELETE SET NULL,
   original_name text NOT NULL,
   stored_name text NOT NULL,
+  storage_backend text NOT NULL DEFAULT 'local',
   mime_type text NOT NULL,
   file_size bigint NOT NULL,
   purpose text NOT NULL,
@@ -342,6 +343,9 @@ CREATE TABLE IF NOT EXISTS household_attachments (
   uploaded_by_role text NOT NULL,
   created_at timestamptz NOT NULL
 );
+
+ALTER TABLE household_attachments
+  ADD COLUMN IF NOT EXISTS storage_backend text NOT NULL DEFAULT 'local';
 
 CREATE TABLE IF NOT EXISTS member_transfers (
   id text PRIMARY KEY,
