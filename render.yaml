@@ -17,6 +17,8 @@ services:
         value: 3000
       - key: CARE_DB_PATH
         value: /app/storage/care.db
+      - key: CARE_UPLOADS_PATH
+        value: /app/storage/uploads
     disk:
       name: care-data
       mountPath: /app/storage
