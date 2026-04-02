@@ -10,6 +10,7 @@ import {
   toggleThemePreference,
 } from "@/app/actions";
 import { DisplayPreferencesForm } from "@/components/display-preferences-form";
+import { PwaInstallControl } from "@/components/pwa-install-control";
 
 export function AppShellNav({
   sections = [],
@@ -71,6 +72,8 @@ export function AppShellNav({
 
       {/* ── Right-side controls: theme toggle + account ── */}
       <div className="flex items-center gap-2">
+        <PwaInstallControl copy={copy} />
+
         <ThemeToggleButton
           currentTheme={currentTheme}
           redirectTo={redirectTo}

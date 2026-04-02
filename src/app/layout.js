@@ -38,12 +38,24 @@ export const metadata = {
   description:
     "Care coordination for pastors, deacons, and volunteers with one shared rhythm for requests, assignments, and follow-up.",
   applicationName: "Church Care OS",
+  appleWebApp: {
+    title: "Church Care OS",
+    statusBarStyle: "default",
+  },
   openGraph: {
     title: "Church Care OS",
     description:
       "A warm operating system for care requests, volunteer coordination, and pastoral follow-up.",
     type: "website",
   },
+};
+
+export const viewport = {
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#2563eb" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
+  ],
 };
 
 export default async function RootLayout({ children }) {
