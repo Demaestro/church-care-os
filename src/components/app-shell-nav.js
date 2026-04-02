@@ -113,13 +113,13 @@ export function AppShellNav({
       {/* ── Mobile expanded drawer ── */}
       {mobileOpenKey === "__mobile__" && (
         <div
-          className="absolute left-0 right-0 top-full z-50 border-b border-line bg-paper px-6 py-4 shadow-[var(--menu-shadow)] xl:hidden"
-          style={{ top: "100%" }}
+          className="absolute left-0 right-0 z-50 border-b border-line bg-paper shadow-[var(--menu-shadow)] xl:hidden"
+          style={{ top: "100%", maxHeight: "calc(100dvh - 4rem)", overflowY: "auto" }}
         >
-          <div className="space-y-3">
+          <div className="px-4 py-4 space-y-4">
             {visibleSections.map((section) => (
               <div key={section.label}>
-                <p className="eyebrow mb-2">{section.label}</p>
+                <p className="eyebrow mb-2 px-1">{section.label}</p>
                 <NavMenuList
                   items={section.items}
                   pathname={pathname}
@@ -131,14 +131,14 @@ export function AppShellNav({
 
             {workspaceSwitcher ? (
               <div>
-                <p className="eyebrow mb-2">{workspaceSwitcher.eyebrow}</p>
-                <WorkspaceMenuPanel workspaceSwitcher={workspaceSwitcher} />
+                <p className="eyebrow mb-2 px-1">{workspaceSwitcher.eyebrow}</p>
+                <WorkspaceMenuPanel workspaceSwitcher={workspaceSwitcher} onNavigate={() => setMobileOpenKey(null)} />
               </div>
             ) : null}
 
             {userSummary ? (
               <div>
-                <p className="eyebrow mb-2">Account</p>
+                <p className="eyebrow mb-2 px-1">Account</p>
                 <AccountMenuPanel copy={copy} userSummary={userSummary} mobile />
               </div>
             ) : null}

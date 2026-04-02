@@ -1,11 +1,22 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { updateMemberContactProfile } from "@/app/actions";
 import { FlashBanner } from "@/components/flash-banner";
+import { PrivacyShield } from "@/components/privacy-shield";
 import { SubmitButton } from "@/components/submit-button";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getCopy, translateSupportNeed } from "@/lib/i18n";
+import {
+  defaultPrimaryBranchId,
+  defaultPrimaryOrganizationId,
+} from "@/lib/organization-defaults";
 import { getMemberPortalData } from "@/lib/care-store";
+import { getPublicWorkspaceCatalog } from "@/lib/organization-store";
 import { filterMemberRequests, hasActiveFilters } from "@/lib/search-filters";
+import {
+  PUBLIC_BRANCH_COOKIE,
+  PUBLIC_ORGANIZATION_COOKIE,
+} from "@/lib/workspace-scope";
 
 export const metadata = {
   title: "Member Portal",
@@ -17,6 +28,28 @@ export default async function MemberPortalPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const pageCopy = copy.memberPortal;
+  const cookieStore = await cookies();
+  const catalog = getPublicWorkspaceCatalog();
+  const organizationId =
+    cookieStore.get(PUBLIC_ORGANIZATION_COOKIE)?.value ||
+    defaultPrimaryOrganizationId ||
+    catalog[0]?.id ||
+    "";
+  const organization =
+    catalog.find((item) => item.id === organizationId) ||
+    catalog.find((item) => item.id === defaultPrimaryOrganizationId) ||
+    catalog[0] ||
+    null;
+  const branchId =
+    cookieStore.get(PUBLIC_BRANCH_COOKIE)?.value ||
+    defaultPrimaryBranchId ||
+    organization?.branches?.[0]?.id ||
+    "";
+  const branch =
+    organization?.branches?.find((item) => item.id === branchId) ||
+    organization?.branches?.find((item) => item.id === defaultPrimaryBranchId) ||
+    organization?.branches?.[0] ||
+    null;
   const params = await searchParams;
   const trackingCode =
     typeof params?.code === "string" ? params.code.trim().toUpperCase() : "";
@@ -30,6 +63,15 @@ export default async function MemberPortalPage({ searchParams }) {
   const portal = trackingCode && contact
     ? await getMemberPortalData(trackingCode, contact)
     : null;
+  const scopedOrganization =
+    portal?.requests?.[0]?.organizationId
+      ? catalog.find((item) => item.id === portal.requests[0].organizationId) || organization
+      : organization;
+  const scopedBranch =
+    portal?.requests?.[0]?.branchId && scopedOrganization
+      ? scopedOrganization.branches?.find((item) => item.id === portal.requests[0].branchId) ||
+        branch
+      : branch;
   const visibleRequests = filterMemberRequests(portal?.requests || [], filters);
   const visibleOpenRequests = visibleRequests.filter((item) => item.isOpen);
   const visibleResolvedRequests = visibleRequests.filter((item) => !item.isOpen);
@@ -49,6 +91,12 @@ export default async function MemberPortalPage({ searchParams }) {
               {pageCopy.title}
             </h1>
             <p className="mt-5 text-lg leading-8 text-muted">{pageCopy.description}</p>
+            {scopedOrganization ? (
+              <div className="mt-5 inline-flex flex-wrap items-center gap-2 rounded-full border border-line bg-canvas px-4 py-2 text-sm text-muted">
+                <span className="font-semibold text-foreground">{scopedOrganization.name}</span>
+                {scopedBranch ? <span>/ {scopedBranch.name}</span> : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -116,9 +164,19 @@ export default async function MemberPortalPage({ searchParams }) {
           </div>
         </article>
 
-        <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
-          {portal ? (
-            <>
+        {portal ? (
+          <PrivacyShield
+            className="surface-card"
+            eyebrow={pageCopy.privacyShield.eyebrow}
+            title={pageCopy.privacyShield.title}
+            body={pageCopy.privacyShield.body}
+            watermark={pageCopy.privacyShield.watermark}
+            quickHideLabel={copy.common.privacyShield.quickHide}
+            revealLabel={copy.common.privacyShield.reveal}
+            hiddenTitle={copy.common.privacyShield.hiddenTitle}
+            hiddenBody={copy.common.privacyShield.hiddenBody}
+          >
+            <article className="rounded-[1.8rem] p-6">
               <div className="grid gap-4 md:grid-cols-3">
                 <MetricCard label={pageCopy.metrics.totalRequests} value={portal.requests.length} />
                 <MetricCard label={pageCopy.metrics.openRequests} value={portal.openRequests.length} />
@@ -173,18 +231,30 @@ export default async function MemberPortalPage({ searchParams }) {
                   className="inline-flex min-h-14 items-center justify-center rounded-[1rem] bg-foreground px-5 py-3 text-base font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
                 />
               </form>
-            </>
-          ) : (
+            </article>
+          </PrivacyShield>
+        ) : (
+          <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
             <div className="rounded-[1.35rem] border border-dashed border-line bg-canvas p-6">
               <p className="text-sm leading-7 text-muted">{pageCopy.emptyPortal}</p>
             </div>
-          )}
-        </article>
+          </article>
+        )}
       </section>
 
       {portal ? (
-        <>
-          <section className="mt-8 surface-card rounded-[1.8rem] border border-line bg-paper p-6">
+        <PrivacyShield
+          className="mt-8 surface-card"
+          eyebrow={pageCopy.privacyShield.eyebrow}
+          title={pageCopy.privacyShield.title}
+          body={pageCopy.privacyShield.body}
+          watermark={pageCopy.privacyShield.watermark}
+          quickHideLabel={copy.common.privacyShield.quickHide}
+          revealLabel={copy.common.privacyShield.reveal}
+          hiddenTitle={copy.common.privacyShield.hiddenTitle}
+          hiddenBody={copy.common.privacyShield.hiddenBody}
+        >
+          <section className="rounded-[1.8rem] p-6">
             <form action="/member" className="rounded-[1.25rem] border border-line bg-canvas p-4">
               <input type="hidden" name="code" value={trackingCode} />
               <input type="hidden" name="contact" value={contact} />
@@ -278,7 +348,7 @@ export default async function MemberPortalPage({ searchParams }) {
               </section>
             </div>
           </section>
-        </>
+        </PrivacyShield>
       ) : null}
     </div>
   );

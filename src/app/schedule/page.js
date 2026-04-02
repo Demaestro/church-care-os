@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { saveFollowUpPlan } from "@/app/actions";
 import { FlashBanner } from "@/components/flash-banner";
 import { SubmitButton } from "@/components/submit-button";
@@ -7,7 +8,9 @@ import { getAppPreferences } from "@/lib/app-preferences-server";
 import { toDateTimeLocalValue } from "@/lib/care-format";
 import { getFollowUpScheduleData } from "@/lib/care-store";
 import { getCopy, translateSupportNeed } from "@/lib/i18n";
+import { getWorkspaceContext } from "@/lib/organization-store";
 import { filterScheduleItems, hasActiveFilters } from "@/lib/search-filters";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 export const metadata = {
   title: "Follow-up Schedule",
@@ -19,7 +22,10 @@ export default async function SchedulePage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const pageCopy = copy.schedule;
-  await requireCurrentUser(["leader", "pastor", "owner"]);
+  const user = await requireCurrentUser(["leader", "pastor", "overseer", "owner"]);
+  const cookieStore = await cookies();
+  const preferredBranchId = cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || "";
+  const workspace = getWorkspaceContext(user, preferredBranchId);
   const params = await searchParams;
   const notice = typeof params?.notice === "string" ? params.notice : "";
   const error = typeof params?.error === "string" ? params.error : "";
@@ -28,10 +34,17 @@ export default async function SchedulePage({ searchParams }) {
     bucket: typeof params?.bucket === "string" ? params.bucket : "all",
     owner: typeof params?.owner === "string" ? params.owner : "all",
   };
-  const schedule = await getFollowUpScheduleData();
+  const schedule = await getFollowUpScheduleData(user, preferredBranchId);
   const items = filterScheduleItems(schedule.items, filters);
   const ownerOptions = Array.from(new Set(schedule.items.map((item) => item.owner))).sort();
   const showClearFilters = hasActiveFilters(filters);
+  const scopeLabel = workspace.activeBranch
+    ? `${workspace.organization.name} / ${workspace.activeBranch.name}`
+    : `${workspace.organization.name} / headquarters view`;
+  const scopedHref = (pathname) =>
+    preferredBranchId
+      ? `${pathname}?branch=${encodeURIComponent(preferredBranchId)}`
+      : pathname;
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-10 pb-16 lg:px-10 lg:py-14">
@@ -45,6 +58,14 @@ export default async function SchedulePage({ searchParams }) {
               {pageCopy.title}
             </h1>
             <p className="mt-5 text-lg leading-8 text-muted">{pageCopy.description}</p>
+            <div className="mt-5 inline-flex items-center rounded-full border border-line bg-canvas px-4 py-2 text-sm text-muted">
+              <span className="font-semibold text-foreground">{scopeLabel}</span>
+              <span className="ml-3">
+                {workspace.activeBranch
+                  ? "This planner is focused on one branch."
+                  : "You are looking across every branch you are allowed to supervise."}
+              </span>
+            </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:min-w-[28rem]">
@@ -102,7 +123,7 @@ export default async function SchedulePage({ searchParams }) {
               </button>
               {showClearFilters ? (
                 <a
-                  href="/schedule"
+                  href={scopedHref("/schedule")}
                   className="inline-flex min-h-14 items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
                 >
                   {copy.common.clearFilters}
@@ -147,7 +168,7 @@ export default async function SchedulePage({ searchParams }) {
                 </div>
 
                 <Link
-                  href={`/households/${item.householdSlug}`}
+                  href={scopedHref(`/households/${item.householdSlug}`)}
                   className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
                 >
                   {pageCopy.openHousehold}

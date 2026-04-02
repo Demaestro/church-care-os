@@ -44,7 +44,15 @@ next-env.d.ts
 
 # local state
 /backups
+/exports/
 /data/*.db
 /data/*.db-*
 /data/*.sqlite
 /data/backups/
+/data/uploads/
+/playwright-report/
+/test-results/
+/.claude/
+/tests/support/*.db
+/tests/support/*.db-*
+/tests/support/*.sqlite

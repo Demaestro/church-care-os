@@ -32,12 +32,12 @@ describe("password reset store", () => {
       consumePasswordResetTokenEntry,
     } = await import("@/lib/password-reset-store");
 
-    const originalUser = findUserByEmail("pastor@grace.demo");
+    const originalUser = findUserByEmail("pastor.lagos@firstlove.demo");
     expect(originalUser?.active).toBe(true);
 
-    const tokenState = createPasswordResetTokenEntry("pastor@grace.demo");
+    const tokenState = createPasswordResetTokenEntry("pastor.lagos@firstlove.demo");
     expect(tokenState?.token).toBeTruthy();
-    expect(tokenState?.user.email).toBe("pastor@grace.demo");
+    expect(tokenState?.user.email).toBe("pastor.lagos@firstlove.demo");
 
     expect(getPasswordResetTokenEntry(tokenState.token).status).toBe("valid");
 
@@ -45,10 +45,10 @@ describe("password reset store", () => {
       tokenState.token,
       "FreshPass!2026"
     );
-    expect(updatedUser.email).toBe("pastor@grace.demo");
+    expect(updatedUser.email).toBe("pastor.lagos@firstlove.demo");
     expect(getPasswordResetTokenEntry(tokenState.token).status).toBe("used");
 
-    const refreshedUser = findUserByEmail("pastor@grace.demo");
+    const refreshedUser = findUserByEmail("pastor.lagos@firstlove.demo");
     expect(verifyPassword("FreshPass!2026", refreshedUser.passwordHash)).toBe(true);
   });
 
@@ -58,7 +58,7 @@ describe("password reset store", () => {
       getPasswordResetTokenEntry,
     } = await import("@/lib/password-reset-store");
 
-    const tokenState = createPasswordResetTokenEntry("leader@grace.demo", {
+    const tokenState = createPasswordResetTokenEntry("leader.lagos@firstlove.demo", {
       ttlMs: -1000,
     });
 

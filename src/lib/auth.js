@@ -61,8 +61,10 @@ export function getRoleLabel(role) {
   switch (role) {
     case "owner":
       return "Owner";
+    case "overseer":
+      return "General Overseer";
     case "pastor":
-      return "Pastor";
+      return "Branch Pastor";
     case "leader":
       return "Leader";
     case "volunteer":
@@ -82,8 +84,20 @@ function sanitizeUser(user) {
     name: user.name,
     email: user.email,
     role: user.role,
+    title: user.title || "",
+    organizationId: user.organizationId || "",
+    branchId: user.branchId || "",
+    accessScope: user.accessScope || "branch",
+    managedBranchIds: Array.isArray(user.managedBranchIds)
+      ? user.managedBranchIds
+      : [],
     lane: user.lane || "",
     volunteerName: user.volunteerName || "",
+    phone: user.phone || "",
+    mfaEnabled: Boolean(user.mfaEnabled),
+    mfaMode: user.mfaMode || "off",
+    mfaSecret: user.mfaSecret || "",
+    mfaBackupCodes: Array.isArray(user.mfaBackupCodes) ? user.mfaBackupCodes : [],
     active: user.active,
     sessionVersion: Number(user.sessionVersion || 1),
     lastLoginAt: user.lastLoginAt || "",

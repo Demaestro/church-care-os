@@ -5,7 +5,11 @@ import { listUsers } from "@/lib/auth-store";
 import { formatDateTime } from "@/lib/care-format";
 import { getDatabase, parseJson, serializeJson } from "@/lib/database";
 import { renderEmailTemplate } from "@/lib/email-templates";
-import { getChurchSettings } from "@/lib/organization-store";
+import { enqueueJob } from "@/lib/job-store";
+import {
+  getChurchSettings,
+  getEffectiveChurchSettings,
+} from "@/lib/organization-store";
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -42,6 +46,8 @@ function createOutboxEntry(db, input) {
   db.prepare(`
     INSERT INTO email_outbox (
       id,
+      organization_id,
+      branch_id,
       template_key,
       purpose,
       recipient_email,
@@ -58,9 +64,11 @@ function createOutboxEntry(db, input) {
       attempted_at,
       sent_at,
       metadata_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
+    input.organizationId || "",
+    input.branchId || null,
     input.templateKey,
     input.purpose,
     input.recipientEmail,
@@ -106,7 +114,7 @@ function updateOutboxEntry(db, outboxId, input) {
   );
 }
 
-async function deliverViaResend(message, settings) {
+export async function deliverViaResend(message, settings) {
   const apiKey = process.env.RESEND_API_KEY;
 
   if (!apiKey) {
@@ -147,7 +155,10 @@ async function deliverViaResend(message, settings) {
 }
 
 async function queueEmailForRecipient(templateKey, recipient, context, options = {}) {
-  const settings = getChurchSettings();
+  const settings = getEffectiveChurchSettings(
+    options.organizationId,
+    options.branchId
+  );
   const recipientEmail = normalizeEmail(recipient?.email);
   const recipientName = recipient?.name || "";
   const baseContext = {
@@ -164,6 +175,8 @@ async function queueEmailForRecipient(templateKey, recipient, context, options =
 
   if (!recipientEmail || !isValidEmailAddress(recipientEmail)) {
     createOutboxEntry(db, {
+      organizationId: options.organizationId || context.organizationId || settings?.organizationId,
+      branchId: options.branchId || context.branchId || null,
       templateKey,
       purpose: rendered.purpose,
       recipientEmail: recipientEmail || "missing-email",
@@ -185,6 +198,8 @@ async function queueEmailForRecipient(templateKey, recipient, context, options =
   }
 
   const outboxId = createOutboxEntry(db, {
+    organizationId: options.organizationId || context.organizationId || settings?.organizationId,
+    branchId: options.branchId || context.branchId || null,
     templateKey,
     purpose: rendered.purpose,
     recipientEmail,
@@ -216,47 +231,20 @@ async function queueEmailForRecipient(templateKey, recipient, context, options =
     };
   }
 
-  try {
-    const delivery = await deliverViaResend(
-      {
-        recipientEmail,
-        subject: rendered.subject,
-        textBody: rendered.text,
-        htmlBody: rendered.html,
-      },
-      settings
-    );
-    const sentAt = new Date().toISOString();
-
-    updateOutboxEntry(db, outboxId, {
-      status: "sent",
-      provider: settings?.emailProvider || "resend",
-      providerMessageId: delivery.providerMessageId,
-      providerResponse: delivery.providerResponse,
-      attemptedAt: sentAt,
-      sentAt,
-      errorMessage: null,
-    });
-
-    return {
-      status: "sent",
+  enqueueJob({
+    organizationId: options.organizationId || context.organizationId || settings?.organizationId,
+    branchId: options.branchId || context.branchId || null,
+    queue: "delivery",
+    type: "email.send",
+    payload: {
       outboxId,
-    };
-  } catch (error) {
-    updateOutboxEntry(db, outboxId, {
-      status: "failed",
-      provider: settings?.emailProvider || "resend",
-      providerResponse: {},
-      attemptedAt: new Date().toISOString(),
-      sentAt: null,
-      errorMessage: error instanceof Error ? error.message : "Email delivery failed.",
-    });
+    },
+  });
 
-    return {
-      status: "failed",
-      outboxId,
-    };
-  }
+  return {
+    status: "queued",
+    outboxId,
+  };
 }
 
 function dedupeRecipients(recipients) {
@@ -287,8 +275,9 @@ export async function sendEmailToAddress(email, templateKey, context, options = 
 
 export async function sendEmailToRoles(roles, templateKey, context, options = {}) {
   const recipients = dedupeRecipients(
-    listUsers()
+    listUsers(options.organizationId ? { organizationId: options.organizationId } : {})
       .filter((user) => user.active && roles.includes(user.role))
+      .filter((user) => (options.branchId ? user.branchId === options.branchId : true))
       .map((user) => ({
         email: user.email,
         name: user.name,
@@ -312,6 +301,8 @@ export async function sendEmailToVolunteer(
     (user) =>
       user.active &&
       user.role === "volunteer" &&
+      (options.organizationId ? user.organizationId === options.organizationId : true) &&
+      (options.branchId ? user.branchId === options.branchId : true) &&
       (user.volunteerName === volunteerName || user.name === volunteerName)
   );
 
@@ -332,11 +323,14 @@ export async function sendEmailToVolunteer(
   );
 }
 
-export function listEmailOutbox(limit = 20) {
-  return getDatabase()
-    .prepare(`
+export function listEmailOutbox(limit = 20, organizationId = "") {
+  const db = getDatabase();
+  const filter = organizationId ? "WHERE organization_id = ?" : "";
+  const statement = db.prepare(`
       SELECT
         id,
+        organization_id,
+        branch_id,
         template_key,
         purpose,
         recipient_email,
@@ -352,12 +346,17 @@ export function listEmailOutbox(limit = 20) {
         sent_at,
         metadata_json
       FROM email_outbox
+      ${filter}
       ORDER BY created_at DESC
       LIMIT ?
-    `)
-    .all(limit)
+    `);
+  const rows = organizationId ? statement.all(organizationId, limit) : statement.all(limit);
+
+  return rows
     .map((row) => ({
       id: row.id,
+      organizationId: row.organization_id || "",
+      branchId: row.branch_id || "",
       templateKey: row.template_key,
       purpose: row.purpose,
       recipientEmail: row.recipient_email,
@@ -378,14 +377,16 @@ export function listEmailOutbox(limit = 20) {
     }));
 }
 
-export function getEmailDeliverySnapshot() {
-  const settings = getChurchSettings();
+export function getEmailDeliverySnapshot(organizationId = "") {
+  const settings = getChurchSettings(organizationId || undefined);
   const db = getDatabase();
+  const filter = organizationId ? "WHERE organization_id = ?" : "";
   const counts = db.prepare(`
     SELECT status, COUNT(*) AS count
     FROM email_outbox
+    ${filter}
     GROUP BY status
-  `).all();
+  `).all(...(organizationId ? [organizationId] : []));
   const countMap = counts.reduce((result, row) => {
     result[row.status] = row.count;
     return result;
@@ -393,9 +394,10 @@ export function getEmailDeliverySnapshot() {
   const latest = db.prepare(`
     SELECT created_at, attempted_at, status
     FROM email_outbox
+    ${filter}
     ORDER BY COALESCE(attempted_at, created_at) DESC
     LIMIT 1
-  `).get();
+  `).get(...(organizationId ? [organizationId] : []));
 
   return {
     mode: settings?.emailDeliveryMode || "log-only",
@@ -414,4 +416,54 @@ export function getEmailDeliverySnapshot() {
     latestStatus: latest?.status || "",
     latestAttemptLabel: formatDateTime(latest?.attempted_at || latest?.created_at),
   };
+}
+
+export async function processEmailOutboxJob({ outboxId }) {
+  const db = getDatabase();
+  const row = db
+    .prepare(`
+      SELECT *
+      FROM email_outbox
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .get(outboxId);
+
+  if (!row) {
+    throw new Error("Email outbox entry not found.");
+  }
+
+  try {
+    const settings = getEffectiveChurchSettings(row.organization_id, row.branch_id || "");
+    const delivery = await deliverViaResend(
+      {
+        recipientEmail: row.recipient_email,
+        subject: row.subject,
+        textBody: row.text_body,
+        htmlBody: row.html_body,
+      },
+      settings
+    );
+    const sentAt = new Date().toISOString();
+
+    updateOutboxEntry(db, outboxId, {
+      status: "sent",
+      provider: settings?.emailProvider || "resend",
+      providerMessageId: delivery.providerMessageId,
+      providerResponse: delivery.providerResponse,
+      attemptedAt: sentAt,
+      sentAt,
+      errorMessage: null,
+    });
+  } catch (error) {
+    updateOutboxEntry(db, outboxId, {
+      status: "failed",
+      provider: row.provider || "resend",
+      providerResponse: {},
+      attemptedAt: new Date().toISOString(),
+      sentAt: null,
+      errorMessage: error instanceof Error ? error.message : "Email delivery failed.",
+    });
+    throw error;
+  }
 }

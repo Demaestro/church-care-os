@@ -1,5 +1,6 @@
 'use server';
 
+import { randomUUID } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -113,6 +114,12 @@ import {
   createMemberTransferEntry,
 } from "@/lib/member-transfer-store";
 import { saveHouseholdAttachment } from "@/lib/attachment-store";
+import {
+  createVolunteerApplication as createVolunteerApplicationEntry,
+  hasPendingApplication,
+  reviewVolunteerApplication as reviewVolunteerApplicationEntry,
+  getVolunteerApplication as getVolunteerApplicationEntry,
+} from "@/lib/volunteer-store";
 import {
   PUBLIC_BRANCH_COOKIE,
   PUBLIC_ORGANIZATION_COOKIE,
@@ -913,10 +920,15 @@ export async function createCareRequest(prevState, formData) {
     getString(formData, "householdName") ||
     submittedBy ||
     `Private care request ${anonymousSuffix}`;
+  const preferredContactLabel =
+    preferredContact === "email" ? (contactEmail ? `Email — ${contactEmail}` : "Email") :
+    preferredContact === "phone" ? (contactPhone ? `Phone — ${contactPhone}` : "Phone call") :
+    preferredContact === "in-person" ? "In person" :
+    preferredContact || null;
   const safePreferredContact =
-    preferredContact ||
-    (contactEmail ? `Email ${contactEmail}` : "") ||
-    (contactPhone ? `Phone ${contactPhone}` : "") ||
+    preferredContactLabel ||
+    (contactEmail ? `Email — ${contactEmail}` : "") ||
+    (contactPhone ? `Phone — ${contactPhone}` : "") ||
     (allowContact ? "Follow up through church office" : "No direct contact requested");
   const safeSummary =
     summary || "Member asked for support and chose to share more detail later.";
@@ -3479,4 +3491,106 @@ export async function selfRegister(formData) {
   });
 
   return { ok: true };
+}
+
+export async function applyForVolunteer(prevState, formData) {
+  void prevState;
+  const user = await requireCurrentUser([
+    "member", "volunteer", "leader", "pastor", "owner",
+    "general_overseer", "regional_overseer", "branch_admin",
+  ]);
+
+  const areas = formData.getAll("areas").map(String).filter(Boolean);
+  const availability = getString(formData, "availability");
+  const note = getString(formData, "note");
+
+  if (areas.length === 0) {
+    return { message: "Please select at least one ministry area.", submitted: false };
+  }
+
+  const alreadyPending = hasPendingApplication(user.organizationId, user.branchId, user.id);
+  if (alreadyPending) {
+    return {
+      message: "You already have a pending volunteer application. Your pastor will review it shortly.",
+      submitted: false,
+    };
+  }
+
+  const applicationId = randomUUID();
+  createVolunteerApplicationEntry({
+    id: applicationId,
+    organizationId: user.organizationId,
+    branchId: user.branchId,
+    userId: user.id,
+    userName: user.name,
+    userEmail: user.email,
+    areas,
+    availability: availability || null,
+    note: note || null,
+  });
+
+  notifyRoles(["pastor", "leader", "owner"], {
+    organizationId: user.organizationId,
+    branchId: user.branchId,
+    kind: "alert",
+    title: "New volunteer application",
+    body: `${user.name} has applied to serve as a volunteer.`,
+    href: "/volunteer/applications",
+    metadata: { applicationId, applicantId: user.id },
+  });
+
+  recordAuditLog({
+    ...buildActorLog(user),
+    action: "volunteer.application_submitted",
+    targetType: "volunteer_application",
+    targetId: applicationId,
+    summary: `${user.name} submitted a volunteer application.`,
+    organizationId: user.organizationId,
+    branchId: user.branchId,
+  });
+
+  revalidatePath("/volunteer/applications");
+  return {
+    submitted: true,
+    message: "Your application has been submitted. Your pastor will review it and get back to you.",
+  };
+}
+
+export async function reviewVolunteerApplicationAction(prevState, formData) {
+  void prevState;
+  const actor = await requireCurrentUser(["pastor", "leader", "owner"]);
+
+  const applicationId = getString(formData, "applicationId");
+  const decision = getString(formData, "decision");
+
+  if (!applicationId || !["approve", "reject"].includes(decision)) {
+    return { message: "Invalid request.", success: false };
+  }
+
+  const status = decision === "approve" ? "approved" : "rejected";
+  reviewVolunteerApplicationEntry(applicationId, {
+    status,
+    reviewedBy: actor.id,
+    reviewedByName: actor.name,
+  });
+
+  if (status === "approved") {
+    const application = getVolunteerApplicationEntry(applicationId);
+    if (application?.userId) {
+      updateUserEntry(application.userId, { role: "volunteer" });
+    }
+  }
+
+  recordAuditLog({
+    ...buildActorLog(actor),
+    action: `volunteer.application_${status}`,
+    targetType: "volunteer_application",
+    targetId: applicationId,
+    summary: `${actor.name} ${status} a volunteer application.`,
+    organizationId: actor.organizationId,
+    branchId: actor.branchId,
+  });
+
+  revalidatePath("/volunteer/applications");
+  return { success: true, status };
 }

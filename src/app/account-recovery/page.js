@@ -68,7 +68,7 @@ export default async function AccountRecoveryPage() {
         </p>
 
         <div className="mt-6">
-          <AccountRecoveryForm copy={copy} />
+          <AccountRecoveryForm copy={copy.recoveryForm} />
         </div>
       </article>
       </section>

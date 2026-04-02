@@ -1,8 +1,13 @@
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
   turbopack: {
-    root: ".",
+    root: __dirname,   // absolute path — silences the turbopack.root warning
   },
   async headers() {
     return [

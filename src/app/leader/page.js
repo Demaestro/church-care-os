@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { assignRequestVolunteer, escalateRequestToPastor } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { requireCurrentUser } from "@/lib/auth";
@@ -8,8 +9,9 @@ import {
   getCopy,
   translateSupportNeed,
 } from "@/lib/i18n";
-import { listVolunteerRoster } from "@/lib/organization-store";
+import { getWorkspaceContext, listVolunteerRoster } from "@/lib/organization-store";
 import { leaderPreview, volunteerPreview } from "@/lib/role-previews";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 const statusClasses = {
   watch: "bg-[rgba(179,138,69,0.14)] text-[#7a6128]",
@@ -28,8 +30,11 @@ export default async function LeaderPage() {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const pageCopy = copy.leader;
-  const user = await requireCurrentUser(["leader", "pastor", "owner"]);
-  const { households, openRequests } = await getDashboardData();
+  const user = await requireCurrentUser(["leader", "pastor", "overseer", "owner"]);
+  const preferredBranchId = (await cookies()).get(WORKSPACE_BRANCH_COOKIE)?.value || "";
+  const workspace = getWorkspaceContext(user, preferredBranchId);
+  const activeBranchId = workspace.activeBranch?.id || "";
+  const { households, openRequests } = await getDashboardData(user, activeBranchId);
   const householdMap = Object.fromEntries(
     households.map((household) => [household.slug, household])
   );
@@ -70,7 +75,7 @@ export default async function LeaderPage() {
   const previewMap = new Map(
     leaderPreview.volunteers.map((volunteer) => [volunteer.name, volunteer])
   );
-  const liveVolunteers = listVolunteerRoster()
+  const liveVolunteers = listVolunteerRoster(user, activeBranchId)
     .filter((volunteer) => !user.lane || volunteer.lane === user.lane || !volunteer.lane)
     .map((volunteer) => {
       const preview = previewMap.get(volunteer.name);
@@ -150,11 +155,10 @@ export default async function LeaderPage() {
               {pageCopy.title}
             </h1>
             <p className="mt-5 text-base leading-8 text-muted sm:text-lg">
-              {leaderPreview.leader.name} is working inside the{" "}
-              {user.lane || leaderPreview.leader.lane}. {pageCopy.body}
+              {user.name} is working inside {workspace.activeScopeLabel}. {pageCopy.body}
             </p>
             <p className="mt-4 text-sm uppercase tracking-[0.18em] text-muted">
-              {leaderPreview.leader.church} - {user.lane || leaderPreview.leader.lane}
+              {workspace.organization.name} - {workspace.activeScopeLabel}
             </p>
           </div>
 

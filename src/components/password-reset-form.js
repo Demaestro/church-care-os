@@ -10,12 +10,12 @@ const initialState = {
   submitted: false,
 };
 
-export function PasswordResetForm({ copy, token }) {
+export function PasswordResetForm({ formCopy, pageCopy, token }) {
   const [state, formAction, pending] = useActionState(
     completePasswordReset,
     initialState
   );
-  const resetCopy = copy.resetPasswordForm;
+  const resetCopy = formCopy;
 
   if (state.submitted) {
     return (
@@ -32,13 +32,13 @@ export function PasswordResetForm({ copy, token }) {
             href="/login"
             className="inline-flex items-center justify-center rounded-[1rem] bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f]"
           >
-            {copy.resetPasswordPage.backToSignIn}
+            {pageCopy.backToSignIn}
           </Link>
           <Link
             href="/account-recovery"
             className="inline-flex items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde]"
           >
-            {copy.resetPasswordPage.requestNewLink}
+            {pageCopy.requestNewLink}
           </Link>
         </div>
       </div>

@@ -19,7 +19,7 @@ export function AccountRecoveryForm({ copy }) {
     requestAccountRecovery,
     initialState
   );
-  const recoveryCopy = copy.recoveryForm;
+  const recoveryCopy = copy;
 
   if (state.submitted) {
     return (

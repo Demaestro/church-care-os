@@ -11,11 +11,17 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "npm run build && playwright test",
     "db:init": "node scripts/init-care-db.mjs",
     "auth:create-user": "node scripts/create-auth-user.mjs",
     "db:backup": "node scripts/backup-care-db.mjs",
     "db:restore": "node scripts/restore-care-db.mjs",
     "db:drill": "node scripts/staging-drill.mjs",
+    "db:export": "node scripts/export-care-data.mjs",
+    "db:pg:check": "node scripts/check-postgres-connection.mjs",
+    "db:pg:import": "node scripts/import-care-data-to-postgres.mjs",
+    "jobs:work": "node scripts/process-jobs.mjs",
+    "jobs:drain": "node scripts/process-jobs.mjs --once",
     "ops:backup-freshness": "node scripts/check-backup-freshness.mjs",
     "ops:healthcheck": "node scripts/check-health.mjs",
     "ops:retention": "node scripts/run-retention-sweep.mjs"
@@ -24,7 +30,9 @@
     "node": ">=20.9.0"
   },
   "dependencies": {
+    "@playwright/test": "^1.58.2",
     "next": "16.2.1",
+    "pg": "^8.20.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

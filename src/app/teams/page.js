@@ -1,11 +1,13 @@
 import { createMinistryTeam, updateMinistryTeam } from "@/app/actions";
+import { cookies } from "next/headers";
 import { FlashBanner } from "@/components/flash-banner";
 import { SubmitButton } from "@/components/submit-button";
 import { requireCurrentUser } from "@/lib/auth";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getCopy } from "@/lib/i18n";
-import { listMinistryTeams } from "@/lib/organization-store";
+import { getWorkspaceContext, listMinistryTeams } from "@/lib/organization-store";
 import { filterTeams, hasActiveFilters } from "@/lib/search-filters";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 export const metadata = {
   title: "Teams",
@@ -17,9 +19,11 @@ export default async function TeamsPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const pageCopy = copy.teams;
-  await requireCurrentUser(["pastor", "owner"]);
+  const user = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const preferredBranchId = (await cookies()).get(WORKSPACE_BRANCH_COOKIE)?.value || "";
+  const workspace = getWorkspaceContext(user, preferredBranchId);
   const params = await searchParams;
-  const teams = listMinistryTeams();
+  const teams = listMinistryTeams(user, workspace.activeBranch?.id || "");
   const notice = typeof params?.notice === "string" ? params.notice : "";
   const error = typeof params?.error === "string" ? params.error : "";
   const filters = {
@@ -29,6 +33,11 @@ export default async function TeamsPage({ searchParams }) {
   const visibleTeams = filterTeams(teams, filters);
   const showClearFilters = hasActiveFilters(filters);
   const activeTeams = teams.filter((team) => team.active);
+  const branchOptions = workspace.visibleBranches.map((branch) => ({
+    value: branch.id,
+    label: branch.name,
+  }));
+  const defaultBranchId = workspace.activeBranch?.id || workspace.visibleBranches[0]?.id || "";
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-10 pb-16 lg:px-10 lg:py-14">
@@ -66,6 +75,15 @@ export default async function TeamsPage({ searchParams }) {
             noticeTitle={copy.common.flashNotice}
             errorTitle={copy.common.flashError}
           />
+        </div>
+
+        <div className="mt-6 rounded-[1.2rem] border border-line bg-canvas px-4 py-3 text-sm text-muted">
+          Team management is scoped to{" "}
+          <span className="font-semibold text-foreground">
+            {workspace.activeBranch
+              ? `${workspace.organization.name} / ${workspace.activeBranch.name}`
+              : `${workspace.organization.name} / all visible branches`}
+          </span>.
         </div>
       </section>
 
@@ -115,6 +133,16 @@ export default async function TeamsPage({ searchParams }) {
           />
 
           <form action={createMinistryTeam} className="mt-6 space-y-4">
+            {branchOptions.length > 1 ? (
+              <SelectField
+                label="Branch"
+                name="branchId"
+                defaultValue={defaultBranchId}
+                options={branchOptions}
+              />
+            ) : (
+              <input type="hidden" name="branchId" value={defaultBranchId} />
+            )}
             <Field
               label={pageCopy.fields.teamName}
               name="name"
@@ -224,6 +252,16 @@ export default async function TeamsPage({ searchParams }) {
                   action={updateMinistryTeam.bind(null, team.id)}
                   className="space-y-4 rounded-[1.35rem] border border-line bg-canvas p-5"
                 >
+                  {branchOptions.length > 1 ? (
+                    <SelectField
+                      label="Branch"
+                      name="branchId"
+                      defaultValue={team.branchId}
+                      options={branchOptions}
+                    />
+                  ) : (
+                    <input type="hidden" name="branchId" value={team.branchId || defaultBranchId} />
+                  )}
                   <div className="grid gap-4 md:grid-cols-2">
                     <Field label={pageCopy.fields.teamName} name="name" defaultValue={team.name} />
                     <Field label={pageCopy.fields.laneName} name="lane" defaultValue={team.lane} />

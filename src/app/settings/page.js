@@ -1,4 +1,5 @@
 import { saveChurchSettings, sendTestEmail, sendTestMessage } from "@/app/actions";
+import { cookies } from "next/headers";
 import { FlashBanner } from "@/components/flash-banner";
 import { SubmitButton } from "@/components/submit-button";
 import { requireCurrentUser } from "@/lib/auth";
@@ -6,6 +7,7 @@ import { getAppPreferences } from "@/lib/app-preferences-server";
 import { toDateTimeLocalValue } from "@/lib/care-format";
 import { getOperationsSnapshot } from "@/lib/care-store";
 import { getEmailDeliverySnapshot, listEmailOutbox } from "@/lib/email-service";
+import { listJobs } from "@/lib/job-store";
 import { getMessageDeliverySnapshot, listMessageOutbox } from "@/lib/message-service";
 import {
   getCopy,
@@ -13,7 +15,8 @@ import {
   translateOutboxStatus,
 } from "@/lib/i18n";
 import { supportedTimezones } from "@/lib/organization-defaults";
-import { getChurchSettings, listMinistryTeams } from "@/lib/organization-store";
+import { getChurchSettings, getWorkspaceContext, listMinistryTeams } from "@/lib/organization-store";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 export const metadata = {
   title: "Settings",
@@ -25,17 +28,20 @@ export default async function SettingsPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const pageCopy = copy.settings;
-  await requireCurrentUser(["owner"]);
+  const user = await requireCurrentUser(["owner"]);
+  const preferredBranchId = (await cookies()).get(WORKSPACE_BRANCH_COOKIE)?.value || "";
+  const workspace = getWorkspaceContext(user, preferredBranchId);
   const params = await searchParams;
   const [settings, ops, teams] = await Promise.all([
-    Promise.resolve(getChurchSettings()),
-    Promise.resolve(getOperationsSnapshot()),
-    Promise.resolve(listMinistryTeams()),
+    Promise.resolve(getChurchSettings(workspace.organization.id)),
+    Promise.resolve(getOperationsSnapshot(user, workspace.activeBranch?.id || "")),
+    Promise.resolve(listMinistryTeams(user, workspace.activeBranch?.id || "")),
   ]);
-  const emailSnapshot = getEmailDeliverySnapshot();
-  const messageSnapshot = getMessageDeliverySnapshot();
-  const outbox = listEmailOutbox(8);
-  const messageOutbox = listMessageOutbox(8);
+  const emailSnapshot = getEmailDeliverySnapshot(workspace.organization.id);
+  const messageSnapshot = getMessageDeliverySnapshot(workspace.organization.id);
+  const jobs = listJobs(8, workspace.organization.id);
+  const outbox = listEmailOutbox(8, workspace.organization.id);
+  const messageOutbox = listMessageOutbox(8, workspace.organization.id);
   const notice = typeof params?.notice === "string" ? params.notice : "";
   const error = typeof params?.error === "string" ? params.error : "";
 
@@ -79,6 +85,12 @@ export default async function SettingsPage({ searchParams }) {
             noticeTitle={copy.common.flashNotice}
             errorTitle={copy.common.flashError}
           />
+        </div>
+
+        <div className="mt-6 rounded-[1.2rem] border border-line bg-canvas px-4 py-3 text-sm text-muted">
+          Viewing organization settings for{" "}
+          <span className="font-semibold text-foreground">{workspace.organization.name}</span>.
+          {workspace.activeBranch ? ` Branch focus is ${workspace.activeBranch.name}, but these settings save at the organization level.` : ""}
         </div>
       </section>
 
@@ -332,6 +344,8 @@ export default async function SettingsPage({ searchParams }) {
               <SnapshotItem label={pageCopy.snapshot.households} value={ops.householdCount} />
               <SnapshotItem label={pageCopy.snapshot.openRequests} value={ops.openRequestCount} />
               <SnapshotItem label={pageCopy.snapshot.auditEvents} value={ops.auditLogCount} />
+              <SnapshotItem label="Queued jobs" value={jobs.filter((job) => job.status === "queued").length} />
+              <SnapshotItem label="Failed jobs" value={jobs.filter((job) => job.status === "failed").length} />
             </div>
           </article>
 
@@ -490,6 +504,49 @@ export default async function SettingsPage({ searchParams }) {
                 className="inline-flex items-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-[#f4ecde] disabled:cursor-not-allowed disabled:opacity-70"
               />
             </form>
+          </article>
+
+          <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
+            <SectionHeading
+              eyebrow="Background worker"
+              title="Recent queue activity"
+              body="Email, SMS, and WhatsApp deliveries are queued for worker processing so user-facing actions stay fast."
+            />
+
+            <div className="mt-6 space-y-4">
+              {jobs.length === 0 ? (
+                <PreviewPanel
+                  title="No background jobs yet"
+                  body="As queued deliveries and scheduled work appear, the latest jobs will show here."
+                />
+              ) : (
+                jobs.map((job) => (
+                  <article
+                    key={job.id}
+                    className="rounded-[1.25rem] border border-line bg-canvas p-4"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{job.type}</p>
+                        <p className="mt-1 text-sm text-muted">{job.queue}</p>
+                      </div>
+                      <OutboxStatusPill status={job.status} language={preferences.language} />
+                    </div>
+                    <div className="mt-3 grid gap-2 text-sm text-muted sm:grid-cols-2">
+                      <p>{copy.common.labels.created}: {job.createdLabel}</p>
+                      <p>Run after: {job.runAfterLabel}</p>
+                      <p>Attempts: {job.attempts} / {job.maxAttempts}</p>
+                      <p>Locked by: {job.lockedBy || "Worker available"}</p>
+                    </div>
+                    {job.lastError ? (
+                      <p className="mt-3 rounded-[1rem] border border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)] px-4 py-3 text-sm text-clay">
+                        {job.lastError}
+                      </p>
+                    ) : null}
+                  </article>
+                ))
+              )}
+            </div>
           </article>
 
           <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">

@@ -29,7 +29,7 @@ export function VolunteerTaskBoard({ preview, initialTab = "assigned", copy }) {
   );
   const sections = Object.entries(preview.assigned);
   const hasAssignedTasks = sections.some(([, tasks]) => tasks.length > 0);
-  const volunteerCopy = copy.volunteer;
+  const volunteerCopy = copy;
 
   return (
     <section className="space-y-8">
@@ -184,7 +184,7 @@ function TaskCard({ task, avatarClass, copy }) {
 
       {task.accepted ? (
         <p className="mt-4 text-sm text-muted">
-          {copy.accepted(task.acceptedLabel)}
+          {task.acceptedMessage}
         </p>
       ) : null}
 

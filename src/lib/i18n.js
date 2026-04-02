@@ -3,6 +3,7 @@ import {
   getLocaleTag,
   languageOptions,
   normalizeLanguage,
+  themeOptions,
 } from "@/lib/app-preferences";
 
 const englishDictionary = {
@@ -11,17 +12,22 @@ const englishDictionary = {
     brandTitle: "Operations board",
     signIn: "Sign in",
     signOut: "Sign out",
+    switchAccount: "Switch account",
+    memberTools: "Member tools",
+    returnToWorkspace: "Return to workspace",
     preferencesTitle: "Language and text size",
     preferencesBody:
       "Choose the language you prefer and make the text easier to read.",
     languageLabel: "Language",
     textSizeLabel: "Text size",
     applyPreferences: "Apply",
+    themeToggleLabel: "Dark mode",
     roleLabels: {
       member: "Member",
       public: "Public",
       owner: "Owner",
-      pastor: "Pastor",
+      overseer: "General Overseer",
+      pastor: "Branch Pastor",
       leader: "Leader",
       volunteer: "Volunteer",
     },
@@ -35,6 +41,7 @@ const englishDictionary = {
       teams: "Teams",
       people: "People",
       reports: "Reports",
+      branches: "Branches",
       leaderView: "Leader view",
       schedule: "Schedule",
       households: "Households",
@@ -43,6 +50,19 @@ const englishDictionary = {
       audit: "Audit",
       settings: "Settings",
     },
+    navGroups: {
+      public: "Member tools",
+      operations: "Care work",
+      oversight: "Oversight",
+    },
+    workspaceReady: "Workspace ready",
+    workspaceSignedIn: "Signed in as",
+    publicEntryTitle: "Member help stays easy to reach.",
+    publicEntryBody:
+      "Request care, track a request, or open the member portal without signing in.",
+    internalEntryTitle: "Switch internal roles without losing your place.",
+    internalEntryBody:
+      "Use the switch-account path to move between owner, pastor, leader, and volunteer workspaces more smoothly during review or training.",
     footerPrimary:
       "Built for care teams who want clarity, warmth, and fewer dropped handoffs.",
     footerSecondary:
@@ -53,9 +73,22 @@ const englishDictionary = {
     comfort: "Comfort / larger text",
     clarity: "Clarity / highest contrast",
   },
+  themeModes: {
+    light: "Light",
+    dark: "Dark",
+  },
   home: {
     greeting: (name) => `Good morning, ${name}`,
     newCareRequest: "+ New care request",
+    boardKicker: "Today on the board",
+    boardDescription:
+      "Start from the area that matches the next decision you need to make. The board below is organised for quick movement between intake, follow-up, routing, and oversight.",
+    launchpadTitle: "Start from the workspace you need",
+    launchpadBody:
+      "These routes cover the main care rhythm from intake to follow-up. Open the one that matches the task in front of you.",
+    attentionTitle: "Start with what needs attention first",
+    attentionBody:
+      "These counts help you open the right workspace quickly instead of hunting through the whole app.",
     metrics: {
       openCases: "Open cases",
       overdueFollowUps: "Overdue follow-ups",
@@ -69,6 +102,31 @@ const englishDictionary = {
       seeAll: "See all",
       howCalculated: "How is this calculated?",
       reachOut: "Reach out",
+    },
+    launchpad: {
+      memberIntakeTitle: "Open member intake",
+      memberIntakeBody:
+        "Start a new request or share the intake page after service, prayer, or a pastoral conversation.",
+      householdsTitle: "Review households",
+      householdsBody:
+        "Search open households, open timelines, and see which situations already have active support around them.",
+      routingTitle: "Move work into lanes",
+      routingBody:
+        "Assign a volunteer, change ownership, or escalate a request before it stalls in the queue.",
+      scheduleTitle: "Keep follow-up visible",
+      scheduleBody:
+        "Catch overdue touchpoints and reset the next care step before anyone is overlooked.",
+      notificationsTitle: "Check new updates",
+      notificationsBody:
+        "Open the inbox for volunteer notes, escalations, and care updates that need a response.",
+      reportsTitle: "See the pattern",
+      reportsBody:
+        "Review case ageing, owner load, and the mix of care needs across the church.",
+    },
+    attention: {
+      unassignedCases: "Cases waiting for a first owner",
+      followUps: "Follow-ups already overdue",
+      unreadInbox: "Unread workflow updates",
     },
     dates: {
       noDate: "No date",
@@ -194,6 +252,13 @@ const englishDictionary = {
       noCodeBody:
         "If you just submitted a request, use the tracking code shown on the confirmation screen. If you no longer have it, contact your church care team directly.",
     },
+    privacyShield: {
+      eyebrow: "Private member view",
+      title: "Hide request details quickly on this device",
+      body:
+        "Browsers cannot fully block screenshots or camera captures, but this page adds a quick-hide layer and visible confidentiality markers so you can obscure details before sharing your screen or handing this device to someone else.",
+      watermark: "Confidential member care",
+    },
     actionMessages: {
       enterCode: "Enter the tracking code from your request confirmation.",
       trackingRequired: "Tracking code is required.",
@@ -207,14 +272,35 @@ const englishDictionary = {
     title: "Sign in before you open internal care workflows.",
     description:
       "Pastor, leader, owner, and volunteer screens are protected with role-based access checks on both pages and server actions.",
+    choosePathTitle: "Choose the quickest path",
+    choosePathBody:
+      "Members do not need an internal account. Staff and volunteers can sign in or switch workspaces from the same screen.",
     publicRouteTitle: "Public route",
     publicRouteBody:
       "Members can still submit a care request without signing in at /requests/new.",
+    memberAccessTitle: "Continue as a member",
+    memberAccessBody:
+      "Open the member-safe tools without signing in. Request help, track a request, or open the member portal with your contact details.",
+    internalAccessTitle: "Open an internal workspace",
+    internalAccessBody:
+      "Use your assigned internal account for owner, pastor, leader, or volunteer work. In local demo mode you can also open a workspace with one click.",
     welcomeBack: "Welcome back",
     useAssignedAccount: "Use the account assigned to your care role.",
+    switchModeTitle: "Switch workspace",
+    switchModeBody:
+      "You can move into another internal workspace from here. Signing in again will replace the current session.",
     needRecovery: "Need account recovery?",
     trackRequest: "Track a care request",
     demoAccounts: "Local demo accounts",
+    openRequestCare: "Request care",
+    openMemberPortal: "Open member portal",
+    openStatusLookup: "Track a request",
+    backToWorkspace: "Back to current workspace",
+    signOutCurrent: "Sign out current account",
+    quickAccessTitle: "Quick demo access",
+    quickAccessBody:
+      "Use one click to open a demo workspace while you review the product locally.",
+    openDemoWorkspace: "Open",
   },
   loginForm: {
     emailLabel: "Email",
@@ -386,6 +472,13 @@ const englishDictionary = {
     notNeededInLogOnlyMode: "Not needed in log-only mode",
     notAttemptedYet: "Not attempted yet",
     noMatchesFound: "Nothing matched the current filters yet.",
+    privacyShield: {
+      quickHide: "Hide details",
+      reveal: "Show details",
+      hiddenTitle: "Details hidden for privacy",
+      hiddenBody:
+        "Sensitive details are now covered. Use the button above whenever you are ready to reveal them again.",
+    },
     labels: {
       template: "Template",
       provider: "Provider",
@@ -513,6 +606,13 @@ const englishDictionary = {
       openPortal: "Open member portal",
       saveProfile: "Save contact details",
       savingProfile: "Saving details...",
+    },
+    privacyShield: {
+      eyebrow: "Private member view",
+      title: "Keep your care history discreet on this screen",
+      body:
+        "This portal adds confidentiality markers and a quick-hide layer so you can cover names, updates, and contact details before someone else looks at your device.",
+      watermark: "Confidential care history",
     },
   },
   leader: {
@@ -693,6 +793,13 @@ const englishDictionary = {
     acceptedAt: (label) => `Accepted ${label}`,
     assigned: "Assigned",
     awaitingVolunteer: "Awaiting volunteer",
+    privacyShield: {
+      eyebrow: "Branch confidential",
+      title: "Use quick hide before stepping away from this branch record",
+      body:
+        "This page contains branch-scoped pastoral and household details. Quick hide covers the record fast, adds visible confidentiality markers, and helps reduce shoulder-surfing when the device is shared or left unattended.",
+      watermark: "Branch confidential record",
+    },
   },
   people: {
     kicker: "Access control",
@@ -1485,6 +1592,15 @@ export function getDisplayModeOptionsWithLabels(language) {
   return displayModeOptions.map((option) => ({
     ...option,
     label: copy.displayModes[option.value] || option.label,
+  }));
+}
+
+export function getThemeOptionsWithLabels(language) {
+  const copy = getCopy(language);
+
+  return themeOptions.map((option) => ({
+    ...option,
+    label: copy.themeModes?.[option.value] || option.label,
   }));
 }
 

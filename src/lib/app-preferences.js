@@ -1,5 +1,6 @@
 export const LANGUAGE_COOKIE = "cco-language";
 export const DISPLAY_MODE_COOKIE = "cco-display-mode";
+export const THEME_COOKIE = "cco-theme";
 
 export const languageOptions = [
   { value: "en", label: "English" },
@@ -14,6 +15,11 @@ export const displayModeOptions = [
   { value: "standard", label: "Standard" },
   { value: "comfort", label: "Comfort" },
   { value: "clarity", label: "Clarity" },
+];
+
+export const themeOptions = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
 ];
 
 const localeMap = {
@@ -33,6 +39,10 @@ export function normalizeDisplayMode(value) {
   return displayModeOptions.some((option) => option.value === value)
     ? value
     : "comfort";
+}
+
+export function normalizeTheme(value) {
+  return themeOptions.some((option) => option.value === value) ? value : "light";
 }
 
 export function getLocaleTag(language) {

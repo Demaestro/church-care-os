@@ -1,10 +1,10 @@
 import "server-only";
 
 import { mkdirSync } from "node:fs";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync, backup } from "node:sqlite";
-import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { hashPassword } from "@/lib/auth-crypto";
 import {
   defaultBranchSettings,
@@ -27,6 +27,8 @@ import {
 } from "@/lib/postgres-sync";
 
 let database;
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const defaultDatabasePath = path.resolve(moduleDir, "..", "..", "data", "care.db");
 
 function resolveDatabaseDriver() {
   const configuredDriver = String(process.env.CARE_DATABASE_DRIVER || "")
@@ -61,11 +63,7 @@ function resolveDatabasePath() {
     return path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, "care.db");
   }
 
-  return path.join(
-    /* turbopackIgnore: true */ process.cwd(),
-    "data",
-    "care.db"
-  );
+  return defaultDatabasePath;
 }
 
 export function getDatabasePath() {
@@ -970,6 +968,29 @@ function ensureSchemaMigrations(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_discipleship_scope
       ON discipleship_records (organization_id, branch_id, stage);
+
+    CREATE TABLE IF NOT EXISTS volunteer_applications (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      user_name TEXT NOT NULL,
+      user_email TEXT NOT NULL,
+      areas TEXT NOT NULL,
+      availability TEXT,
+      note TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      reviewed_by TEXT,
+      reviewed_by_name TEXT,
+      reviewed_at TEXT,
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_volunteer_applications_scope
+      ON volunteer_applications (organization_id, branch_id, status, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_volunteer_applications_user
+      ON volunteer_applications (user_id, status);
   `);
 
   db.exec(`

@@ -1,8 +1,11 @@
+import { cookies } from "next/headers";
 import { requireCurrentUser } from "@/lib/auth";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getOperationsSnapshot, listAuditLogs } from "@/lib/care-store";
 import { getCopy, translateRoleLabel } from "@/lib/i18n";
+import { getWorkspaceContext } from "@/lib/organization-store";
 import { filterAuditEntries, hasActiveFilters } from "@/lib/search-filters";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 export const metadata = {
   title: "Audit Log",
@@ -12,10 +15,13 @@ export const metadata = {
 export default async function AuditPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
-  await requireCurrentUser(["pastor", "owner"]);
+  const user = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const cookieStore = await cookies();
+  const preferredBranchId = cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || "";
+  const workspace = getWorkspaceContext(user, preferredBranchId);
   const params = await searchParams;
-  const entries = listAuditLogs();
-  const ops = getOperationsSnapshot();
+  const entries = listAuditLogs(160, user, preferredBranchId);
+  const ops = getOperationsSnapshot(user, preferredBranchId);
   const pageCopy = copy.audit;
   const filters = {
     query: typeof params?.q === "string" ? params.q.trim() : "",
@@ -27,6 +33,9 @@ export default async function AuditPage({ searchParams }) {
     new Set(entries.map((entry) => entry.action.split(".")[0]))
   ).sort();
   const showClearFilters = hasActiveFilters(filters);
+  const scopeLabel = workspace.activeBranch
+    ? `${workspace.organization.name} / ${workspace.activeBranch.name}`
+    : `${workspace.organization.name} / headquarters view`;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10 pb-16 lg:px-10 lg:py-14">
@@ -40,6 +49,14 @@ export default async function AuditPage({ searchParams }) {
         <p className="mt-5 max-w-3xl text-lg leading-8 text-muted">
           {pageCopy.description}
         </p>
+        <div className="mt-5 inline-flex items-center rounded-full border border-line bg-canvas px-4 py-2 text-sm text-muted">
+          <span className="font-semibold text-foreground">{scopeLabel}</span>
+          <span className="ml-3">
+            {workspace.activeBranch
+              ? "Audit events below are limited to the branch you are focused on."
+              : "You are reviewing audit activity across the branches you are allowed to oversee."}
+          </span>
+        </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           <MetricCard label={pageCopy.metrics.households} value={ops.householdCount} />
@@ -73,6 +90,10 @@ export default async function AuditPage({ searchParams }) {
               options={[
                 { value: "all", label: copy.common.allRoles },
                 { value: "owner", label: translateRoleLabel("owner", preferences.language) },
+                {
+                  value: "overseer",
+                  label: translateRoleLabel("overseer", preferences.language),
+                },
                 { value: "pastor", label: translateRoleLabel("pastor", preferences.language) },
                 { value: "leader", label: translateRoleLabel("leader", preferences.language) },
                 {

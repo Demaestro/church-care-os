@@ -26,6 +26,14 @@ export function resolveBackupDir() {
   return path.join(path.dirname(resolveDatabasePath()), "backups");
 }
 
+export function resolveUploadsPath() {
+  if (process.env.CARE_UPLOADS_PATH) {
+    return process.env.CARE_UPLOADS_PATH;
+  }
+
+  return path.join(projectRoot, "data", "uploads");
+}
+
 export function parseFlag(name) {
   const prefixed = `--${name}=`;
   const inline = process.argv.find((value) => value.startsWith(prefixed));

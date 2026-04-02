@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { requireCurrentUser } from "@/lib/auth";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import {
@@ -6,7 +7,7 @@ import {
   translateStage,
   translateSupportNeed,
 } from "@/lib/i18n";
-import { getOperationalReportData } from "@/lib/organization-store";
+import { getOperationalReportData, getWorkspaceContext } from "@/lib/organization-store";
 import {
   filterOverdueFollowUps,
   filterRecentClosures,
@@ -14,6 +15,7 @@ import {
   hasActiveFilters,
   matchesSearchQuery,
 } from "@/lib/search-filters";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 export const metadata = {
   title: "Reports",
@@ -25,9 +27,11 @@ export default async function ReportsPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const pageCopy = copy.reports;
-  await requireCurrentUser(["pastor", "owner"]);
+  const user = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const preferredBranchId = (await cookies()).get(WORKSPACE_BRANCH_COOKIE)?.value || "";
+  const workspace = getWorkspaceContext(user, preferredBranchId);
   const params = await searchParams;
-  const report = await getOperationalReportData();
+  const report = await getOperationalReportData(user, workspace.activeBranch?.id || "");
   const filters = {
     query: typeof params?.q === "string" ? params.q.trim() : "",
   };
@@ -46,6 +50,18 @@ export default async function ReportsPage({ searchParams }) {
   const visibleAgingBuckets = report.agingBuckets.filter((item) =>
     matchesSearchQuery([item.label], filters.query)
   );
+  const visibleRegionBreakdown = report.regionBreakdown.filter((item) =>
+    matchesSearchQuery([item.label], filters.query)
+  );
+  const visibleBranchBreakdown = report.branchBreakdown.filter((item) =>
+    matchesSearchQuery([item.label, item.regionName], filters.query)
+  );
+  const visibleRecentTransfers = report.recentTransfers.filter((item) =>
+    matchesSearchQuery(
+      [item.householdSlug, item.fromBranchName, item.toBranchName, item.reason],
+      filters.query
+    )
+  );
   const showClearFilters = hasActiveFilters(filters);
   const visibleSearchTotal =
     visibleVolunteerLoads.length +
@@ -54,7 +70,10 @@ export default async function ReportsPage({ searchParams }) {
     visibleRequestTrend.length +
     visibleOwnerLoad.length +
     visibleSourceMix.length +
-    visibleAgingBuckets.length;
+    visibleAgingBuckets.length +
+    visibleRegionBreakdown.length +
+    visibleBranchBreakdown.length +
+    visibleRecentTransfers.length;
   const overallSearchTotal =
     report.volunteerLoads.length +
     report.overdueFollowUps.length +
@@ -62,7 +81,10 @@ export default async function ReportsPage({ searchParams }) {
     report.requestTrend.length +
     report.ownerLoad.length +
     report.sourceMix.length +
-    report.agingBuckets.length;
+    report.agingBuckets.length +
+    report.regionBreakdown.length +
+    report.branchBreakdown.length +
+    report.recentTransfers.length;
   const needMax = Math.max(...report.needBreakdown.map((item) => item.count), 1);
   const stageMax = Math.max(...report.stageBreakdown.map((item) => item.count), 1);
   const volunteerMax = Math.max(
@@ -73,6 +95,8 @@ export default async function ReportsPage({ searchParams }) {
   const ownerLoadMax = Math.max(...visibleOwnerLoad.map((item) => item.count), 1);
   const sourceMixMax = Math.max(...visibleSourceMix.map((item) => item.count), 1);
   const agingMax = Math.max(...visibleAgingBuckets.map((item) => item.count), 1);
+  const regionMax = Math.max(...visibleRegionBreakdown.map((item) => item.count), 1);
+  const branchMax = Math.max(...visibleBranchBreakdown.map((item) => item.count), 1);
   const summaryCards = [
     {
       label: pageCopy.summary.openCareRequests,
@@ -122,6 +146,18 @@ export default async function ReportsPage({ searchParams }) {
             />
             <ExportLink href="/reports/export?type=users" label={pageCopy.exports.users} />
             <ExportLink href="/reports/export?type=audit" label={pageCopy.exports.audit} />
+            <ExportLink
+              href="/reports/export?type=branches"
+              label={pageCopy.exports.branches || "Branches"}
+            />
+            <ExportLink
+              href="/reports/export?type=transfers"
+              label={pageCopy.exports.transfers || "Transfers"}
+            />
+            <ExportLink
+              href="/reports/export?type=jobs"
+              label={pageCopy.exports.jobs || "Jobs"}
+            />
           </div>
         </div>
 
@@ -319,6 +355,101 @@ export default async function ReportsPage({ searchParams }) {
         </DataPanel>
         <DataPanel title={pageCopy.panels.caseAging}>
           <BarList items={visibleAgingBuckets} max={agingMax} tone="moss" emptyBody={pageCopy.noSliceData} />
+        </DataPanel>
+      </section>
+
+      <section className="mt-8 grid gap-6 xl:grid-cols-2">
+        <DataPanel title="Regional pressure">
+          <BarList
+            items={visibleRegionBreakdown.map((item) => ({
+              label: `${item.label} · ${item.urgentCount} urgent`,
+              count: item.count,
+            }))}
+            max={regionMax}
+            emptyBody="No regional reporting data is visible in the current scope."
+          />
+        </DataPanel>
+        <DataPanel title="Branch comparison">
+          <BarList
+            items={visibleBranchBreakdown.map((item) => ({
+              label: `${item.label} · ${item.regionName}`,
+              count: item.count,
+            }))}
+            max={branchMax}
+            tone="moss"
+            emptyBody="No branch comparison data is visible in the current scope."
+          />
+        </DataPanel>
+      </section>
+
+      <section className="mt-8 grid gap-6 xl:grid-cols-[0.94fr_1.06fr]">
+        <DataPanel title="Transfer activity">
+          <div className="grid gap-4 md:grid-cols-3">
+            <GovernanceCard
+              label="Requested"
+              value={report.transferSummary.requestedCount}
+            />
+            <GovernanceCard
+              label="Reviewed"
+              value={report.transferSummary.reviewedCount}
+            />
+            <GovernanceCard
+              label="Completed"
+              value={report.transferSummary.completedCount}
+            />
+          </div>
+
+          <div className="mt-5 space-y-4">
+            {visibleRecentTransfers.length > 0 ? (
+              visibleRecentTransfers.map((transfer) => (
+                <article
+                  key={transfer.id}
+                  className="rounded-[1.25rem] border border-line bg-canvas p-4"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-lg font-semibold text-foreground">
+                        {transfer.householdSlug}
+                      </p>
+                      <p className="mt-2 text-sm leading-7 text-muted">
+                        {transfer.fromBranchName} → {transfer.toBranchName}
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-line bg-paper px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                      {transfer.status}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-7 text-foreground">{transfer.reason}</p>
+                  <p className="mt-3 text-sm text-muted">
+                    {transfer.requestedByName} · {transfer.requestedLabel}
+                  </p>
+                </article>
+              ))
+            ) : (
+              <EmptyCopy body="No transfer activity matches the current filter." />
+            )}
+          </div>
+        </DataPanel>
+
+        <DataPanel title="Background jobs and delivery queue">
+          <div className="grid gap-4 md:grid-cols-2">
+            <GovernanceCard label="Queued" value={report.ops.jobs.queuedCount} />
+            <GovernanceCard label="Processing" value={report.ops.jobs.processingCount} />
+            <GovernanceCard label="Completed" value={report.ops.jobs.completedCount} />
+            <GovernanceCard label="Failed" value={report.ops.jobs.failedCount} />
+          </div>
+          <div className="mt-5 rounded-[1.25rem] border border-line bg-canvas p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-muted">Latest job</p>
+            <p className="mt-3 text-sm leading-7 text-foreground">
+              Status: {report.ops.jobs.latestStatus || "No jobs queued yet"}
+            </p>
+            <p className="mt-2 text-sm leading-7 text-muted">
+              Created: {report.ops.jobs.latestCreatedLabel}
+            </p>
+            <p className="mt-2 text-sm leading-7 text-muted">
+              Next run: {report.ops.jobs.latestRunAfterLabel}
+            </p>
+          </div>
         </DataPanel>
       </section>
     </div>

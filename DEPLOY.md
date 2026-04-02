@@ -6,12 +6,14 @@ Church Care OS now stores live care data in a SQLite database file. Every produc
 
 - Run one application instance only.
 - Keep `care.db` on persistent storage.
+- Keep uploaded attachments on persistent storage too by setting `CARE_UPLOADS_PATH`.
 - Set `CARE_DB_PATH` explicitly in production.
 - Put a reverse proxy or provider edge in front of the app.
 - Use `/health` as the deployment health check.
 - Run `npm run db:init` once if you want to bootstrap the SQLite file before first traffic.
 - Move to a real database before attempting multi-instance scale.
 - Run scheduled backups and occasional restore drills.
+- Run a background worker with `npm run jobs:work` if you want queued delivery processing outside the web process.
 - If email is not configured yet, leave the app in `log-only` delivery mode and connect the provider later.
 
 Recommended production env vars:
@@ -19,12 +21,17 @@ Recommended production env vars:
 - `AUTH_SECRET`
 - `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`
 - `CARE_DB_PATH`
+- `CARE_UPLOADS_PATH`
 - `HOSTNAME=0.0.0.0`
 - `PORT=3000`
 - `APP_BASE_URL`
 - `BACKUP_DIR` if you want backups outside the default data folder
 - `BACKUP_MAX_AGE_HOURS=26`
+- `CARE_DATABASE_DRIVER=sqlite`
+- `DATABASE_URL` only when you are exporting to / importing from PostgreSQL
+- `PGSSLMODE=require` when your PostgreSQL host requires TLS
 - `RESEND_API_KEY` only when you are ready for live email
+- `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` only when you are ready for live messaging
 
 ## Render
 
@@ -125,6 +132,7 @@ After deployment, validate the host with these commands:
 ```bash
 npm run db:backup
 npm run db:drill
+npm run jobs:drain
 npm run ops:backup-freshness
 npm run ops:healthcheck
 ```
@@ -134,6 +142,18 @@ To test a restore manually:
 ```bash
 npm run db:restore -- --from /absolute/path/to/backup.sqlite
 ```
+
+## PostgreSQL migration path
+
+The app runtime still uses SQLite today, but the repo now includes a migration/export path for moving production data forward:
+
+```bash
+npm run db:export
+DATABASE_URL=postgres://... npm run db:pg:check
+DATABASE_URL=postgres://... npm run db:pg:import -- --from /absolute/path/to/export-folder
+```
+
+The PostgreSQL schema lives in `scripts/postgres/schema.sql`.
 
 ## Provider choice
 

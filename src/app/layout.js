@@ -151,7 +151,7 @@ export default async function RootLayout({ children }) {
 
           <header className="sticky top-0 z-40 border-b border-line bg-[var(--header-bg)] shadow-[var(--header-shadow)] backdrop-blur-2xl">
             <div className="mx-auto max-w-7xl px-6 lg:px-10">
-              <div className="flex h-16 items-center justify-between gap-4">
+              <div className="flex h-14 items-center justify-between gap-2 sm:h-16 sm:gap-4">
                 {/* ── Brand logo ── */}
                 <Link href="/" className="flex flex-shrink-0 items-center gap-3 group">
                   <span
@@ -301,6 +301,10 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
     oversightItems.push({
       href: "/new-members",
       label: "New Members",
+    });
+    oversightItems.push({
+      href: "/volunteer/applications",
+      label: "Volunteer Applications",
     });
     oversightItems.push({
       href: "/reports",

@@ -1,8 +1,21 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { RequestIntakeForm } from "@/components/request-intake-form";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getCopy } from "@/lib/i18n";
-import { getChurchSettings } from "@/lib/organization-store";
+import {
+  defaultPrimaryBranchId,
+  defaultPrimaryOrganizationId,
+} from "@/lib/organization-defaults";
+import {
+  getEffectiveChurchSettings,
+  getPublicWorkspaceCatalog,
+} from "@/lib/organization-store";
+import {
+  PUBLIC_BRANCH_COOKIE,
+  PUBLIC_ORGANIZATION_COOKIE,
+} from "@/lib/workspace-scope";
+import { getCurrentUser } from "@/lib/auth";
 
 export const metadata = {
   title: "Request Care",
@@ -11,13 +24,38 @@ export const metadata = {
 };
 
 export default async function NewRequestPage() {
-  const preferences = await getAppPreferences();
+  const [preferences, currentUser] = await Promise.all([
+    getAppPreferences(),
+    getCurrentUser(),
+  ]);
   const copy = getCopy(preferences.language);
-  const settings = getChurchSettings();
+  const cookieStore = await cookies();
+  const catalog = getPublicWorkspaceCatalog();
+  const organizationId =
+    cookieStore.get(PUBLIC_ORGANIZATION_COOKIE)?.value ||
+    defaultPrimaryOrganizationId ||
+    catalog[0]?.id ||
+    "";
+  const organization =
+    catalog.find((item) => item.id === organizationId) ||
+    catalog.find((item) => item.id === defaultPrimaryOrganizationId) ||
+    catalog[0] ||
+    null;
+  const branchId =
+    cookieStore.get(PUBLIC_BRANCH_COOKIE)?.value ||
+    defaultPrimaryBranchId ||
+    organization?.branches?.[0]?.id ||
+    "";
+  const branch =
+    organization?.branches?.find((item) => item.id === branchId) ||
+    organization?.branches?.find((item) => item.id === defaultPrimaryBranchId) ||
+    organization?.branches?.[0] ||
+    null;
+  const settings = getEffectiveChurchSettings(organization?.id, branch?.id || "");
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10 pb-16 lg:px-10 lg:py-14">
-      <section className="surface-card rounded-[2.2rem] border border-line bg-paper p-8 lg:p-10">
+    <div className="mx-auto max-w-3xl px-4 py-8 pb-16 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
+      <section className="surface-card rounded-[1.5rem] border border-line bg-paper p-5 sm:rounded-[2rem] sm:p-8 lg:p-10">
         <div className="max-w-4xl">
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
             {copy.requestNew.kicker}
@@ -28,6 +66,12 @@ export default async function NewRequestPage() {
           <p className="mt-5 text-base leading-8 text-muted sm:text-lg">
             {copy.requestNew.description}
           </p>
+          {organization ? (
+            <div className="mt-5 inline-flex flex-wrap items-center gap-2 rounded-full border border-line bg-canvas px-4 py-2 text-sm text-muted">
+              <span className="font-semibold text-foreground">{organization.name}</span>
+              {branch ? <span>/ {branch.name}</span> : null}
+            </div>
+          ) : null}
           <div className="mt-6 flex flex-wrap gap-3">
             {settings?.supportEmail ? (
               <span className="rounded-full border border-line bg-canvas px-4 py-2 text-sm text-muted">
@@ -43,7 +87,11 @@ export default async function NewRequestPage() {
         </div>
 
         <div className="mt-8 border-t border-line pt-8">
-          <RequestIntakeForm language={preferences.language} copy={copy} />
+          <RequestIntakeForm
+            language={preferences.language}
+            copy={copy.intakeForm}
+            currentUser={currentUser ? { name: currentUser.name, email: currentUser.email, phone: currentUser.phone } : null}
+          />
         </div>
       </section>
 

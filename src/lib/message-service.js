@@ -5,8 +5,12 @@ import { Buffer } from "node:buffer";
 import { listUsers } from "@/lib/auth-store";
 import { formatDateTime } from "@/lib/care-format";
 import { getDatabase, parseJson, serializeJson } from "@/lib/database";
+import { enqueueJob } from "@/lib/job-store";
 import { renderMessageTemplate } from "@/lib/message-templates";
-import { getChurchSettings } from "@/lib/organization-store";
+import {
+  getChurchSettings,
+  getEffectiveChurchSettings,
+} from "@/lib/organization-store";
 
 export function normalizePhoneNumber(value) {
   const raw = String(value || "").trim();
@@ -50,6 +54,8 @@ function createOutboxEntry(db, input) {
   db.prepare(`
     INSERT INTO message_outbox (
       id,
+      organization_id,
+      branch_id,
       channel,
       template_key,
       purpose,
@@ -65,9 +71,11 @@ function createOutboxEntry(db, input) {
       attempted_at,
       sent_at,
       metadata_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
+    input.organizationId || "",
+    input.branchId || null,
     input.channel,
     input.templateKey,
     input.purpose,
@@ -127,7 +135,7 @@ function formatTwilioAddress(channel, phone) {
   return channel === "whatsapp" ? `whatsapp:${normalized}` : normalized;
 }
 
-async function deliverViaTwilio(channel, message, settings) {
+export async function deliverViaTwilio(channel, message, settings) {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
 
@@ -180,7 +188,10 @@ async function queueMessageForRecipient(
   context,
   options = {}
 ) {
-  const settings = getChurchSettings();
+  const settings = getEffectiveChurchSettings(
+    options.organizationId,
+    options.branchId
+  );
   const recipientPhone = normalizePhoneNumber(recipient?.phone);
   const recipientName = recipient?.name || "";
   const baseContext = {
@@ -197,6 +208,8 @@ async function queueMessageForRecipient(
 
   if (!recipientPhone || !isValidMessagingPhone(recipientPhone)) {
     createOutboxEntry(db, {
+      organizationId: options.organizationId || context.organizationId || settings?.organizationId,
+      branchId: options.branchId || context.branchId || null,
       channel,
       templateKey,
       purpose: rendered.purpose,
@@ -217,6 +230,8 @@ async function queueMessageForRecipient(
   }
 
   const outboxId = createOutboxEntry(db, {
+    organizationId: options.organizationId || context.organizationId || settings?.organizationId,
+    branchId: options.branchId || context.branchId || null,
     channel,
     templateKey,
     purpose: rendered.purpose,
@@ -245,46 +260,21 @@ async function queueMessageForRecipient(
     };
   }
 
-  try {
-    const delivery = await deliverViaTwilio(
+  enqueueJob({
+    organizationId: options.organizationId || context.organizationId || settings?.organizationId,
+    branchId: options.branchId || context.branchId || null,
+    queue: "delivery",
+    type: `message.send.${channel}`,
+    payload: {
+      outboxId,
       channel,
-      {
-        recipientPhone,
-        body: rendered.body,
-      },
-      settings
-    );
-    const sentAt = new Date().toISOString();
+    },
+  });
 
-    updateOutboxEntry(db, outboxId, {
-      status: "sent",
-      provider: settings?.messageProvider || "twilio",
-      providerMessageId: delivery.providerMessageId,
-      providerResponse: delivery.providerResponse,
-      attemptedAt: sentAt,
-      sentAt,
-      errorMessage: null,
-    });
-
-    return {
-      status: "sent",
-      outboxId,
-    };
-  } catch (error) {
-    updateOutboxEntry(db, outboxId, {
-      status: "failed",
-      provider: settings?.messageProvider || "twilio",
-      providerResponse: {},
-      attemptedAt: new Date().toISOString(),
-      sentAt: null,
-      errorMessage: error instanceof Error ? error.message : "Message delivery failed.",
-    });
-
-    return {
-      status: "failed",
-      outboxId,
-    };
-  }
+  return {
+    status: "queued",
+    outboxId,
+  };
 }
 
 function dedupeRecipients(recipients) {
@@ -328,8 +318,9 @@ export async function sendMessageToRoles(
   options = {}
 ) {
   const recipients = dedupeRecipients(
-    listUsers()
+    listUsers(options.organizationId ? { organizationId: options.organizationId } : {})
       .filter((user) => user.active && roles.includes(user.role))
+      .filter((user) => (options.branchId ? user.branchId === options.branchId : true))
       .map((user) => ({
         phone: user.phone,
         name: user.name,
@@ -350,10 +341,13 @@ export async function sendMessageToVolunteer(
   context,
   options = {}
 ) {
-  const volunteer = listUsers().find(
+  const volunteer = listUsers(
+    options.organizationId ? { organizationId: options.organizationId } : {}
+  ).find(
     (user) =>
       user.active &&
       user.role === "volunteer" &&
+      (options.branchId ? user.branchId === options.branchId : true) &&
       (user.volunteerName === volunteerName || user.name === volunteerName)
   );
 
@@ -375,11 +369,14 @@ export async function sendMessageToVolunteer(
   );
 }
 
-export function listMessageOutbox(limit = 20) {
-  return getDatabase()
-    .prepare(`
+export function listMessageOutbox(limit = 20, organizationId = "") {
+  const db = getDatabase();
+  const filter = organizationId ? "WHERE organization_id = ?" : "";
+  const statement = db.prepare(`
       SELECT
         id,
+        organization_id,
+        branch_id,
         channel,
         template_key,
         purpose,
@@ -396,12 +393,17 @@ export function listMessageOutbox(limit = 20) {
         sent_at,
         metadata_json
       FROM message_outbox
+      ${filter}
       ORDER BY created_at DESC
       LIMIT ?
-    `)
-    .all(limit)
+    `);
+  const rows = organizationId ? statement.all(organizationId, limit) : statement.all(limit);
+
+  return rows
     .map((row) => ({
       id: row.id,
+      organizationId: row.organization_id || "",
+      branchId: row.branch_id || "",
       channel: row.channel,
       templateKey: row.template_key,
       purpose: row.purpose,
@@ -423,16 +425,18 @@ export function listMessageOutbox(limit = 20) {
     }));
 }
 
-export function getMessageDeliverySnapshot() {
-  const settings = getChurchSettings();
+export function getMessageDeliverySnapshot(organizationId = "") {
+  const settings = getChurchSettings(organizationId || undefined);
   const db = getDatabase();
+  const filter = organizationId ? "WHERE organization_id = ?" : "";
   const counts = db
     .prepare(`
       SELECT status, COUNT(*) AS count
       FROM message_outbox
+      ${filter}
       GROUP BY status
     `)
-    .all();
+    .all(...(organizationId ? [organizationId] : []));
   const countMap = counts.reduce((result, row) => {
     result[row.status] = row.count;
     return result;
@@ -441,10 +445,11 @@ export function getMessageDeliverySnapshot() {
     .prepare(`
       SELECT created_at, attempted_at, status
       FROM message_outbox
+      ${filter}
       ORDER BY COALESCE(attempted_at, created_at) DESC
       LIMIT 1
     `)
-    .get();
+    .get(...(organizationId ? [organizationId] : []));
 
   return {
     mode: settings?.messageDeliveryMode || "log-only",
@@ -461,4 +466,53 @@ export function getMessageDeliverySnapshot() {
     latestStatus: latest?.status || "",
     latestAttemptLabel: formatDateTime(latest?.attempted_at || latest?.created_at),
   };
+}
+
+export async function processMessageOutboxJob({ outboxId, channel }) {
+  const db = getDatabase();
+  const row = db
+    .prepare(`
+      SELECT *
+      FROM message_outbox
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .get(outboxId);
+
+  if (!row) {
+    throw new Error("Message outbox entry not found.");
+  }
+
+  try {
+    const settings = getEffectiveChurchSettings(row.organization_id, row.branch_id || "");
+    const delivery = await deliverViaTwilio(
+      channel || row.channel,
+      {
+        recipientPhone: row.recipient_phone,
+        body: row.body,
+      },
+      settings
+    );
+    const sentAt = new Date().toISOString();
+
+    updateOutboxEntry(db, outboxId, {
+      status: "sent",
+      provider: settings?.messageProvider || "twilio",
+      providerMessageId: delivery.providerMessageId,
+      providerResponse: delivery.providerResponse,
+      attemptedAt: sentAt,
+      sentAt,
+      errorMessage: null,
+    });
+  } catch (error) {
+    updateOutboxEntry(db, outboxId, {
+      status: "failed",
+      provider: row.provider || "twilio",
+      providerResponse: {},
+      attemptedAt: new Date().toISOString(),
+      sentAt: null,
+      errorMessage: error instanceof Error ? error.message : "Message delivery failed.",
+    });
+    throw error;
+  }
 }

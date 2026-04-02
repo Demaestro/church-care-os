@@ -1,6 +1,6 @@
 # Church Care OS
 
-Church Care OS is a Next.js 16 care coordination app for pastors, ministry leaders, and volunteers. The app now runs on a local SQLite database at `data/care.db`, with automatic backup scripts, auth-protected internal routes, and a public member intake flow.
+Church Care OS is a Next.js 16 care coordination app for pastors, ministry leaders, volunteers, and headquarters oversight teams. The app currently runs on a local SQLite database at `data/care.db`, with automatic backup scripts, branch-scoped internal routes, MFA-capable sign-in, a public member intake flow, and migration tooling for PostgreSQL.
 
 Core product surfaces already included:
 
@@ -12,6 +12,7 @@ Core product surfaces already included:
 - Request status lookup
 - Account recovery
 - Admin users, teams, reports, settings, audit trail, and notifications
+- Regions, branches, transfers, security, attachments, and HQ analytics
 
 ## Runtime requirements
 
@@ -100,13 +101,27 @@ Useful commands:
 npm run db:init
 npm run db:backup
 npm run db:restore -- --from /absolute/path/to/backup.sqlite
+npm run db:export
+npm run db:pg:check
+npm run db:pg:import -- --from /absolute/path/to/export-folder
 npm run db:drill
+npm run jobs:drain
+npm run jobs:work
 npm run ops:retention
 npm run ops:healthcheck
 npm run ops:backup-freshness
+npm run test:e2e
 ```
 
-If `care.db` does not exist yet, run `npm run db:init` once to create the schema and seed the starter data from `data/care-store.json`.
+If `care.db` does not exist yet, run `npm run db:init` once to prepare the file. The full schema and demo/bootstrap data are then created automatically the first time the app boots and touches the database.
+
+`npm run db:export` creates a portable export bundle under `exports/` with:
+
+- one JSON file per table
+- a `manifest.json`
+- copied uploads from `CARE_UPLOADS_PATH` when present
+
+Use `npm run db:pg:import -- --from <export-folder>` with `DATABASE_URL` set to load that bundle into PostgreSQL using `scripts/postgres/schema.sql`.
 
 To create a production owner account:
 
@@ -131,6 +146,31 @@ The app now also includes provider-ready SMS and WhatsApp messaging with a separ
 - `twilio`: sends live SMS or WhatsApp once `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and sender numbers are configured
 
 If you are not ready to connect live messaging yet, the app still works fully in `log-only` mode and records every attempted message for review.
+
+## Background jobs
+
+Outbound email, SMS, and WhatsApp can now be processed by a dedicated worker instead of only inside the request lifecycle.
+
+- `npm run jobs:drain` processes queued jobs once and exits
+- `npm run jobs:work` polls the queue continuously
+
+This worker reads from the SQLite `jobs` table and updates the delivery outboxes after calling the configured provider APIs.
+
+## Browser coverage
+
+The repo now includes Playwright browser coverage for:
+
+- public request intake
+- request status lookup
+- member portal access
+- HQ oversight pages
+- volunteer workspace access
+
+Run it with:
+
+```bash
+npm run test:e2e
+```
 
 ## Provider configs
 

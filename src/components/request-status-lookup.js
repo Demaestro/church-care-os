@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { lookupRequestStatus } from "@/app/actions";
+import { PrivacyShield } from "@/components/privacy-shield";
 import { translateSupportNeed } from "@/lib/i18n";
 
 const statusToneClasses = {
@@ -26,6 +27,7 @@ export function RequestStatusLookup({
   initialCode = "",
   initialResult = null,
   copy,
+  privacyCopy,
   language = "en",
 }) {
   const [state, formAction, pending] = useActionState(
@@ -33,7 +35,7 @@ export function RequestStatusLookup({
     buildInitialState(initialCode, initialResult)
   );
   const result = state.result;
-  const statusCopy = copy.requestStatusLookup;
+  const statusCopy = copy;
 
   return (
     <div className="space-y-6">
@@ -79,78 +81,92 @@ export function RequestStatusLookup({
       ) : null}
 
       {result ? (
-        <section className="surface-card rounded-[2rem] border border-line bg-paper p-6 lg:p-7">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
-                {statusCopy.requestLocated}
-              </p>
-              <h2 className="mt-3 text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
-                {result.householdName}
-              </h2>
-              <p className="mt-2 text-sm uppercase tracking-[0.16em] text-muted">
-                {result.trackingCode}
-              </p>
-            </div>
-            <span
-              className={`inline-flex rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-[0.16em] ${statusToneClasses[result.statusTone]}`}
-            >
-              {result.statusLabel}
-            </span>
-          </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <InfoCard
-              label={statusCopy.infoCards.supportNeed}
-              value={translateSupportNeed(result.need, language)}
-            />
-            <InfoCard label={statusCopy.infoCards.created} value={result.createdLabel} />
-            <InfoCard
-              label={statusCopy.infoCards.responseWindow}
-              value={result.dueLabel}
-            />
-            <InfoCard label={statusCopy.infoCards.privacy} value={result.privacyLabel} />
-          </div>
-
-          <div className="mt-6 rounded-[1.35rem] bg-canvas p-5">
-            <p className="text-xs uppercase tracking-[0.18em] text-muted">
-              {statusCopy.currentUpdate}
-            </p>
-            <p className="mt-3 text-base leading-8 text-foreground">
-              {result.statusDetail}
-            </p>
-            <p className="mt-4 text-sm leading-7 text-muted">{result.summary}</p>
-          </div>
-
-          <div className="mt-7">
-            <div className="flex items-center justify-between gap-4">
-              <h3 className="text-2xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
-                {statusCopy.timelineTitle}
-              </h3>
-              <Link
-                href="/requests/new"
-                className="text-sm font-medium text-[#356fbe] transition hover:text-[#29578f]"
+        <PrivacyShield
+          eyebrow={statusCopy.privacyShield.eyebrow}
+          title={statusCopy.privacyShield.title}
+          body={statusCopy.privacyShield.body}
+          watermark={statusCopy.privacyShield.watermark}
+          quickHideLabel={privacyCopy?.quickHide || "Hide details"}
+          revealLabel={privacyCopy?.reveal || "Show details"}
+          hiddenTitle={privacyCopy?.hiddenTitle || "Details hidden for privacy"}
+          hiddenBody={
+            privacyCopy?.hiddenBody ||
+            "Sensitive details are now covered. Use the button above whenever you are ready to reveal them again."
+          }
+        >
+          <section className="surface-card rounded-[2rem] p-6 lg:p-7">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
+                  {statusCopy.requestLocated}
+                </p>
+                <h2 className="mt-3 text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
+                  {result.householdName}
+                </h2>
+                <p className="mt-2 text-sm uppercase tracking-[0.16em] text-muted">
+                  {result.trackingCode}
+                </p>
+              </div>
+              <span
+                className={`inline-flex rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-[0.16em] ${statusToneClasses[result.statusTone]}`}
               >
-                {statusCopy.submitAnotherRequest}
-              </Link>
+                {result.statusLabel}
+              </span>
             </div>
 
-            <div className="mt-5 space-y-4">
-              {result.timeline.map((event) => (
-                <article
-                  key={event.id}
-                  className="rounded-[1.25rem] border border-line bg-canvas p-4"
-                >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-lg font-semibold text-foreground">{event.label}</p>
-                    <p className="text-sm text-muted">{event.createdLabel}</p>
-                  </div>
-                  <p className="mt-2 text-sm leading-7 text-muted">{event.detail}</p>
-                </article>
-              ))}
+            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <InfoCard
+                label={statusCopy.infoCards.supportNeed}
+                value={translateSupportNeed(result.need, language)}
+              />
+              <InfoCard label={statusCopy.infoCards.created} value={result.createdLabel} />
+              <InfoCard
+                label={statusCopy.infoCards.responseWindow}
+                value={result.dueLabel}
+              />
+              <InfoCard label={statusCopy.infoCards.privacy} value={result.privacyLabel} />
             </div>
-          </div>
-        </section>
+
+            <div className="mt-6 rounded-[1.35rem] bg-canvas p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-muted">
+                {statusCopy.currentUpdate}
+              </p>
+              <p className="mt-3 text-base leading-8 text-foreground">
+                {result.statusDetail}
+              </p>
+              <p className="mt-4 text-sm leading-7 text-muted">{result.summary}</p>
+            </div>
+
+            <div className="mt-7">
+              <div className="flex items-center justify-between gap-4">
+                <h3 className="text-2xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
+                  {statusCopy.timelineTitle}
+                </h3>
+                <Link
+                  href="/requests/new"
+                  className="text-sm font-medium text-[#356fbe] transition hover:text-[#29578f]"
+                >
+                  {statusCopy.submitAnotherRequest}
+                </Link>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                {result.timeline.map((event) => (
+                  <article
+                    key={event.id}
+                    className="rounded-[1.25rem] border border-line bg-canvas p-4"
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-lg font-semibold text-foreground">{event.label}</p>
+                      <p className="text-sm text-muted">{event.createdLabel}</p>
+                    </div>
+                    <p className="mt-2 text-sm leading-7 text-muted">{event.detail}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+        </PrivacyShield>
       ) : (
         <section className="grid gap-4 md:grid-cols-2">
           <HelperCard

@@ -12,7 +12,8 @@ export function findUserByEmail(email) {
   const row = getDatabase()
     .prepare(`
       SELECT id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
-      , session_version, last_login_at
+      , session_version, last_login_at, organization_id, branch_id, access_scope, title, managed_branch_ids_json
+      , mfa_enabled, mfa_mode, mfa_secret, mfa_backup_codes_json
       FROM users
       WHERE email = ?
       LIMIT 1
@@ -30,7 +31,8 @@ export function findUserById(id) {
   const row = getDatabase()
     .prepare(`
       SELECT id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
-      , session_version, last_login_at
+      , session_version, last_login_at, organization_id, branch_id, access_scope, title, managed_branch_ids_json
+      , mfa_enabled, mfa_mode, mfa_secret, mfa_backup_codes_json
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -40,17 +42,34 @@ export function findUserById(id) {
   return mapUserRow(row);
 }
 
-export function listUsers() {
+export function listUsers(filter = {}) {
   const rows = getDatabase()
     .prepare(`
       SELECT id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
-      , session_version, last_login_at
+      , session_version, last_login_at, organization_id, branch_id, access_scope, title, managed_branch_ids_json
+      , mfa_enabled, mfa_mode, mfa_secret, mfa_backup_codes_json
       FROM users
       ORDER BY role, name
     `)
     .all();
 
-  return rows.map(mapUserRow);
+  return rows
+    .map(mapUserRow)
+    .filter((user) => {
+      if (filter.organizationId && user.organizationId !== filter.organizationId) {
+        return false;
+      }
+
+      if (filter.branchId && user.branchId !== filter.branchId) {
+        return false;
+      }
+
+      if (filter.role && user.role !== filter.role) {
+        return false;
+      }
+
+      return true;
+    });
 }
 
 export function createUserEntry(input) {
@@ -61,8 +80,10 @@ export function createUserEntry(input) {
 
   db.prepare(`
     INSERT INTO users (
-      id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at,
+      organization_id, branch_id, access_scope, title, managed_branch_ids_json,
+      mfa_enabled, mfa_mode, mfa_secret, mfa_backup_codes_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     userId,
     input.name,
@@ -73,7 +94,16 @@ export function createUserEntry(input) {
     input.lane || null,
     input.volunteerName || null,
     input.active === false ? 0 : 1,
-    now
+    now,
+    input.organizationId || null,
+    input.branchId || null,
+    input.accessScope || "branch",
+    input.title || null,
+    JSON.stringify(input.managedBranchIds || []),
+    input.mfaEnabled ? 1 : 0,
+    input.mfaMode || "off",
+    input.mfaSecret || null,
+    JSON.stringify(input.mfaBackupCodes || [])
   );
 
   return userId;
@@ -95,7 +125,16 @@ export function updateUserEntry(userId, input) {
         role = ?,
         lane = ?,
         volunteer_name = ?,
-        active = ?
+        active = ?,
+        organization_id = ?,
+        branch_id = ?,
+        access_scope = ?,
+        title = ?,
+        managed_branch_ids_json = ?,
+        mfa_enabled = ?,
+        mfa_mode = ?,
+        mfa_secret = ?,
+        mfa_backup_codes_json = ?
       WHERE id = ?
     `)
     .run(
@@ -106,6 +145,21 @@ export function updateUserEntry(userId, input) {
       input.lane ?? existing.lane ?? null,
       input.volunteerName ?? existing.volunteerName ?? null,
       input.active === undefined ? (existing.active ? 1 : 0) : input.active ? 1 : 0,
+      input.organizationId ?? existing.organizationId ?? null,
+      input.branchId ?? existing.branchId ?? null,
+      input.accessScope ?? existing.accessScope ?? "branch",
+      input.title ?? existing.title ?? null,
+      JSON.stringify(input.managedBranchIds ?? existing.managedBranchIds ?? []),
+      input.mfaEnabled === undefined
+        ? existing.mfaEnabled
+          ? 1
+          : 0
+        : input.mfaEnabled
+          ? 1
+          : 0,
+      input.mfaMode ?? existing.mfaMode ?? "off",
+      input.mfaSecret ?? existing.mfaSecret ?? null,
+      JSON.stringify(input.mfaBackupCodes ?? existing.mfaBackupCodes ?? []),
       userId
     );
 }
@@ -170,6 +224,31 @@ export function bumpUserSessionVersionEntry(userId) {
     .run(userId);
 }
 
+export function setUserMfaEntry(userId, input) {
+  const existing = findUserById(userId);
+  if (!existing) {
+    throw new Error("User not found.");
+  }
+
+  getDatabase()
+    .prepare(`
+      UPDATE users
+      SET
+        mfa_enabled = ?,
+        mfa_mode = ?,
+        mfa_secret = ?,
+        mfa_backup_codes_json = ?
+      WHERE id = ?
+    `)
+    .run(
+      input.enabled ? 1 : 0,
+      input.mode || "off",
+      input.secret || null,
+      JSON.stringify(input.backupCodes || []),
+      userId
+    );
+}
+
 function mapUserRow(row) {
   if (!row) {
     return null;
@@ -184,6 +263,19 @@ function mapUserRow(row) {
     passwordHash: row.password_hash,
     lane: row.lane || "",
     volunteerName: row.volunteer_name || "",
+    organizationId: row.organization_id || "",
+    branchId: row.branch_id || "",
+    accessScope: row.access_scope || "branch",
+    title: row.title || "",
+    managedBranchIds: row.managed_branch_ids_json
+      ? JSON.parse(row.managed_branch_ids_json)
+      : [],
+    mfaEnabled: row.mfa_enabled === 1,
+    mfaMode: row.mfa_mode || "off",
+    mfaSecret: row.mfa_secret || "",
+    mfaBackupCodes: row.mfa_backup_codes_json
+      ? JSON.parse(row.mfa_backup_codes_json)
+      : [],
     active: row.active === 1,
     sessionVersion: Number(row.session_version || 1),
     lastLoginAt: row.last_login_at || "",

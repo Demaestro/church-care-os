@@ -28,16 +28,16 @@ describe("auth store controls", () => {
       touchUserLoginEntry,
     } = await import("@/lib/auth-store");
 
-    const before = findUserByEmail("pastor@grace.demo");
+    const before = findUserByEmail("pastor.lagos@firstlove.demo");
     expect(before?.sessionVersion).toBe(1);
     expect(before?.lastLoginAt).toBe("");
 
     touchUserLoginEntry(before.id);
-    const afterLogin = findUserByEmail("pastor@grace.demo");
+    const afterLogin = findUserByEmail("pastor.lagos@firstlove.demo");
     expect(afterLogin?.lastLoginAt).toBeTruthy();
 
     bumpUserSessionVersionEntry(before.id);
-    const afterBump = findUserByEmail("pastor@grace.demo");
+    const afterBump = findUserByEmail("pastor.lagos@firstlove.demo");
     expect(afterBump?.sessionVersion).toBe(2);
   });
 });

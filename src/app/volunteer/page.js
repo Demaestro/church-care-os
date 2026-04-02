@@ -1,11 +1,13 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { VolunteerTaskBoard } from "@/components/volunteer-task-board";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import { requireCurrentUser } from "@/lib/auth";
 import { getDashboardData } from "@/lib/care-store";
 import { getCopy } from "@/lib/i18n";
-import { listVolunteerRoster } from "@/lib/organization-store";
+import { getWorkspaceContext, listVolunteerRoster } from "@/lib/organization-store";
 import { leaderPreview, volunteerPreview } from "@/lib/role-previews";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 export const metadata = {
   title: "Volunteer View",
@@ -16,16 +18,19 @@ export const metadata = {
 export default async function VolunteerPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
-  const user = await requireCurrentUser(["volunteer", "leader", "pastor", "owner"]);
+  const user = await requireCurrentUser(["volunteer", "leader", "pastor", "overseer", "owner"]);
+  const preferredBranchId = (await cookies()).get(WORKSPACE_BRANCH_COOKIE)?.value || "";
+  const workspace = getWorkspaceContext(user, preferredBranchId);
+  const activeBranchId = workspace.activeBranch?.id || "";
   const params = await searchParams;
   const requestedVolunteer =
     typeof params?.volunteer === "string" ? params.volunteer : "";
   const requestedTab = typeof params?.tab === "string" ? params.tab : "assigned";
-  const { requests } = await getDashboardData();
+  const { requests } = await getDashboardData(user, activeBranchId);
   const previewMap = new Map(
     leaderPreview.volunteers.map((volunteer) => [volunteer.name, volunteer])
   );
-  const liveRoster = listVolunteerRoster().map((volunteer) => {
+  const liveRoster = listVolunteerRoster(user, activeBranchId).map((volunteer) => {
     const preview = previewMap.get(volunteer.name);
 
     return {
@@ -67,6 +72,7 @@ export default async function VolunteerPage({ searchParams }) {
     (request) => request.assignedVolunteer?.name === selectedVolunteer.name
   );
   const preview = buildVolunteerPreview(selectedVolunteer, volunteerRequests);
+  const { accepted, ...volunteerCopy } = copy.volunteer;
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-10 pb-16 lg:px-10 lg:py-14">
@@ -91,7 +97,7 @@ export default async function VolunteerPage({ searchParams }) {
       <VolunteerTaskBoard
         preview={preview}
         initialTab={requestedTab}
-        copy={copy}
+        copy={volunteerCopy}
       />
     </div>
   );
@@ -150,6 +156,14 @@ function mapRequestToTask(request, now) {
     canAddNote: true,
     accepted,
     acceptedLabel: request.assignedVolunteer?.acceptedLabel,
+    acceptedMessage: accepted
+      ? `Accepted ${
+          request.assignedVolunteer?.acceptedLabel &&
+          request.assignedVolunteer.acceptedLabel !== "No time set"
+            ? request.assignedVolunteer.acceptedLabel
+            : "recently"
+        }.`
+      : "",
   };
 }
 
@@ -173,6 +187,14 @@ function mapRequestToCompletedTask(request) {
     canAddNote: false,
     accepted: Boolean(request.assignedVolunteer?.acceptedAt),
     acceptedLabel: request.assignedVolunteer?.acceptedLabel,
+    acceptedMessage: request.assignedVolunteer?.acceptedAt
+      ? `Accepted ${
+          request.assignedVolunteer?.acceptedLabel &&
+          request.assignedVolunteer.acceptedLabel !== "No time set"
+            ? request.assignedVolunteer.acceptedLabel
+            : "recently"
+        }.`
+      : "",
   };
 }
 

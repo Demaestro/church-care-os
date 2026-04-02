@@ -25,7 +25,7 @@ const initialState = {
   trackingCode: "",
 };
 
-export function RequestIntakeForm({ language = "en", copy }) {
+export function RequestIntakeForm({ language = "en", copy, currentUser = null }) {
   const [state, formAction, pending] = useActionState(
     createCareRequest,
     initialState
@@ -89,10 +89,10 @@ export function RequestIntakeForm({ language = "en", copy }) {
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
             {intakeCopy.steps.support}
           </p>
-          <h2 className="text-4xl tracking-[-0.04em] text-foreground [font-family:var(--font-display)]">
+          <h2 className="text-2xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)] sm:text-3xl">
             {intakeCopy.title}
           </h2>
-          <p className="mt-3 max-w-3xl text-base leading-8 text-muted">
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-muted sm:text-base sm:leading-8">
             {intakeCopy.intro}
           </p>
         </div>
@@ -101,7 +101,7 @@ export function RequestIntakeForm({ language = "en", copy }) {
           <p className="text-lg font-semibold text-foreground">
             {intakeCopy.supportQuestion}
           </p>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
             {intakeSupportOptions.map((option) => (
               <SupportOption
                 key={option}
@@ -135,81 +135,19 @@ export function RequestIntakeForm({ language = "en", copy }) {
         />
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <div className="md:col-span-2 xl:col-span-3">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
-            {intakeCopy.steps.contact}
-          </p>
-        </div>
-        <Field
-          label={intakeCopy.nameLabel}
-          name="submittedBy"
-          placeholder={intakeCopy.namePlaceholder}
-          defaultValue={state.values.submittedBy}
-          error={state.errors.submittedBy}
+      {currentUser ? (
+        <SignedInContactSection
+          user={currentUser}
+          defaultPreferred={state.values.preferredContact}
+          intakeCopy={intakeCopy}
         />
-        <Field
-          label={intakeCopy.emailLabel}
-          name="contactEmail"
-          type="email"
-          placeholder={intakeCopy.emailPlaceholder}
-          defaultValue={state.values.contactEmail}
-          error={state.errors.contactEmail}
+      ) : (
+        <GuestContactSection
+          state={state}
+          intakeCopy={intakeCopy}
+          language={language}
         />
-        <Field
-          label={intakeCopy.phoneLabel}
-          name="contactPhone"
-          type="tel"
-          placeholder={intakeCopy.phonePlaceholder}
-          defaultValue={state.values.contactPhone}
-          error={state.errors.contactPhone}
-        />
-        <Field
-          label={intakeCopy.contactLabel}
-          name="preferredContact"
-          placeholder={intakeCopy.contactPlaceholder}
-          defaultValue={state.values.preferredContact}
-          error={state.errors.preferredContact}
-        />
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-foreground">
-            Date of Birth <span className="text-muted">(optional)</span>
-          </label>
-          <input
-            type="date"
-            name="birthday"
-            defaultValue={state.values.birthday}
-            className="block w-full rounded-[0.9rem] border border-line bg-paper px-4 py-3 text-sm text-foreground focus:border-[var(--soft-accent-border)] focus:outline-none"
-          />
-        </div>
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-foreground">Gender</label>
-          <select
-            name="gender"
-            defaultValue={state.values.gender || "unspecified"}
-            className="block w-full rounded-[0.9rem] border border-line bg-paper px-4 py-3 text-sm text-foreground focus:border-[var(--soft-accent-border)] focus:outline-none"
-          >
-            <option value="unspecified">Prefer not to say</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-          </select>
-        </div>
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-foreground">Membership Type</label>
-          <select
-            name="memberType"
-            defaultValue={state.values.memberType || "member"}
-            className="block w-full rounded-[0.9rem] border border-line bg-paper px-4 py-3 text-sm text-foreground focus:border-[var(--soft-accent-border)] focus:outline-none"
-          >
-            <option value="member">Regular Member</option>
-            <option value="new_member">New Member</option>
-            <option value="visitor">Visitor</option>
-          </select>
-          <p className="text-xs text-muted">
-            Select &quot;New Member&quot; to enrol in our 30-day welcome journey with dedicated follow-up.
-          </p>
-        </div>
-      </section>
+      )}
 
       <section className="rounded-[1.75rem] bg-canvas p-6">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
@@ -254,6 +192,120 @@ export function RequestIntakeForm({ language = "en", copy }) {
         </p>
       </div>
     </form>
+  );
+}
+
+// Signed-in: just ask how to reach them
+function SignedInContactSection({ user, defaultPreferred, intakeCopy }) {
+  const hasPhone = Boolean(user.phone);
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center gap-3 rounded-[1.5rem] border border-line bg-canvas px-5 py-4">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--soft-fill)] text-sm font-bold text-moss">
+          {user.name.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-foreground">{user.name}</p>
+          <p className="text-xs text-muted">{user.email}</p>
+        </div>
+      </div>
+
+      {/* hidden fields so the action has the identity */}
+      <input type="hidden" name="submittedBy" value={user.name} />
+      <input type="hidden" name="contactEmail" value={user.email} />
+      {hasPhone && <input type="hidden" name="contactPhone" value={user.phone} />}
+
+      <div>
+        <p className="text-lg font-semibold text-foreground">How should we reach you?</p>
+        <p className="mt-1 text-sm text-muted">Choose your preferred contact method and we will use that when following up.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <ContactOption
+            value="email"
+            label="Email"
+            detail={user.email}
+            name="preferredContact"
+            defaultChecked={!defaultPreferred || defaultPreferred === "email"}
+          />
+          {hasPhone && (
+            <ContactOption
+              value="phone"
+              label="Phone call"
+              detail={user.phone}
+              name="preferredContact"
+              defaultChecked={defaultPreferred === "phone"}
+            />
+          )}
+          <ContactOption
+            value="in-person"
+            label="In person"
+            detail="A pastor will find a time to connect with you"
+            name="preferredContact"
+            defaultChecked={defaultPreferred === "in-person"}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// Guest: full contact fields (unauthenticated)
+function GuestContactSection({ state, intakeCopy }) {
+  return (
+    <section className="grid gap-4 sm:grid-cols-2">
+      <div className="sm:col-span-2">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
+          {intakeCopy.steps.contact}
+        </p>
+      </div>
+      <Field
+        label={intakeCopy.nameLabel}
+        name="submittedBy"
+        placeholder={intakeCopy.namePlaceholder}
+        defaultValue={state.values.submittedBy}
+        error={state.errors.submittedBy}
+      />
+      <Field
+        label={intakeCopy.emailLabel}
+        name="contactEmail"
+        type="email"
+        placeholder={intakeCopy.emailPlaceholder}
+        defaultValue={state.values.contactEmail}
+        error={state.errors.contactEmail}
+      />
+      <Field
+        label={intakeCopy.phoneLabel}
+        name="contactPhone"
+        type="tel"
+        placeholder={intakeCopy.phonePlaceholder}
+        defaultValue={state.values.contactPhone}
+        error={state.errors.contactPhone}
+      />
+      <Field
+        label={intakeCopy.contactLabel}
+        name="preferredContact"
+        placeholder={intakeCopy.contactPlaceholder}
+        defaultValue={state.values.preferredContact}
+        error={state.errors.preferredContact}
+      />
+    </section>
+  );
+}
+
+function ContactOption({ value, label, detail, name, defaultChecked }) {
+  return (
+    <label className="block cursor-pointer">
+      <input
+        type="radio"
+        name={name}
+        value={value}
+        defaultChecked={defaultChecked}
+        className="peer sr-only"
+      />
+      <span className="flex min-h-16 flex-col justify-center rounded-[1rem] border border-line bg-paper px-4 py-3 transition peer-checked:border-[rgba(73,106,77,0.24)] peer-checked:bg-[rgba(73,106,77,0.08)] hover:bg-canvas">
+        <span className="text-sm font-semibold text-foreground">{label}</span>
+        <span className="mt-0.5 text-xs text-muted">{detail}</span>
+      </span>
+    </label>
   );
 }
 

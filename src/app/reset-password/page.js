@@ -81,7 +81,14 @@ export default async function ResetPasswordPage({ searchParams }) {
                 {copy.resetPasswordPage.validFor(expiresLabel)}
               </p>
               <div className="mt-6">
-                <PasswordResetForm copy={copy} token={token} />
+                <PasswordResetForm
+                  formCopy={copy.resetPasswordForm}
+                  pageCopy={{
+                    backToSignIn: copy.resetPasswordPage.backToSignIn,
+                    requestNewLink: copy.resetPasswordPage.requestNewLink,
+                  }}
+                  token={token}
+                />
               </div>
             </>
           ) : (

@@ -1,9 +1,21 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { RequestStatusLookup } from "@/components/request-status-lookup";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getMemberRequestStatusByTrackingCode } from "@/lib/care-store";
 import { getCopy } from "@/lib/i18n";
-import { getChurchSettings } from "@/lib/organization-store";
+import {
+  defaultPrimaryBranchId,
+  defaultPrimaryOrganizationId,
+} from "@/lib/organization-defaults";
+import {
+  getEffectiveChurchSettings,
+  getPublicWorkspaceCatalog,
+} from "@/lib/organization-store";
+import {
+  PUBLIC_BRANCH_COOKIE,
+  PUBLIC_ORGANIZATION_COOKIE,
+} from "@/lib/workspace-scope";
 
 export const metadata = {
   title: "Request Status",
@@ -14,13 +26,43 @@ export const metadata = {
 export default async function RequestStatusPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
+  const cookieStore = await cookies();
+  const catalog = getPublicWorkspaceCatalog();
+  const organizationId =
+    cookieStore.get(PUBLIC_ORGANIZATION_COOKIE)?.value ||
+    defaultPrimaryOrganizationId ||
+    catalog[0]?.id ||
+    "";
+  const organization =
+    catalog.find((item) => item.id === organizationId) ||
+    catalog.find((item) => item.id === defaultPrimaryOrganizationId) ||
+    catalog[0] ||
+    null;
+  const branchId =
+    cookieStore.get(PUBLIC_BRANCH_COOKIE)?.value ||
+    defaultPrimaryBranchId ||
+    organization?.branches?.[0]?.id ||
+    "";
+  const branch =
+    organization?.branches?.find((item) => item.id === branchId) ||
+    organization?.branches?.find((item) => item.id === defaultPrimaryBranchId) ||
+    organization?.branches?.[0] ||
+    null;
   const params = await searchParams;
   const trackingCode =
     typeof params?.code === "string" ? params.code.trim().toUpperCase() : "";
   const [settings, initialResult] = await Promise.all([
-    Promise.resolve(getChurchSettings()),
+    Promise.resolve(getEffectiveChurchSettings(organization?.id, branch?.id || "")),
     trackingCode ? getMemberRequestStatusByTrackingCode(trackingCode) : Promise.resolve(null),
   ]);
+  const scopedOrganization =
+    initialResult?.organizationId
+      ? catalog.find((item) => item.id === initialResult.organizationId) || organization
+      : organization;
+  const scopedBranch =
+    initialResult?.branchId && scopedOrganization
+      ? scopedOrganization.branches?.find((item) => item.id === initialResult.branchId) || branch
+      : branch;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10 pb-16 lg:px-10 lg:py-14">
@@ -35,6 +77,12 @@ export default async function RequestStatusPage({ searchParams }) {
           <p className="mt-5 text-lg leading-8 text-muted">
             {copy.requestStatusPage.description}
           </p>
+          {scopedOrganization ? (
+            <div className="mt-5 inline-flex flex-wrap items-center gap-2 rounded-full border border-line bg-canvas px-4 py-2 text-sm text-muted">
+              <span className="font-semibold text-foreground">{scopedOrganization.name}</span>
+              {scopedBranch ? <span>/ {scopedBranch.name}</span> : null}
+            </div>
+          ) : null}
 
           <div className="mt-8 grid gap-4">
             <InfoPanel
@@ -73,7 +121,8 @@ export default async function RequestStatusPage({ searchParams }) {
         </article>
 
         <RequestStatusLookup
-          copy={copy}
+          copy={copy.requestStatusLookup}
+          privacyCopy={copy.common.privacyShield}
           language={preferences.language}
           initialCode={trackingCode}
           initialResult={initialResult}

@@ -8,6 +8,7 @@ import {
   unlockUserAccount,
   updateUserAccess,
 } from "@/app/actions";
+import { cookies } from "next/headers";
 import { FlashBanner } from "@/components/flash-banner";
 import { SubmitButton } from "@/components/submit-button";
 import { requireCurrentUser } from "@/lib/auth";
@@ -16,13 +17,18 @@ import { getLocaleTag } from "@/lib/app-preferences";
 import { listUsers } from "@/lib/auth-store";
 import { listAuditLogs } from "@/lib/care-store";
 import { getCopy, translateRecoveryStatus, translateRoleLabel } from "@/lib/i18n";
-import { listMinistryTeams, listRecoveryRequests } from "@/lib/organization-store";
+import {
+  getWorkspaceContext,
+  listMinistryTeams,
+  listRecoveryRequests,
+} from "@/lib/organization-store";
 import { internalRoleOptions } from "@/lib/policies";
 import {
   filterRecoveryRequests,
   filterUsers,
   hasActiveFilters,
 } from "@/lib/search-filters";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 export const metadata = {
   title: "People",
@@ -35,12 +41,18 @@ export default async function AdminUsersPage({ searchParams }) {
   const copy = getCopy(preferences.language);
   const pageCopy = copy.people;
   const localeTag = getLocaleTag(preferences.language);
-  const currentUser = await requireCurrentUser(["pastor", "owner"]);
+  const currentUser = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const preferredBranchId = (await cookies()).get(WORKSPACE_BRANCH_COOKIE)?.value || "";
+  const workspace = getWorkspaceContext(currentUser, preferredBranchId);
   const params = await searchParams;
-  const users = listUsers();
-  const teams = listMinistryTeams();
-  const recoveryRequests = listRecoveryRequests();
-  const auditEntries = listAuditLogs(240);
+  const scopeBranchId = workspace.activeBranch?.id || "";
+  const users = listUsers({
+    organizationId: workspace.organization.id,
+    ...(scopeBranchId ? { branchId: scopeBranchId } : {}),
+  });
+  const teams = listMinistryTeams(currentUser, scopeBranchId);
+  const recoveryRequests = listRecoveryRequests(currentUser, scopeBranchId);
+  const auditEntries = listAuditLogs(240, currentUser, scopeBranchId);
   const notice = typeof params?.notice === "string" ? params.notice : "";
   const error = typeof params?.error === "string" ? params.error : "";
   const filters = {
@@ -53,12 +65,22 @@ export default async function AdminUsersPage({ searchParams }) {
   const roleOptions =
     currentUser.role === "owner"
       ? internalRoleOptions
-      : internalRoleOptions.filter((option) =>
-          ["leader", "volunteer"].includes(option.value)
-        );
+      : currentUser.role === "overseer"
+        ? internalRoleOptions.filter((option) =>
+            ["pastor", "leader", "volunteer"].includes(option.value)
+          )
+        : internalRoleOptions.filter((option) =>
+            ["leader", "volunteer"].includes(option.value)
+          );
   const localizedRoleOptions = roleOptions.map((option) => ({
     ...option,
     label: translateRoleLabel(option.value, preferences.language),
+  }));
+  const branchOptions = workspace.visibleBranches.map((branch) => ({
+    value: branch.id,
+    label: branch.locationLabel
+      ? `${branch.name} · ${branch.locationLabel}`
+      : branch.name,
   }));
   const laneSuggestions = Array.from(
     new Set(teams.map((team) => team.lane).filter(Boolean))
@@ -125,6 +147,10 @@ export default async function AdminUsersPage({ searchParams }) {
 
       <section className="mt-8 grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
+          <div className="mb-4 rounded-[1.2rem] border border-line bg-canvas px-4 py-3 text-sm text-muted">
+            Managing people for <span className="font-semibold text-foreground">{workspace.organization.name}</span>
+            {workspace.activeBranch ? ` · ${workspace.activeBranch.name}` : " · all visible branches"}
+          </div>
           <form action="/admin/users" className="rounded-[1.35rem] border border-line bg-canvas p-4">
             <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.75fr_0.85fr_auto]">
               <Field
@@ -240,6 +266,40 @@ export default async function AdminUsersPage({ searchParams }) {
                 name="role"
                 options={localizedRoleOptions}
               />
+              <Field
+                label="Title"
+                name="title"
+                placeholder="Branch pastor, HQ care admin, volunteer..."
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <SelectField
+                label="Branch"
+                name="branchId"
+                defaultValue={workspace.activeBranch?.id || branchOptions[0]?.value}
+                options={branchOptions}
+              />
+              <SelectField
+                label="Access scope"
+                name="accessScope"
+                defaultValue={currentUser.role === "owner" ? "organization" : "branch"}
+                options={[
+                  { value: "branch", label: "Branch only" },
+                  { value: "organization", label: "Organization / HQ" },
+                ]}
+              />
+            </div>
+
+            <div className="mt-4">
+              <Field
+                label="Managed branch IDs (HQ roles only)"
+                name="managedBranchIds"
+                placeholder="Leave blank for all visible branches, or enter comma-separated branch IDs"
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
               <Field
                 label={pageCopy.fields.lane}
                 name="lane"
@@ -493,20 +553,53 @@ export default async function AdminUsersPage({ searchParams }) {
                         options={localizedRoleOptions}
                       />
                       <Field
+                        label="Title"
+                        name="title"
+                        defaultValue={account.title}
+                        placeholder="Branch pastor, HQ care admin, volunteer..."
+                      />
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <SelectField
+                        label="Branch"
+                        name="branchId"
+                        defaultValue={account.branchId || workspace.activeBranch?.id}
+                        options={branchOptions}
+                      />
+                      <SelectField
+                        label="Access scope"
+                        name="accessScope"
+                        defaultValue={account.accessScope || "branch"}
+                        options={[
+                          { value: "branch", label: "Branch only" },
+                          { value: "organization", label: "Organization / HQ" },
+                        ]}
+                      />
+                    </div>
+
+                    <Field
+                      label="Managed branch IDs (HQ roles only)"
+                      name="managedBranchIds"
+                      defaultValue={(account.managedBranchIds || []).join(", ")}
+                      placeholder="Leave blank for all visible branches, or enter comma-separated branch IDs"
+                    />
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Field
                         label={pageCopy.fields.lane}
                         name="lane"
                         defaultValue={account.lane}
                         placeholder={pageCopy.placeholders.lane}
                         list="lane-options"
                       />
+                      <Field
+                        label={pageCopy.fields.volunteerDisplayName}
+                        name="volunteerName"
+                        defaultValue={account.volunteerName}
+                        placeholder={pageCopy.placeholders.volunteerDisplayNameNeeded}
+                      />
                     </div>
-
-                    <Field
-                      label={pageCopy.fields.volunteerDisplayName}
-                      name="volunteerName"
-                      defaultValue={account.volunteerName}
-                      placeholder={pageCopy.placeholders.volunteerDisplayNameNeeded}
-                    />
 
                     <ToggleField
                       label={pageCopy.fields.accountIsActive}
@@ -620,6 +713,10 @@ export default async function AdminUsersPage({ searchParams }) {
 function canManageRole(actorRole, role) {
   if (actorRole === "owner") {
     return true;
+  }
+
+  if (actorRole === "overseer") {
+    return ["pastor", "leader", "volunteer"].includes(role);
   }
 
   if (actorRole === "pastor") {

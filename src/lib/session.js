@@ -7,7 +7,31 @@ import { roleLandingPages } from "@/lib/policies";
 import { safeEqualValue, signValue } from "@/lib/auth-crypto";
 
 const sessionCookieName = "care_session";
+const pendingSessionCookieName = "care_pending_session";
 const sessionDurationSeconds = 60 * 60 * 12;
+const pendingSessionDurationSeconds = 60 * 10;
+
+export function shouldUseSecureCookies() {
+  const explicit = String(process.env.CARE_SECURE_COOKIES || "").trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(explicit)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(explicit)) {
+    return false;
+  }
+
+  const appBaseUrl = String(process.env.APP_BASE_URL || "").trim();
+  if (appBaseUrl) {
+    try {
+      return new URL(appBaseUrl).protocol === "https:";
+    } catch {
+      return process.env.NODE_ENV === "production";
+    }
+  }
+
+  return process.env.NODE_ENV === "production";
+}
 
 function getSessionSecret() {
   if (process.env.AUTH_SECRET) {
@@ -72,6 +96,10 @@ export async function createSession(user) {
     email: user.email,
     lane: user.lane || "",
     volunteerName: user.volunteerName || "",
+    organizationId: user.organizationId || "",
+    branchId: user.branchId || "",
+    accessScope: user.accessScope || "branch",
+    managedBranchIds: user.managedBranchIds || [],
     sessionVersion: Number(user.sessionVersion || 1),
     exp: expiresAt,
   });
@@ -80,8 +108,28 @@ export async function createSession(user) {
     path: "/",
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookies(),
     maxAge: sessionDurationSeconds,
+  });
+}
+
+export async function createPendingSession(user, purpose = "mfa") {
+  const expiresAt = Date.now() + pendingSessionDurationSeconds * 1000;
+  const token = encodeSession({
+    userId: user.id,
+    role: user.role,
+    organizationId: user.organizationId || "",
+    branchId: user.branchId || "",
+    purpose,
+    exp: expiresAt,
+  });
+
+  (await cookies()).set(pendingSessionCookieName, token, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: shouldUseSecureCookies(),
+    maxAge: pendingSessionDurationSeconds,
   });
 }
 
@@ -90,10 +138,25 @@ export async function destroySession() {
     path: "/",
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookies(),
     maxAge: 0,
   });
 }
+
+export async function destroyPendingSession() {
+  (await cookies()).set(pendingSessionCookieName, "", {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: shouldUseSecureCookies(),
+    maxAge: 0,
+  });
+}
+
+export const getPendingSession = cache(async function getPendingSession() {
+  const token = (await cookies()).get(pendingSessionCookieName)?.value;
+  return decodeSession(token);
+});
 
 export async function requireSession() {
   const session = await getOptionalSession();

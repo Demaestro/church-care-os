@@ -34,7 +34,7 @@ export default async function NotificationsPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const pageCopy = copy.notifications;
-  const user = await requireCurrentUser(["volunteer", "leader", "pastor", "owner"]);
+  const user = await requireCurrentUser(["volunteer", "leader", "pastor", "overseer", "owner"]);
   const params = await searchParams;
   const notifications = listNotificationsForUser(user);
   const filters = {

@@ -7,6 +7,11 @@ import { getDatabase, parseJson, serializeJson } from "@/lib/database";
 
 function resolveTargetUserIds(input = {}) {
   const recipients = new Set();
+  const visibleUsers = listUsers(
+    input.organizationId ? { organizationId: input.organizationId } : {}
+  ).filter((user) =>
+    input.branchId ? user.branchId === input.branchId || input.allowCrossBranch : true
+  );
 
   for (const userId of input.userIds || []) {
     if (userId) {
@@ -15,7 +20,7 @@ function resolveTargetUserIds(input = {}) {
   }
 
   if (input.volunteerName) {
-    for (const user of listUsers()) {
+    for (const user of visibleUsers) {
       if (
         user.active &&
         user.role === "volunteer" &&
@@ -27,7 +32,7 @@ function resolveTargetUserIds(input = {}) {
   }
 
   if (input.roles?.length) {
-    for (const user of listUsers()) {
+    for (const user of visibleUsers) {
       if (user.active && input.roles.includes(user.role)) {
         recipients.add(user.id);
       }
@@ -49,6 +54,8 @@ export function createNotifications(input) {
   const insert = db.prepare(`
     INSERT INTO notifications (
       id,
+      organization_id,
+      branch_id,
       recipient_user_id,
       kind,
       title,
@@ -57,12 +64,14 @@ export function createNotifications(input) {
       metadata_json,
       created_at,
       read_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   for (const userId of userIds) {
     insert.run(
       randomUUID(),
+      input.organizationId || "",
+      input.branchId || null,
       userId,
       input.kind || "update",
       input.title,
