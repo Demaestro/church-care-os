@@ -6,6 +6,9 @@ import { login } from "@/app/actions";
 const initialState = {
   message: "",
   errors: {},
+  values: {
+    email: "",
+  },
 };
 
 export function LoginForm({ copy }) {
@@ -20,6 +23,7 @@ export function LoginForm({ copy }) {
         type="email"
         placeholder={loginCopy.emailPlaceholder}
         error={state.errors?.email}
+        defaultValue={state.values?.email || ""}
       />
       <Field
         label={loginCopy.passwordLabel}
@@ -46,7 +50,7 @@ export function LoginForm({ copy }) {
   );
 }
 
-function Field({ label, name, placeholder, error, type }) {
+function Field({ label, name, placeholder, error, type, defaultValue = "" }) {
   return (
     <label className="block">
       <span className="text-base font-medium text-foreground">{label}</span>
@@ -54,6 +58,8 @@ function Field({ label, name, placeholder, error, type }) {
         type={type}
         name={name}
         placeholder={placeholder}
+        defaultValue={defaultValue}
+        autoComplete={type === "password" ? "current-password" : "username"}
         className="mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-4 text-base text-foreground outline-none transition focus:border-moss"
       />
       {error ? <p className="mt-2 text-sm text-clay">{error}</p> : null}

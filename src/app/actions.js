@@ -730,6 +730,9 @@ export async function login(prevState, formData) {
   );
   const password = getBoundedPassword(formData, "password");
   const errors = {};
+  const values = {
+    email,
+  };
 
   if (!email) {
     errors.email = loginCopy.actionMessages.emailRequired;
@@ -745,6 +748,7 @@ export async function login(prevState, formData) {
     return {
       message: loginCopy.actionMessages.fixFields,
       errors,
+      values,
     };
   }
 
@@ -758,6 +762,7 @@ export async function login(prevState, formData) {
       errors: {
         email: loginCopy.actionMessages.retryHint,
       },
+      values,
     };
   }
 
@@ -768,6 +773,7 @@ export async function login(prevState, formData) {
       errors: {
         email: loginCopy.actionMessages.retryHint,
       },
+      values,
     };
   }
 
@@ -779,6 +785,7 @@ export async function login(prevState, formData) {
         errors: {
           email: loginCopy.actionMessages.retryHint,
         },
+        values,
       };
     }
 
@@ -803,6 +810,7 @@ export async function login(prevState, formData) {
       errors: {
         email: loginCopy.actionMessages.retryHint,
       },
+      values,
     };
   }
 
@@ -813,6 +821,7 @@ export async function login(prevState, formData) {
       errors: {
         email: loginCopy.actionMessages.retryHint,
       },
+      values,
     };
   }
 
@@ -823,6 +832,7 @@ export async function login(prevState, formData) {
       errors: {
         email: loginCopy.actionMessages.retryHint,
       },
+      values,
     };
   }
 
@@ -832,6 +842,7 @@ export async function login(prevState, formData) {
       errors: {
         email: loginCopy.actionMessages.retryHint,
       },
+      values,
     };
   }
 
