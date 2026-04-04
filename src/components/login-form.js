@@ -24,6 +24,9 @@ export function LoginForm({ copy }) {
         placeholder={loginCopy.emailPlaceholder}
         error={state.errors?.email}
         defaultValue={state.values?.email || ""}
+        autoComplete="email"
+        autoCapitalize="none"
+        spellCheck={false}
       />
       <Field
         label={loginCopy.passwordLabel}
@@ -31,6 +34,8 @@ export function LoginForm({ copy }) {
         type="password"
         placeholder={loginCopy.passwordPlaceholder}
         error={state.errors?.password}
+        autoComplete="current-password"
+        spellCheck={false}
       />
 
       {state.message ? (
@@ -50,7 +55,17 @@ export function LoginForm({ copy }) {
   );
 }
 
-function Field({ label, name, placeholder, error, type, defaultValue = "" }) {
+function Field({
+  label,
+  name,
+  placeholder,
+  error,
+  type,
+  defaultValue = "",
+  autoComplete,
+  autoCapitalize,
+  spellCheck,
+}) {
   return (
     <label className="block">
       <span className="text-base font-medium text-foreground">{label}</span>
@@ -59,7 +74,9 @@ function Field({ label, name, placeholder, error, type, defaultValue = "" }) {
         name={name}
         placeholder={placeholder}
         defaultValue={defaultValue}
-        autoComplete={type === "password" ? "current-password" : "username"}
+        autoComplete={autoComplete || (type === "password" ? "current-password" : "username")}
+        autoCapitalize={autoCapitalize}
+        spellCheck={spellCheck}
         className="mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-4 text-base text-foreground outline-none transition focus:border-moss"
       />
       {error ? <p className="mt-2 text-sm text-clay">{error}</p> : null}

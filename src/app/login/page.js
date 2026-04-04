@@ -21,6 +21,7 @@ export default async function LoginPage({ searchParams }) {
     typeof params?.notice === "string" ? params.notice.trim() : "";
   const error = typeof params?.error === "string" ? params.error.trim() : "";
   const user = await getCurrentUser();
+
   if (user && !switchMode) {
     redirect(getUserLandingPage(user));
   }
@@ -28,8 +29,6 @@ export default async function LoginPage({ searchParams }) {
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-20 lg:px-8">
       <div className="grid min-h-[520px] overflow-hidden rounded-[2.5rem] border border-line shadow-lg lg:grid-cols-2">
-
-        {/* ── Left: Brand panel ── */}
         <div className="flex flex-col justify-between bg-[linear-gradient(145deg,#1e3a8a_0%,#1d4ed8_45%,#4338ca_100%)] p-10 lg:p-12">
           <div>
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 text-sm font-bold tracking-widest text-white">
@@ -42,37 +41,56 @@ export default async function LoginPage({ searchParams }) {
 
           <div>
             <h1 className="text-3xl font-bold leading-tight tracking-tight text-white lg:text-4xl">
-              A calmer way<br />to care for<br />your people.
+              A calmer way
+              <br />
+              to care for
+              <br />
+              your people.
             </h1>
             <p className="mt-4 text-sm leading-7 text-blue-200">
-              Pastoral care, follow-up workflows, and discipleship — all in one private, secure space.
+              Pastoral care, follow-up workflows, and discipleship - all in one
+              private, secure space.
             </p>
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-300">Access roles</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-300">
+              Access roles
+            </p>
             <div className="flex flex-wrap gap-2">
-              {["Pastor", "Leader", "Volunteer", "Member"].map(r => (
-                <span key={r} className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-blue-100">
-                  {r}
+              {["Pastor", "Leader", "Volunteer", "Member"].map((role) => (
+                <span
+                  key={role}
+                  className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-blue-100"
+                >
+                  {role}
                 </span>
               ))}
             </div>
           </div>
         </div>
 
-        {/* ── Right: Sign-in form ── */}
         <div className="flex flex-col justify-center bg-paper px-8 py-10 lg:px-12">
           {switchMode && user ? (
             <div className="mb-6 rounded-[1.2rem] border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-moss">Signed in as</p>
-              <p className="mt-1 text-sm font-semibold text-foreground">{user.name}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-moss">
+                Signed in as
+              </p>
+              <p className="mt-1 text-sm font-semibold text-foreground">
+                {user.name}
+              </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Link href={getUserLandingPage(user)} className="rounded-[0.85rem] border border-line bg-paper px-3 py-2 text-xs font-medium text-foreground hover:bg-canvas">
+                <Link
+                  href={getUserLandingPage(user)}
+                  className="rounded-[0.85rem] border border-line bg-paper px-3 py-2 text-xs font-medium text-foreground hover:bg-canvas"
+                >
                   Back to workspace
                 </Link>
                 <form action={logout}>
-                  <button type="submit" className="rounded-[0.85rem] border border-line bg-paper px-3 py-2 text-xs font-medium text-foreground hover:bg-canvas">
+                  <button
+                    type="submit"
+                    className="rounded-[0.85rem] border border-line bg-paper px-3 py-2 text-xs font-medium text-foreground hover:bg-canvas"
+                  >
                     Sign out
                   </button>
                 </form>
@@ -81,8 +99,12 @@ export default async function LoginPage({ searchParams }) {
           ) : null}
 
           <div className="mb-7">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">Welcome back</h2>
-            <p className="mt-1.5 text-sm text-muted">Sign in to your care workspace.</p>
+            <h2 className="text-2xl font-bold tracking-tight text-foreground">
+              Welcome back
+            </h2>
+            <p className="mt-1.5 text-sm text-muted">
+              Sign in to your care workspace.
+            </p>
           </div>
 
           {notice ? (
@@ -100,11 +122,17 @@ export default async function LoginPage({ searchParams }) {
           <LoginForm copy={copy.loginForm} />
 
           <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-            <Link href="/account-recovery" className="text-muted hover:text-foreground hover:underline">
+            <Link
+              href="/account-recovery"
+              className="text-muted hover:text-foreground hover:underline"
+            >
               Forgot password?
             </Link>
-            <span className="text-line">·</span>
-            <Link href="/requests/status" className="text-muted hover:text-foreground hover:underline">
+            <span className="text-line">|</span>
+            <Link
+              href="/requests/status"
+              className="text-muted hover:text-foreground hover:underline"
+            >
               Track a request
             </Link>
           </div>
@@ -112,21 +140,29 @@ export default async function LoginPage({ searchParams }) {
           <div className="mt-8 border-t border-line pt-6">
             <p className="text-sm text-muted">
               New to your church?{" "}
-              <Link href="/register" className="font-semibold text-moss hover:underline">
-                Create a member account →
+              <Link
+                href="/register"
+                className="font-semibold text-moss hover:underline"
+              >
+                Create a member account -&gt;
               </Link>
+            </p>
+            <p className="mt-2 text-xs text-muted">
+              New member accounts need email verification before the first
+              sign-in.
             </p>
           </div>
         </div>
       </div>
 
-      {/* ── Demo quick-access (dev only) ── */}
       {process.env.NODE_ENV !== "production" ? (
         <div className="mt-8 rounded-[2rem] border border-line bg-paper p-8">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted">
             {copy.loginPage.quickAccessTitle}
           </p>
-          <p className="mt-2 text-sm text-muted">{copy.loginPage.quickAccessBody}</p>
+          <p className="mt-2 text-sm text-muted">
+            {copy.loginPage.quickAccessBody}
+          </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
             {demoAuthUsers.map((account) => (
               <form key={account.email} action={quickDemoLogin}>
@@ -135,8 +171,12 @@ export default async function LoginPage({ searchParams }) {
                   type="submit"
                   className="w-full rounded-[1.3rem] border border-line bg-canvas px-4 py-4 text-left transition hover:border-[var(--soft-accent-border)] hover:bg-[var(--soft-fill)]"
                 >
-                  <p className="text-sm font-semibold text-foreground">{account.name}</p>
-                  <p className="mt-0.5 text-xs text-muted">{translateRoleLabel(account.role, preferences.language)}</p>
+                  <p className="text-sm font-semibold text-foreground">
+                    {account.name}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {translateRoleLabel(account.role, preferences.language)}
+                  </p>
                 </button>
               </form>
             ))}

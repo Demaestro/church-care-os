@@ -132,7 +132,7 @@ export default async function RootLayout({ children }) {
         buttonLabel: user.name.split(" ")[0] || user.name,
         roleLabel: translateRoleLabel(user.role, preferences.language),
         detailLabel: workspace
-          ? `${workspace.organization.shortName} · ${workspace.activeScopeLabel}`
+          ? `${workspace.organization.shortName} | ${workspace.activeScopeLabel}`
           : "",
         workspaceHref,
         switchHref: "/login?switch=1",

@@ -305,7 +305,7 @@ const englishDictionary = {
   loginForm: {
     emailLabel: "Email",
     passwordLabel: "Password",
-    emailPlaceholder: "pastor@grace.demo",
+    emailPlaceholder: "pastor.lagos@firstlove.demo",
     passwordPlaceholder: "Enter your password",
     signIn: "Sign in",
     signingIn: "Signing in...",

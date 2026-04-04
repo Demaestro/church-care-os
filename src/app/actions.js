@@ -210,6 +210,24 @@ function getGenericRegistrationResponse() {
   };
 }
 
+function buildRegistrationResponse(challenge = null, options = {}) {
+  const { resent = false } = options;
+  const response = getGenericRegistrationResponse();
+
+  if (
+    process.env.NODE_ENV !== "production" &&
+    challenge?.token
+  ) {
+    response.verificationPath = buildEmailVerificationPath(challenge.token);
+    response.message =
+      resent
+        ? "Check your email to verify your existing account before your first sign-in."
+        : "Your account was created. Verify your email before your first sign-in.";
+  }
+
+  return response;
+}
+
 function getAccountAttentionMessage() {
   return "We could not sign you in right now. Check your email for any secure next steps, or request sign-in help.";
 }
@@ -226,6 +244,16 @@ function buildPathWithParams(path, values = {}) {
 
   const query = params.toString();
   return query ? `${pathname}?${query}` : pathname;
+}
+
+function sanitizeInternalRedirect(path, fallback = "/") {
+  const value = String(path || "").trim();
+
+  if (!value.startsWith("/") || value.startsWith("//")) {
+    return fallback;
+  }
+
+  return value;
 }
 
 function redirectWithNotice(path, notice, values = {}) {
@@ -323,6 +351,30 @@ function buildUnlockAccountPath(token) {
   return token
     ? `/unlock-account?token=${encodeURIComponent(token)}`
     : "/unlock-account";
+}
+
+function resolvePublicWorkspaceSelection(
+  organizationId = "",
+  branchId = "",
+  strict = false
+) {
+  const catalog = getPublicWorkspaceCatalog();
+  const organization = strict
+    ? catalog.find((item) => item.id === organizationId) || null
+    : catalog.find((item) => item.id === organizationId) || catalog[0] || null;
+  const branch = strict
+    ? organization?.branches.find((item) => item.id === branchId) || null
+    : organization?.branches.find((item) => item.id === branchId) ||
+      organization?.branches[0] ||
+      null;
+
+  return {
+    catalog,
+    organization,
+    branch,
+    organizationId: organization?.id || "",
+    branchId: branch?.id || "",
+  };
 }
 
 function notifyRoles(roles, input) {
@@ -566,20 +618,17 @@ function resolveManagedScopeFromForm(actor, formData, role) {
 
 async function getPublicSelection() {
   const cookieStore = await cookies();
-  const catalog = getPublicWorkspaceCatalog();
-  const organizationId =
+  const preferredOrganizationId =
     cookieStore.get(PUBLIC_ORGANIZATION_COOKIE)?.value || defaultPrimaryOrganizationId;
-  const organization =
-    catalog.find((item) => item.id === organizationId) || catalog[0];
-  const branchId = cookieStore.get(PUBLIC_BRANCH_COOKIE)?.value || "";
-  const branch =
-    organization?.branches.find((item) => item.id === branchId) ||
-    organization?.branches[0] ||
-    null;
+  const preferredBranchId = cookieStore.get(PUBLIC_BRANCH_COOKIE)?.value || "";
+  const selection = resolvePublicWorkspaceSelection(
+    preferredOrganizationId,
+    preferredBranchId
+  );
 
   return {
-    organizationId: organization?.id || defaultPrimaryOrganizationId,
-    branchId: branch?.id || defaultPrimaryBranchId,
+    organizationId: selection.organizationId || defaultPrimaryOrganizationId,
+    branchId: selection.branchId || defaultPrimaryBranchId,
   };
 }
 
@@ -1141,7 +1190,10 @@ export async function createCareRequest(prevState, formData) {
     contactPhone: rawContactPhone,
   };
   const publicSelection = await getPublicSelection();
-  const settings = getChurchSettings(publicSelection.organizationId);
+  const settings = getEffectiveChurchSettings(
+    publicSelection.organizationId,
+    publicSelection.branchId
+  );
   const confirmationMessage =
     settings?.intakeConfirmationText ||
     "Your request has been received. A pastor or assigned care leader will review it and follow up using the contact method you provided.";
@@ -1207,6 +1259,9 @@ export async function createCareRequest(prevState, formData) {
     (allowContact ? "Follow up through church office" : "No direct contact requested");
   const safeSummary =
     summary || "Member asked for support and chose to share more detail later.";
+  const normalizedPreferredContact = safePreferredContact
+    .replaceAll("â€”", "-")
+    .replaceAll("—", "-");
 
   const { householdSlug, trackingCode } = await createCareRequestEntry({
     organizationId: publicSelection.organizationId,
@@ -1215,7 +1270,7 @@ export async function createCareRequest(prevState, formData) {
     submittedBy: safeSubmittedBy,
     contactEmail,
     contactPhone,
-    preferredContact: safePreferredContact,
+    preferredContact: normalizedPreferredContact,
     requestFor: values.requestFor,
     need,
     summary: safeSummary,
@@ -1225,7 +1280,7 @@ export async function createCareRequest(prevState, formData) {
     owner: "Unassigned",
     source: "Member care form",
     tags: "",
-    intakeNote: `Submitted by ${safeSubmittedBy}. Preferred contact: ${safePreferredContact}.`,
+    intakeNote: `Submitted by ${safeSubmittedBy}. Preferred contact: ${normalizedPreferredContact}.`,
     privacyLevel,
     shareWithVolunteers: !(keepNamePrivate || markSensitive),
     allowTextUpdates: allowContact,
@@ -2132,7 +2187,10 @@ export async function saveDisplayPreferences(formData) {
   const language = normalizeLanguage(getString(formData, "language"));
   const displayMode = normalizeDisplayMode(getString(formData, "displayMode"));
   const theme = normalizeTheme(getString(formData, "theme"));
-  const redirectTo = getString(formData, "redirectTo") || "/";
+  const redirectTo = sanitizeInternalRedirect(
+    getString(formData, "redirectTo"),
+    "/"
+  );
   const cookieOptions = getPreferenceCookieOptions();
 
   cookieStore.set(LANGUAGE_COOKIE, language, cookieOptions);
@@ -2145,7 +2203,10 @@ export async function saveDisplayPreferences(formData) {
 export async function toggleThemePreference(formData) {
   const cookieStore = await cookies();
   const theme = normalizeTheme(getString(formData, "theme"));
-  const redirectTo = getString(formData, "redirectTo") || "/";
+  const redirectTo = sanitizeInternalRedirect(
+    getString(formData, "redirectTo"),
+    "/"
+  );
   const cookieOptions = getPreferenceCookieOptions();
 
   cookieStore.set(THEME_COOKIE, theme, cookieOptions);
@@ -2157,7 +2218,10 @@ export async function switchWorkspaceBranch(formData) {
   const user = await requireCurrentUser(["leader", "pastor", "overseer", "owner"]);
   const cookieStore = await cookies();
   const requestedBranchId = getString(formData, "branchId");
-  const redirectTo = getString(formData, "redirectTo") || getUserLandingPage(user);
+  const redirectTo = sanitizeInternalRedirect(
+    getString(formData, "redirectTo"),
+    getUserLandingPage(user)
+  );
   const workspace = getWorkspaceContext(user, requestedBranchId);
 
   if (!isOrganizationScopedUser(user) || !workspace.canSwitchBranches) {
@@ -2181,14 +2245,13 @@ export async function switchPublicBranch(formData) {
   const cookieStore = await cookies();
   const organizationId = getString(formData, "organizationId") || defaultPrimaryOrganizationId;
   const branchId = getString(formData, "branchId");
-  const redirectTo = getString(formData, "redirectTo") || "/";
-  const catalog = getPublicWorkspaceCatalog();
-  const organization =
-    catalog.find((item) => item.id === organizationId) || catalog[0];
-  const branch =
-    organization?.branches.find((item) => item.id === branchId) ||
-    organization?.branches[0] ||
-    null;
+  const redirectTo = sanitizeInternalRedirect(
+    getString(formData, "redirectTo"),
+    "/"
+  );
+  const selection = resolvePublicWorkspaceSelection(organizationId, branchId);
+  const organization = selection.organization;
+  const branch = selection.branch;
   const cookieOptions = getPreferenceCookieOptions();
 
   if (organization?.id) {
@@ -3732,21 +3795,33 @@ export async function selfRegister(formData) {
   );
   const password = getBoundedPassword(formData, "password");
   const birthday = getString(formData, "birthday") || null;
-  const gender = getString(formData, "gender") || "unspecified";
-  const memberType = getString(formData, "memberType") || "member";
-  const organizationId = getString(formData, "organizationId");
-  const branchId = getString(formData, "branchId");
+  const rawGender = getString(formData, "gender") || "unspecified";
+  const rawMemberType = getString(formData, "memberType") || "member";
+  const gender = ["unspecified", "male", "female"].includes(rawGender)
+    ? rawGender
+    : "unspecified";
+  const memberType = ["member", "new_member", "visitor"].includes(rawMemberType)
+    ? rawMemberType
+    : "member";
+  const publicSelection = resolvePublicWorkspaceSelection(
+    getString(formData, "organizationId"),
+    getString(formData, "branchId"),
+    true
+  );
+  const organizationId = publicSelection.organizationId;
+  const branchId = publicSelection.branchId;
 
   if (!name)  return { error: "Full name is required." };
   if (!email) return { error: "A valid email address is required." };
   if (!isValidEmailAddress(email)) return { error: "Please enter a valid email address." };
   if (!password || password.length < 8) return { error: "Password must be at least 8 characters." };
-  if (!organizationId || !branchId) return { error: "Please select your church and branch." };
+  if (!organizationId || !branchId) return { error: "Please choose a valid church and branch." };
 
   const existing = findUserByEmail(email);
   if (existing) {
     if (!existing.emailVerifiedAt && existing.role === "member") {
-      await sendVerificationEmail(existing);
+      const challenge = await sendVerificationEmail(existing);
+      return buildRegistrationResponse(challenge, { resent: true });
     }
 
     return getGenericRegistrationResponse();
@@ -3781,7 +3856,7 @@ export async function selfRegister(formData) {
   }
 
   const newUser = findUserById(userId);
-  await sendVerificationEmail(newUser);
+  const challenge = await sendVerificationEmail(newUser);
 
   recordAuditLog({
     actorUserId: userId,
@@ -3795,7 +3870,7 @@ export async function selfRegister(formData) {
     summary: `${name} self-registered and must verify email before accessing the app.`,
   });
 
-  return getGenericRegistrationResponse();
+  return buildRegistrationResponse(challenge);
 }
 
 export async function applyForVolunteer(prevState, formData) {

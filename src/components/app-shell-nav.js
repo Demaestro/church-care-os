@@ -165,7 +165,7 @@ function ThemeToggleButton({ currentTheme, redirectTo, copy }) {
         title={copy.themeToggleLabel}
         className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-line bg-[var(--header-pill-bg)] text-base text-foreground transition hover:border-[var(--soft-accent-border)] hover:bg-paper"
       >
-        {darkMode ? "☀️" : "🌙"}
+        {darkMode ? <SunGlyph /> : <MoonGlyph />}
       </button>
     </form>
   );
@@ -474,6 +474,48 @@ function Chevron({ open }) {
       strokeLinejoin="round"
     >
       <path d="M2.5 4.5 6 8l3.5-3.5" />
+    </svg>
+  );
+}
+
+function SunGlyph() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2.25" />
+      <path d="M12 19.25v2.25" />
+      <path d="m4.93 4.93 1.6 1.6" />
+      <path d="m17.47 17.47 1.6 1.6" />
+      <path d="M2.5 12h2.25" />
+      <path d="M19.25 12h2.25" />
+      <path d="m4.93 19.07 1.6-1.6" />
+      <path d="m17.47 6.53 1.6-1.6" />
+    </svg>
+  );
+}
+
+function MoonGlyph() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M20 15.35A8.5 8.5 0 1 1 8.65 4 6.75 6.75 0 0 0 20 15.35Z" />
     </svg>
   );
 }

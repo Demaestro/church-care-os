@@ -9,16 +9,20 @@ const STEPS = ["Church", "Details", "Done"];
 export function RegisterForm({
   orgs = [],
   preselectedOrgId = "",
+  preselectedBranchId = "",
   preselectedBranches = [],
 }) {
   const router = useRouter();
-  const [step, setStep] = useState(preselectedOrgId ? 2 : 1);
+  const [step, setStep] = useState(
+    preselectedOrgId && preselectedBranchId ? 2 : 1
+  );
   const [orgId, setOrgId] = useState(preselectedOrgId);
-  const [branchId, setBranchId] = useState("");
+  const [branchId, setBranchId] = useState(preselectedBranchId);
   const [branches, setBranches] = useState(preselectedBranches);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [verificationPath, setVerificationPath] = useState("");
   const [isPending, startTransition] = useTransition();
 
   async function handleOrgChange(event) {
@@ -33,7 +37,9 @@ export function RegisterForm({
 
     setLoadingBranches(true);
     try {
-      const response = await fetch(`/api/branches?orgId=${selectedOrgId}`);
+      const response = await fetch(
+        `/api/branches?orgId=${encodeURIComponent(selectedOrgId)}`
+      );
       const data = await response.json();
       setBranches(data.branches || []);
     } catch {
@@ -104,8 +110,8 @@ export function RegisterForm({
         result?.message ||
           "Check your email for a verification link before you sign in."
       );
+      setVerificationPath(result?.verificationPath || "");
       setStep(3);
-      setTimeout(() => router.push("/login"), 1800);
     });
   }
 
@@ -237,6 +243,7 @@ export function RegisterForm({
             label="Full name"
             name="name"
             placeholder="Your full name"
+            autoComplete="name"
             required
           />
           <FormField
@@ -244,6 +251,9 @@ export function RegisterForm({
             name="email"
             type="email"
             placeholder="you@example.com"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
             required
           />
           <FormField
@@ -251,6 +261,8 @@ export function RegisterForm({
             name="phone"
             type="tel"
             placeholder="+234 800 000 0000"
+            autoComplete="tel"
+            inputMode="tel"
           />
 
           <div className="grid grid-cols-2 gap-4">
@@ -303,6 +315,7 @@ export function RegisterForm({
               name="password"
               type="password"
               placeholder="Min. 8 characters"
+              autoComplete="new-password"
               required
             />
             <div className="mt-4">
@@ -311,6 +324,7 @@ export function RegisterForm({
                 name="confirmPassword"
                 type="password"
                 placeholder="Repeat your password"
+                autoComplete="new-password"
                 required
               />
             </div>
@@ -354,6 +368,34 @@ export function RegisterForm({
           <p className="mt-2 text-sm text-muted">
             {successMessage || "We sent the next secure step to your email address."}
           </p>
+          <div className="mt-5 space-y-3 text-sm text-muted">
+            <p>
+              Before your first sign-in, verify your email address. After that, you can return to the login page and use the password you just created.
+            </p>
+            {verificationPath ? (
+              <p className="rounded-[0.9rem] border border-[rgba(37,99,235,0.14)] bg-[rgba(37,99,235,0.06)] px-4 py-3 text-left text-[0.95rem] text-foreground">
+                Local testing mode is active, so you can finish verification right here without waiting for email delivery.
+              </p>
+            ) : null}
+          </div>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            {verificationPath ? (
+              <button
+                type="button"
+                onClick={() => router.push(verificationPath)}
+                className="inline-flex items-center justify-center rounded-[1.15rem] bg-[linear-gradient(135deg,#2563eb,#4f46e5)] px-6 py-4 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                Verify email now
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => router.push("/login")}
+              className="inline-flex items-center justify-center rounded-[1.15rem] border border-line bg-canvas px-6 py-4 text-sm font-medium text-foreground transition hover:bg-paper"
+            >
+              Go to sign in
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -366,6 +408,10 @@ function FormField({
   type = "text",
   placeholder,
   required = false,
+  autoComplete,
+  autoCapitalize,
+  spellCheck,
+  inputMode,
 }) {
   return (
     <label className="block">
@@ -377,6 +423,10 @@ function FormField({
         type={type}
         name={name}
         placeholder={placeholder}
+        autoComplete={autoComplete}
+        autoCapitalize={autoCapitalize}
+        spellCheck={spellCheck}
+        inputMode={inputMode}
         className="mt-2 block w-full rounded-[1rem] border border-line bg-paper px-4 py-3.5 text-sm text-foreground placeholder:text-muted focus:border-moss focus:outline-none"
       />
     </label>
