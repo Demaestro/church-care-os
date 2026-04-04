@@ -18,6 +18,7 @@ export function RegisterForm({
   const [branches, setBranches] = useState(preselectedBranches);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [isPending, startTransition] = useTransition();
 
   async function handleOrgChange(event) {
@@ -99,8 +100,12 @@ export function RegisterForm({
         return;
       }
 
+      setSuccessMessage(
+        result?.message ||
+          "Check your email for a verification link before you sign in."
+      );
       setStep(3);
-      setTimeout(() => router.push("/"), 1500);
+      setTimeout(() => router.push("/login"), 1800);
     });
   }
 
@@ -345,9 +350,9 @@ export function RegisterForm({
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--soft-fill)] text-3xl">
             OK
           </div>
-          <h2 className="mt-5 text-xl font-bold text-foreground">Welcome!</h2>
+          <h2 className="mt-5 text-xl font-bold text-foreground">Check your email</h2>
           <p className="mt-2 text-sm text-muted">
-            Your account has been created. Signing you in...
+            {successMessage || "We sent the next secure step to your email address."}
           </p>
         </div>
       )}

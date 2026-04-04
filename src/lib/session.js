@@ -1,8 +1,10 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getDatabase } from "@/lib/database";
 import { shouldUseSecureTransport } from "@/lib/deployment-environment";
 import { roleLandingPages } from "@/lib/policies";
 import { safeEqualValue, signValue } from "@/lib/auth-crypto";
@@ -76,12 +78,28 @@ function decodeSession(token) {
 
 export const getOptionalSession = cache(async function getOptionalSession() {
   const token = (await cookies()).get(sessionCookieName)?.value;
-  return decodeSession(token);
+  const session = decodeSession(token);
+
+  if (!session?.sessionId) {
+    return session;
+  }
+
+  const revoked = getDatabase()
+    .prepare(`
+      SELECT 1 AS revoked
+      FROM session_revocations
+      WHERE session_id = ?
+      LIMIT 1
+    `)
+    .get(session.sessionId);
+
+  return revoked?.revoked === 1 ? null : session;
 });
 
 export async function createSession(user) {
   const expiresAt = Date.now() + sessionDurationSeconds * 1000;
   const token = encodeSession({
+    sessionId: randomUUID(),
     userId: user.id,
     role: user.role,
     name: user.name,
@@ -99,7 +117,7 @@ export async function createSession(user) {
   (await cookies()).set(sessionCookieName, token, {
     path: "/",
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: shouldUseSecureCookies(),
     maxAge: sessionDurationSeconds,
   });
@@ -119,7 +137,7 @@ export async function createPendingSession(user, purpose = "mfa") {
   (await cookies()).set(pendingSessionCookieName, token, {
     path: "/",
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: shouldUseSecureCookies(),
     maxAge: pendingSessionDurationSeconds,
   });
@@ -129,7 +147,7 @@ export async function destroySession() {
   (await cookies()).set(sessionCookieName, "", {
     path: "/",
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: shouldUseSecureCookies(),
     maxAge: 0,
   });
@@ -139,7 +157,7 @@ export async function destroyPendingSession() {
   (await cookies()).set(pendingSessionCookieName, "", {
     path: "/",
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: shouldUseSecureCookies(),
     maxAge: 0,
   });
@@ -170,5 +188,35 @@ export async function requireRole(roles) {
 }
 
 export function getRoleLandingPage(role) {
+  if (role === "member") {
+    return "/";
+  }
+
   return roleLandingPages[role] || "/login";
+}
+
+export function revokeSessionEntry(session) {
+  if (!session?.sessionId) {
+    return;
+  }
+
+  const expiresAt = Number(session.exp || 0) > Date.now()
+    ? new Date(Number(session.exp)).toISOString()
+    : new Date(Date.now() + sessionDurationSeconds * 1000).toISOString();
+
+  getDatabase()
+    .prepare(`
+      INSERT OR REPLACE INTO session_revocations (
+        session_id,
+        user_id,
+        revoked_at,
+        expires_at
+      ) VALUES (?, ?, ?, ?)
+    `)
+    .run(
+      session.sessionId,
+      session.userId || null,
+      new Date().toISOString(),
+      expiresAt
+    );
 }

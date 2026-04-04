@@ -204,6 +204,13 @@ export function purgeRetentionWindows() {
     Date.now() - retentionPolicy.staleRateLimitDays * 24 * 60 * 60 * 1000
   ).toISOString();
   db.prepare("DELETE FROM rate_limits WHERE last_seen_at < ?").run(cutoff);
+  db.prepare("DELETE FROM session_revocations WHERE expires_at < ?").run(
+    new Date().toISOString()
+  );
+  db.prepare(`
+    DELETE FROM auth_challenges
+    WHERE expires_at < ? OR consumed_at IS NOT NULL
+  `).run(new Date().toISOString());
 }
 
 function createSchema(db) {
@@ -330,8 +337,14 @@ function createSchema(db) {
       lane TEXT,
       volunteer_name TEXT,
       active INTEGER NOT NULL DEFAULT 1,
+      email_verified_at TEXT,
+      failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+      locked_at TEXT,
       session_version INTEGER NOT NULL DEFAULT 1,
       last_login_at TEXT,
+      birthday TEXT,
+      gender TEXT NOT NULL DEFAULT 'unspecified',
+      member_type TEXT NOT NULL DEFAULT 'member',
       created_at TEXT NOT NULL
     ) STRICT;
 
@@ -481,10 +494,25 @@ function createSchema(db) {
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       purpose TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL,
       consumed_at TEXT
     ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_auth_challenges_user_purpose
+      ON auth_challenges (user_id, purpose, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS session_revocations (
+      session_id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      revoked_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_session_revocations_expires
+      ON session_revocations (expires_at);
 
     CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user
       ON password_reset_tokens (user_id, requested_at DESC);
@@ -817,6 +845,14 @@ function ensureSchemaMigrations(db) {
   addColumnIfMissing(db, "requests", "tracking_code", "TEXT");
   addColumnIfMissing(db, "requests", "status_detail", "TEXT");
   addColumnIfMissing(db, "users", "phone", "TEXT");
+  addColumnIfMissing(db, "users", "email_verified_at", "TEXT");
+  addColumnIfMissing(
+    db,
+    "users",
+    "failed_login_attempts",
+    "INTEGER NOT NULL DEFAULT 0"
+  );
+  addColumnIfMissing(db, "users", "locked_at", "TEXT");
   addColumnIfMissing(
     db,
     "users",
@@ -824,6 +860,13 @@ function ensureSchemaMigrations(db) {
     "INTEGER NOT NULL DEFAULT 1"
   );
   addColumnIfMissing(db, "users", "last_login_at", "TEXT");
+  addColumnIfMissing(db, "auth_challenges", "token_hash", "TEXT");
+  addColumnIfMissing(
+    db,
+    "auth_challenges",
+    "metadata_json",
+    `TEXT NOT NULL DEFAULT '{}'`
+  );
   addColumnIfMissing(
     db,
     "church_settings",
@@ -947,6 +990,21 @@ function ensureSchemaMigrations(db) {
   addColumnIfMissing(db, "requests", "last_contact_outcome", "TEXT");
   addColumnIfMissing(db, "requests", "follow_up_owner_id", "TEXT");
   addColumnIfMissing(db, "requests", "follow_up_owner_name", "TEXT");
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_challenges_token_hash
+      ON auth_challenges (token_hash);
+
+    CREATE TABLE IF NOT EXISTS session_revocations (
+      session_id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      revoked_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_session_revocations_expires
+      ON session_revocations (expires_at);
+  `);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS discipleship_records (
@@ -1427,8 +1485,8 @@ function seedPermanentPastors(db) {
   const insert = db.prepare(`
     INSERT OR IGNORE INTO users (
       id, organization_id, branch_id, name, email, role, access_scope,
-      title, managed_branch_ids_json, password_hash, active, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      title, managed_branch_ids_json, password_hash, active, email_verified_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const now = new Date().toISOString();
   for (const u of permanentPastorAccounts) {
@@ -1444,6 +1502,7 @@ function seedPermanentPastors(db) {
       serializeJson([u.branchId]),
       hashPassword(u.password),
       1,
+      now,
       now
     );
   }
@@ -1458,8 +1517,9 @@ function seedUsers(db) {
   const insertUser = db.prepare(`
     INSERT OR IGNORE INTO users (
       id, organization_id, branch_id, name, email, phone, role, access_scope,
-      title, managed_branch_ids_json, password_hash, lane, volunteer_name, active, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      title, managed_branch_ids_json, password_hash, lane, volunteer_name, active,
+      email_verified_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const now = new Date().toISOString();
 
@@ -1479,6 +1539,7 @@ function seedUsers(db) {
       user.lane || null,
       user.volunteerName || null,
       1,
+      now,
       now
     );
   }

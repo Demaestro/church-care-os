@@ -114,8 +114,14 @@ CREATE TABLE IF NOT EXISTS users (
   lane text,
   volunteer_name text,
   active boolean NOT NULL DEFAULT true,
+  email_verified_at timestamptz,
+  failed_login_attempts integer NOT NULL DEFAULT 0,
+  locked_at timestamptz,
   session_version integer NOT NULL DEFAULT 1,
   last_login_at timestamptz,
+  birthday text,
+  gender text NOT NULL DEFAULT 'unspecified',
+  member_type text NOT NULL DEFAULT 'member',
   created_at timestamptz NOT NULL,
   mfa_enabled boolean NOT NULL DEFAULT false,
   mfa_mode text NOT NULL DEFAULT 'off',
@@ -263,9 +269,18 @@ CREATE TABLE IF NOT EXISTS auth_challenges (
   id text PRIMARY KEY,
   user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   purpose text NOT NULL,
+  token_hash text NOT NULL UNIQUE,
+  metadata_json jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL,
   expires_at timestamptz NOT NULL,
   consumed_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS session_revocations (
+  session_id text PRIMARY KEY,
+  user_id text REFERENCES users(id) ON DELETE SET NULL,
+  revoked_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS notifications (
@@ -421,6 +436,10 @@ CREATE INDEX IF NOT EXISTS idx_auth_invites_email
   ON auth_invites (email, expires_at, consumed_at);
 CREATE INDEX IF NOT EXISTS idx_auth_challenges_user
   ON auth_challenges (user_id, expires_at, consumed_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_challenges_token_hash
+  ON auth_challenges (token_hash);
+CREATE INDEX IF NOT EXISTS idx_session_revocations_expires
+  ON session_revocations (expires_at);
 CREATE INDEX IF NOT EXISTS idx_household_attachments_household
   ON household_attachments (household_slug, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_member_transfers_scope

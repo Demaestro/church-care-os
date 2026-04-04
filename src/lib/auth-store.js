@@ -14,6 +14,7 @@ export function findUserByEmail(email) {
       SELECT id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
       , session_version, last_login_at, organization_id, branch_id, access_scope, title, managed_branch_ids_json
       , mfa_enabled, mfa_mode, mfa_secret, mfa_backup_codes_json
+      , email_verified_at, failed_login_attempts, locked_at, birthday, gender, member_type
       FROM users
       WHERE email = ?
       LIMIT 1
@@ -33,6 +34,7 @@ export function findUserById(id) {
       SELECT id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
       , session_version, last_login_at, organization_id, branch_id, access_scope, title, managed_branch_ids_json
       , mfa_enabled, mfa_mode, mfa_secret, mfa_backup_codes_json
+      , email_verified_at, failed_login_attempts, locked_at, birthday, gender, member_type
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -48,6 +50,7 @@ export function listUsers(filter = {}) {
       SELECT id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at
       , session_version, last_login_at, organization_id, branch_id, access_scope, title, managed_branch_ids_json
       , mfa_enabled, mfa_mode, mfa_secret, mfa_backup_codes_json
+      , email_verified_at, failed_login_attempts, locked_at, birthday, gender, member_type
       FROM users
       ORDER BY role, name
     `)
@@ -82,8 +85,9 @@ export function createUserEntry(input) {
     INSERT INTO users (
       id, name, email, phone, role, password_hash, lane, volunteer_name, active, created_at,
       organization_id, branch_id, access_scope, title, managed_branch_ids_json,
-      mfa_enabled, mfa_mode, mfa_secret, mfa_backup_codes_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      mfa_enabled, mfa_mode, mfa_secret, mfa_backup_codes_json,
+      email_verified_at, failed_login_attempts, locked_at, birthday, gender, member_type
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     userId,
     input.name,
@@ -103,7 +107,15 @@ export function createUserEntry(input) {
     input.mfaEnabled ? 1 : 0,
     input.mfaMode || "off",
     input.mfaSecret || null,
-    JSON.stringify(input.mfaBackupCodes || [])
+    JSON.stringify(input.mfaBackupCodes || []),
+    input.emailVerifiedAt === undefined
+      ? now
+      : input.emailVerifiedAt || null,
+    Number(input.failedLoginAttempts || 0),
+    input.lockedAt || null,
+    input.birthday || null,
+    input.gender || "unspecified",
+    input.memberType || "member"
   );
 
   return userId;
@@ -173,7 +185,9 @@ export function setUserPasswordEntry(userId, password) {
   getDatabase()
     .prepare(`
       UPDATE users
-      SET password_hash = ?
+      SET password_hash = ?,
+          failed_login_attempts = 0,
+          locked_at = NULL
       WHERE id = ?
     `)
     .run(hashPassword(password), userId);
@@ -207,6 +221,84 @@ export function touchUserLoginEntry(userId) {
       WHERE id = ?
     `)
     .run(new Date().toISOString(), userId);
+}
+
+export function clearUserLoginFailuresEntry(userId) {
+  const existing = findUserById(userId);
+  if (!existing) {
+    throw new Error("User not found.");
+  }
+
+  getDatabase()
+    .prepare(`
+      UPDATE users
+      SET failed_login_attempts = 0,
+          locked_at = NULL
+      WHERE id = ?
+    `)
+    .run(userId);
+}
+
+export function recordFailedLoginAttemptEntry(userId, threshold = 10) {
+  const existing = findUserById(userId);
+  if (!existing) {
+    throw new Error("User not found.");
+  }
+
+  const nextAttempts = Number(existing.failedLoginAttempts || 0) + 1;
+  const lockedAt = nextAttempts >= threshold ? new Date().toISOString() : null;
+
+  getDatabase()
+    .prepare(`
+      UPDATE users
+      SET failed_login_attempts = ?,
+          locked_at = COALESCE(?, locked_at)
+      WHERE id = ?
+    `)
+    .run(nextAttempts, lockedAt, userId);
+
+  return {
+    attempts: nextAttempts,
+    locked: Boolean(lockedAt || existing.lockedAt),
+    lockedAt: lockedAt || existing.lockedAt || "",
+  };
+}
+
+export function markUserEmailVerifiedEntry(userId) {
+  const existing = findUserById(userId);
+  if (!existing) {
+    throw new Error("User not found.");
+  }
+
+  const now = new Date().toISOString();
+  getDatabase()
+    .prepare(`
+      UPDATE users
+      SET email_verified_at = COALESCE(email_verified_at, ?),
+          active = 1,
+          failed_login_attempts = 0,
+          locked_at = NULL
+      WHERE id = ?
+    `)
+    .run(now, userId);
+
+  return now;
+}
+
+export function unlockUserEntry(userId) {
+  const existing = findUserById(userId);
+  if (!existing) {
+    throw new Error("User not found.");
+  }
+
+  getDatabase()
+    .prepare(`
+      UPDATE users
+      SET failed_login_attempts = 0,
+          locked_at = NULL
+      WHERE id = ?
+    `)
+    .run(userId);
 }
 
 export function bumpUserSessionVersionEntry(userId) {
@@ -276,6 +368,12 @@ function mapUserRow(row) {
     mfaBackupCodes: row.mfa_backup_codes_json
       ? JSON.parse(row.mfa_backup_codes_json)
       : [],
+    emailVerifiedAt: row.email_verified_at || "",
+    failedLoginAttempts: Number(row.failed_login_attempts || 0),
+    lockedAt: row.locked_at || "",
+    birthday: row.birthday || "",
+    gender: row.gender || "unspecified",
+    memberType: row.member_type || "member",
     active: row.active === 1,
     sessionVersion: Number(row.session_version || 1),
     lastLoginAt: row.last_login_at || "",

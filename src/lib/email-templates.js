@@ -159,6 +159,8 @@ export function renderEmailTemplate(templateKey, context) {
   const volunteerUrl = buildAbsoluteUrl(baseUrl, context.volunteerPath || "/volunteer");
   const householdUrl = buildAbsoluteUrl(baseUrl, context.householdPath || "");
   const resetUrl = buildAbsoluteUrl(baseUrl, context.resetPath || "");
+  const verifyUrl = buildAbsoluteUrl(baseUrl, context.verifyPath || "");
+  const unlockUrl = buildAbsoluteUrl(baseUrl, context.unlockPath || "");
   const requestStatusUrl = buildAbsoluteUrl(
     baseUrl,
     context.statusPath || "/requests/status"
@@ -398,6 +400,76 @@ export function renderEmailTemplate(templateKey, context) {
             : null,
           footerNote:
             "For security, never forward this email or share the reset link with another person.",
+        }),
+      };
+    case "email-verification":
+      return {
+        purpose: "account-onboarding",
+        ...buildEmailDocument({
+          settings,
+          subject: `${subjectPrefix}Verify your care account email`,
+          preheader: "Confirm this email address before you sign in.",
+          eyebrow: "Account verification",
+          heading: "Verify your email address",
+          intro:
+            "Before we open this member account, please confirm that you own this email address.",
+          facts: [
+            {
+              label: "Account email",
+              value: context.email,
+            },
+            {
+              label: "Link expires",
+              value: context.expiresLabel || "In about 24 hours",
+            },
+          ],
+          paragraphs: [
+            "This protects your church records and prevents someone else from opening an account with your email address.",
+            "If you did not start this registration, you can ignore this message and no account access will be granted.",
+          ],
+          cta: verifyUrl
+            ? {
+                label: "Verify email",
+                href: verifyUrl,
+              }
+            : null,
+          footerNote:
+            "For safety, this one-time link expires automatically and should not be forwarded.",
+        }),
+      };
+    case "account-unlock":
+      return {
+        purpose: "account-security",
+        ...buildEmailDocument({
+          settings,
+          subject: `${subjectPrefix}Unlock your care account`,
+          preheader: "Your account was protected after repeated sign-in failures.",
+          eyebrow: "Account security",
+          heading: "Unlock your account",
+          intro:
+            "We temporarily blocked new sign-ins after repeated failed password attempts. Use this secure link to unlock the account safely.",
+          facts: [
+            {
+              label: "Account email",
+              value: context.email,
+            },
+            {
+              label: "Link expires",
+              value: context.expiresLabel || "In about 8 hours",
+            },
+          ],
+          paragraphs: [
+            "If the recent sign-in attempts were yours, unlock the account and then sign in again carefully.",
+            "If they were not yours, unlock the account, then request a password reset immediately.",
+          ],
+          cta: unlockUrl
+            ? {
+                label: "Unlock account",
+                href: unlockUrl,
+              }
+            : null,
+          footerNote:
+            "This link only unlocks the account. It does not change your password.",
         }),
       };
     case "account-created":

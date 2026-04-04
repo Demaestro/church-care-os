@@ -14,19 +14,23 @@ import {
   normalizeTheme,
 } from "@/lib/app-preferences";
 import {
-  authenticateCredentials,
   getUserLandingPage,
   requireCurrentUser,
 } from "@/lib/auth";
+import { verifyPassword } from "@/lib/auth-crypto";
 import {
   bumpUserSessionVersionEntry,
+  clearUserLoginFailuresEntry,
   createUserEntry,
   findUserByEmail,
   findUserById,
+  markUserEmailVerifiedEntry,
+  recordFailedLoginAttemptEntry,
   setUserMfaEntry,
   setUserPasswordEntry,
   touchUserLoginEntry,
   toggleUserActiveEntry,
+  unlockUserEntry,
   updateUserEntry,
 } from "@/lib/auth-store";
 import { formatDateTime } from "@/lib/care-format";
@@ -35,7 +39,9 @@ import {
   createSession,
   destroyPendingSession,
   destroySession,
+  getOptionalSession,
   getPendingSession,
+  revokeSessionEntry,
   shouldUseSecureCookies,
 } from "@/lib/session";
 import {
@@ -143,6 +149,29 @@ import {
   dropJourney,
   upsertServiceSchedule,
 } from "@/lib/new-member-store";
+import {
+  consumeAuthChallengeEntry,
+  issueAuthChallengeEntry,
+} from "@/lib/auth-challenge-store";
+
+const loginRateLimit = {
+  maxAttempts: 5,
+  windowMs: 15 * 60 * 1000,
+};
+
+const registerRateLimit = {
+  maxAttempts: 5,
+  windowMs: 15 * 60 * 1000,
+};
+
+const loginLockoutThreshold = 10;
+const maxAuthFieldLengths = {
+  email: 254,
+  name: 120,
+  phone: 32,
+  password: 128,
+  note: 500,
+};
 
 function getString(formData, key) {
   const value = formData.get(key);
@@ -162,6 +191,27 @@ function splitList(value) {
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function getBoundedString(formData, key, maxLength) {
+  return getString(formData, key).slice(0, maxLength);
+}
+
+function getBoundedPassword(formData, key, maxLength = maxAuthFieldLengths.password) {
+  const value = formData.get(key);
+  return typeof value === "string" ? value.slice(0, maxLength) : "";
+}
+
+function getGenericRegistrationResponse() {
+  return {
+    ok: true,
+    message:
+      "If your details can be used for an account, check your email for the next secure step.",
+  };
+}
+
+function getAccountAttentionMessage() {
+  return "We could not sign you in right now. Check your email for any secure next steps, or request sign-in help.";
 }
 
 function buildPathWithParams(path, values = {}) {
@@ -224,7 +274,7 @@ async function setMfaPreviewCodes(codes = []) {
   (await cookies()).set(MFA_SETUP_PREVIEW_COOKIE, JSON.stringify(codes), {
     path: "/",
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: shouldUseSecureCookies(),
     maxAge: 60 * 10,
   });
@@ -234,7 +284,7 @@ async function clearMfaPreviewCodes() {
   (await cookies()).set(MFA_SETUP_PREVIEW_COOKIE, "", {
     path: "/",
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: shouldUseSecureCookies(),
     maxAge: 0,
   });
@@ -261,6 +311,18 @@ function buildResetPasswordPath(token) {
   return token
     ? `/reset-password?token=${encodeURIComponent(token)}`
     : "/reset-password";
+}
+
+function buildEmailVerificationPath(token) {
+  return token
+    ? `/verify-email?token=${encodeURIComponent(token)}`
+    : "/verify-email";
+}
+
+function buildUnlockAccountPath(token) {
+  return token
+    ? `/unlock-account?token=${encodeURIComponent(token)}`
+    : "/unlock-account";
 }
 
 function notifyRoles(roles, input) {
@@ -543,17 +605,136 @@ async function getRequestCopy() {
   return getCopy(normalizeLanguage(cookieStore.get(LANGUAGE_COOKIE)?.value));
 }
 
+async function sendVerificationEmail(user) {
+  if (!user?.id || !user?.email) {
+    return null;
+  }
+
+  const challenge = issueAuthChallengeEntry({
+    userId: user.id,
+    purpose: "email-verification",
+    metadata: {
+      organizationId: user.organizationId || "",
+      branchId: user.branchId || "",
+    },
+  });
+
+  await emailAddress(
+    user.email,
+    "email-verification",
+    {
+      email: user.email,
+      expiresLabel: formatDateTime(challenge.expiresAt),
+      verifyPath: buildEmailVerificationPath(challenge.token),
+    },
+    {
+      organizationId: user.organizationId,
+      branchId: user.branchId,
+      recipientName: user.name,
+      metadata: {
+        userId: user.id,
+        purpose: "email-verification",
+      },
+    }
+  );
+
+  return challenge;
+}
+
+async function sendUnlockEmail(user) {
+  if (!user?.id || !user?.email) {
+    return null;
+  }
+
+  const challenge = issueAuthChallengeEntry({
+    userId: user.id,
+    purpose: "account-unlock",
+    metadata: {
+      organizationId: user.organizationId || "",
+      branchId: user.branchId || "",
+    },
+  });
+
+  await emailAddress(
+    user.email,
+    "account-unlock",
+    {
+      email: user.email,
+      expiresLabel: formatDateTime(challenge.expiresAt),
+      unlockPath: buildUnlockAccountPath(challenge.token),
+    },
+    {
+      organizationId: user.organizationId,
+      branchId: user.branchId,
+      recipientName: user.name,
+      metadata: {
+        userId: user.id,
+        purpose: "account-unlock",
+      },
+    }
+  );
+
+  return challenge;
+}
+
+async function startVerifiedNewMemberJourney(user) {
+  if (!user || user.memberType !== "new_member") {
+    return;
+  }
+
+  const { getDatabase } = await import("@/lib/database");
+  const db = getDatabase();
+  const existingJourney = db.prepare(`
+    SELECT id
+    FROM new_member_journeys
+    WHERE organization_id = ?
+      AND branch_id = ?
+      AND member_email = ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(user.organizationId, user.branchId, user.email);
+
+  if (existingJourney?.id) {
+    return;
+  }
+
+  const journeyId = createJourneyEntry({
+    organizationId: user.organizationId,
+    branchId: user.branchId,
+    memberName: user.name,
+    memberEmail: user.email,
+    memberPhone: user.phone || "",
+    gender: user.gender || "unspecified",
+    birthday: user.birthday || null,
+  });
+
+  createNotifications({
+    organizationId: user.organizationId,
+    branchId: user.branchId,
+    roles: ["volunteer", "leader", "pastor"],
+    kind: "alert",
+    title: "New member joined",
+    body: `${user.name} verified a new member account. Please follow up within 48 hours.`,
+    href: `/new-members/${journeyId}`,
+    metadata: { journeyId, memberName: user.name },
+  });
+}
+
 export async function login(prevState, formData) {
   void prevState;
   const copy = await getRequestCopy();
   const loginCopy = copy.loginForm;
 
-  const email = getString(formData, "email").toLowerCase();
-  const password = getString(formData, "password");
+  const email = normalizeEmail(
+    getBoundedString(formData, "email", maxAuthFieldLengths.email)
+  );
+  const password = getBoundedPassword(formData, "password");
   const errors = {};
 
   if (!email) {
     errors.email = loginCopy.actionMessages.emailRequired;
+  } else if (!isValidEmailAddress(email)) {
+    errors.email = loginCopy.actionMessages.retryHint;
   }
 
   if (!password) {
@@ -567,8 +748,21 @@ export async function login(prevState, formData) {
     };
   }
 
-  const user = await authenticateCredentials(email, password);
-  if (!user) {
+  const rateLimit = consumeRateLimit(
+    `login:${await getRequestFingerprint()}`,
+    loginRateLimit
+  );
+  if (!rateLimit.allowed) {
+    return {
+      message: getAccountAttentionMessage(),
+      errors: {
+        email: loginCopy.actionMessages.retryHint,
+      },
+    };
+  }
+
+  const existingUser = findUserByEmail(email);
+  if (!existingUser?.passwordHash) {
     return {
       message: loginCopy.actionMessages.invalidCredentials,
       errors: {
@@ -576,6 +770,73 @@ export async function login(prevState, formData) {
       },
     };
   }
+
+  const passwordMatches = verifyPassword(password, existingUser.passwordHash);
+  if (!passwordMatches) {
+    if (existingUser.lockedAt) {
+      return {
+        message: loginCopy.actionMessages.invalidCredentials,
+        errors: {
+          email: loginCopy.actionMessages.retryHint,
+        },
+      };
+    }
+
+    const attempt = recordFailedLoginAttemptEntry(
+      existingUser.id,
+      loginLockoutThreshold
+    );
+
+    if (attempt.locked && existingUser.email) {
+      await sendUnlockEmail(existingUser);
+      recordAuditLog({
+        ...buildActorLog(existingUser),
+        action: "auth.account_locked",
+        targetType: "user",
+        targetId: existingUser.id,
+        summary: `${existingUser.name} was locked after repeated failed sign-in attempts.`,
+      });
+    }
+
+    return {
+      message: loginCopy.actionMessages.invalidCredentials,
+      errors: {
+        email: loginCopy.actionMessages.retryHint,
+      },
+    };
+  }
+
+  if (existingUser.lockedAt) {
+    await sendUnlockEmail(existingUser);
+    return {
+      message: getAccountAttentionMessage(),
+      errors: {
+        email: loginCopy.actionMessages.retryHint,
+      },
+    };
+  }
+
+  if (!existingUser.emailVerifiedAt && existingUser.role === "member") {
+    await sendVerificationEmail(existingUser);
+    return {
+      message: getAccountAttentionMessage(),
+      errors: {
+        email: loginCopy.actionMessages.retryHint,
+      },
+    };
+  }
+
+  if (!existingUser.active) {
+    return {
+      message: loginCopy.actionMessages.invalidCredentials,
+      errors: {
+        email: loginCopy.actionMessages.retryHint,
+      },
+    };
+  }
+
+  clearUserLoginFailuresEntry(existingUser.id);
+  const user = findUserById(existingUser.id);
 
   if (shouldRequireMfa(user)) {
     await createPendingSession(user, "mfa");
@@ -709,7 +970,9 @@ export async function logout() {
     "pastor",
     "leader",
     "volunteer",
+    "member",
   ]);
+  const session = await getOptionalSession();
 
   recordAuditLog({
     ...buildActorLog(user),
@@ -719,6 +982,7 @@ export async function logout() {
     summary: `${user.name} signed out.`,
   });
 
+  revokeSessionEntry(session);
   await destroySession();
   redirect("/login");
 }
@@ -1556,9 +1820,15 @@ export async function requestAccountRecovery(prevState, formData) {
   const copy = await getRequestCopy();
   const recoveryCopy = copy.recoveryForm;
 
-  const email = normalizeEmail(getString(formData, "email"));
-  const requesterName = getString(formData, "requesterName");
-  const note = getString(formData, "note");
+  const email = normalizeEmail(
+    getBoundedString(formData, "email", maxAuthFieldLengths.email)
+  );
+  const requesterName = getBoundedString(
+    formData,
+    "requesterName",
+    maxAuthFieldLengths.name
+  );
+  const note = getBoundedString(formData, "note", maxAuthFieldLengths.note);
   const honeypot = getString(formData, "website");
   const errors = {};
 
@@ -1605,6 +1875,26 @@ export async function requestAccountRecovery(prevState, formData) {
   }
 
   const matchedUser = findUserByEmail(email);
+  if (matchedUser?.role === "member" && !matchedUser.emailVerifiedAt) {
+    await sendVerificationEmail(matchedUser);
+
+    recordAuditLog({
+      actorName: requesterName || "Public recovery form",
+      actorRole: "public",
+      action: "auth.email_verification_resent",
+      targetType: "user",
+      targetId: matchedUser.id,
+      summary: `Verification link re-issued for ${email}.`,
+    });
+
+    return {
+      message: recoveryCopy.actionMessages.logged,
+      errors: {},
+      values: {},
+      submitted: true,
+    };
+  }
+
   const needsManualReview = !matchedUser?.active || Boolean(note);
   let recoveryRequestId = "";
 
@@ -1749,9 +2039,9 @@ export async function completePasswordReset(prevState, formData) {
   void prevState;
   const copy = await getRequestCopy();
   const resetCopy = copy.resetPasswordForm;
-  const token = getString(formData, "token");
-  const password = getString(formData, "password");
-  const confirmPassword = getString(formData, "confirmPassword");
+  const token = getBoundedString(formData, "token", 512);
+  const password = getBoundedPassword(formData, "password");
+  const confirmPassword = getBoundedPassword(formData, "confirmPassword");
   const errors = {};
   const tokenState = getPasswordResetTokenEntry(token);
 
@@ -1785,6 +2075,8 @@ export async function completePasswordReset(prevState, formData) {
 
   try {
     const updatedUser = consumePasswordResetTokenEntry(token, password);
+    markUserEmailVerifiedEntry(updatedUser.id);
+    clearUserLoginFailuresEntry(updatedUser.id);
     bumpUserSessionVersionEntry(updatedUser.id);
 
     recordAuditLog({
@@ -3412,20 +3704,27 @@ export async function saveServiceSchedule(formData) {
 // ── Self-registration (public — no auth required) ─────────────────────────────
 
 export async function selfRegister(formData) {
-  const rateLimit = consumeRateLimit(await getRequestFingerprint());
+  const rateLimit = consumeRateLimit(
+    `register:${await getRequestFingerprint()}`,
+    registerRateLimit
+  );
   if (!rateLimit.allowed) {
     return { error: "Too many requests. Please wait a moment and try again." };
   }
 
-  const name        = getString(formData, "name").trim();
-  const email       = normalizeEmail(getString(formData, "email"));
-  const phone       = normalizePhoneNumber(getString(formData, "phone") || "");
-  const password    = getString(formData, "password");
-  const birthday    = getString(formData, "birthday") || null;
-  const gender      = getString(formData, "gender") || "unspecified";
-  const memberType  = getString(formData, "memberType") || "member";
+  const name = getBoundedString(formData, "name", maxAuthFieldLengths.name);
+  const email = normalizeEmail(
+    getBoundedString(formData, "email", maxAuthFieldLengths.email)
+  );
+  const phone = normalizePhoneNumber(
+    getBoundedString(formData, "phone", maxAuthFieldLengths.phone)
+  );
+  const password = getBoundedPassword(formData, "password");
+  const birthday = getString(formData, "birthday") || null;
+  const gender = getString(formData, "gender") || "unspecified";
+  const memberType = getString(formData, "memberType") || "member";
   const organizationId = getString(formData, "organizationId");
-  const branchId       = getString(formData, "branchId");
+  const branchId = getString(formData, "branchId");
 
   if (!name)  return { error: "Full name is required." };
   if (!email) return { error: "A valid email address is required." };
@@ -3433,64 +3732,59 @@ export async function selfRegister(formData) {
   if (!password || password.length < 8) return { error: "Password must be at least 8 characters." };
   if (!organizationId || !branchId) return { error: "Please select your church and branch." };
 
-  // Check email not already taken
   const existing = findUserByEmail(email);
-  if (existing) return { error: "An account with this email already exists. Try signing in." };
+  if (existing) {
+    if (!existing.emailVerifiedAt && existing.role === "member") {
+      await sendVerificationEmail(existing);
+    }
 
-  const userId = createUserEntry({
-    name,
-    email,
-    phone: phone || null,
-    role: "member",
-    password,
-    active: true,
-    organizationId,
-    branchId,
-    accessScope: "branch",
-    managedBranchIds: [],
-  });
+    return getGenericRegistrationResponse();
+  }
 
-  // Save birthday, gender, member_type via direct DB update
+  let userId = "";
+
   try {
-    const { getDatabase } = await import("@/lib/database");
-    const db = getDatabase();
-    db.prepare(`UPDATE users SET birthday = ?, gender = ?, member_type = ? WHERE id = ?`)
-      .run(birthday, gender, memberType, userId);
-  } catch {}
+    userId = createUserEntry({
+      name,
+      email,
+      phone: phone || null,
+      role: "member",
+      password,
+      active: false,
+      emailVerifiedAt: null,
+      organizationId,
+      branchId,
+      accessScope: "branch",
+      managedBranchIds: [],
+      birthday,
+      gender,
+      memberType,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("UNIQUE constraint failed: users.email")) {
+      return getGenericRegistrationResponse();
+    }
 
-  // If new member, auto-start the 30-day journey
-  if (memberType === "new_member") {
-    try {
-      const { createJourneyEntry } = await import("@/lib/new-member-store");
-      const journeyId = createJourneyEntry({ organizationId, branchId, memberName: name, memberEmail: email, memberPhone: phone || "", gender, birthday });
-      createNotifications({
-        organizationId, branchId,
-        roles: ["volunteer", "leader", "pastor"],
-        kind: "alert",
-        title: "New member joined",
-        body: `${name} just created an account as a new member. Please follow up within 48 hours.`,
-        href: `/new-members/${journeyId}`,
-        metadata: { journeyId, memberName: name },
-      });
-    } catch {}
+    throw error;
   }
 
-  // Auto sign-in
-  const newUser = findUserByEmail(email);
-  if (newUser) {
-    touchUserLoginEntry(newUser.id);
-    await createSession(newUser);
-  }
+  const newUser = findUserById(userId);
+  await sendVerificationEmail(newUser);
 
   recordAuditLog({
-    actorId: userId, actorName: name, actorRole: "member",
-    organizationId, branchId,
+    actorUserId: userId,
+    actorName: name,
+    actorRole: "member",
+    organizationId,
+    branchId,
     action: "auth.self_registered",
-    targetType: "user", targetId: userId,
-    summary: `${name} self-registered as a member.`,
+    targetType: "user",
+    targetId: userId,
+    summary: `${name} self-registered and must verify email before accessing the app.`,
   });
 
-  return { ok: true };
+  return getGenericRegistrationResponse();
 }
 
 export async function applyForVolunteer(prevState, formData) {

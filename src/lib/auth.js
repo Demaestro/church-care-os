@@ -13,6 +13,14 @@ export async function authenticateCredentials(email, password) {
     return null;
   }
 
+  if (user.lockedAt) {
+    return null;
+  }
+
+  if (user.role === "member" && !user.emailVerifiedAt) {
+    return null;
+  }
+
   if (!verifyPassword(password, user.passwordHash)) {
     return null;
   }
@@ -32,6 +40,14 @@ export const getCurrentUser = cache(async function getCurrentUser() {
   }
 
   if (Number(session.sessionVersion || 1) !== Number(user.sessionVersion || 1)) {
+    return null;
+  }
+
+  if (user.lockedAt) {
+    return null;
+  }
+
+  if (user.role === "member" && !user.emailVerifiedAt) {
     return null;
   }
 
@@ -69,6 +85,8 @@ export function getRoleLabel(role) {
       return "Leader";
     case "volunteer":
       return "Volunteer";
+    case "member":
+      return "Member";
     default:
       return "Guest";
   }
@@ -98,6 +116,12 @@ function sanitizeUser(user) {
     mfaMode: user.mfaMode || "off",
     mfaSecret: user.mfaSecret || "",
     mfaBackupCodes: Array.isArray(user.mfaBackupCodes) ? user.mfaBackupCodes : [],
+    emailVerifiedAt: user.emailVerifiedAt || "",
+    failedLoginAttempts: Number(user.failedLoginAttempts || 0),
+    lockedAt: user.lockedAt || "",
+    birthday: user.birthday || "",
+    gender: user.gender || "unspecified",
+    memberType: user.memberType || "member",
     active: user.active,
     sessionVersion: Number(user.sessionVersion || 1),
     lastLoginAt: user.lastLoginAt || "",

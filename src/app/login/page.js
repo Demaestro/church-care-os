@@ -17,6 +17,9 @@ export default async function LoginPage({ searchParams }) {
   const copy = getCopy(preferences.language);
   const params = await searchParams;
   const switchMode = params?.switch === "1";
+  const notice =
+    typeof params?.notice === "string" ? params.notice.trim() : "";
+  const error = typeof params?.error === "string" ? params.error.trim() : "";
   const user = await getCurrentUser();
   if (user && !switchMode) {
     redirect(getUserLandingPage(user));
@@ -81,6 +84,18 @@ export default async function LoginPage({ searchParams }) {
             <h2 className="text-2xl font-bold tracking-tight text-foreground">Welcome back</h2>
             <p className="mt-1.5 text-sm text-muted">Sign in to your care workspace.</p>
           </div>
+
+          {notice ? (
+            <div className="mb-5 rounded-[1rem] border border-[rgba(73,106,77,0.16)] bg-[rgba(73,106,77,0.08)] px-4 py-3 text-sm text-moss">
+              {notice}
+            </div>
+          ) : null}
+
+          {error ? (
+            <div className="mb-5 rounded-[1rem] border border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)] px-4 py-3 text-sm text-clay">
+              {error}
+            </div>
+          ) : null}
 
           <LoginForm copy={copy.loginForm} />
 
