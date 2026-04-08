@@ -702,10 +702,9 @@ function createSchema(db) {
 }
 
 function ensureSchemaMigrations(db) {
-  seedOrganizations(db);
-  seedRegions(db);
-
-  // These columns must exist on branches BEFORE seedBranches runs its INSERT.
+  // These organization columns must exist before seedOrganizations runs its
+  // INSERT, otherwise older local databases crash during startup when new
+  // branding/pastor fields are referenced.
   addColumnIfMissing(db, "organizations", "pastor_name", "TEXT");
   addColumnIfMissing(db, "organizations", "website_url", "TEXT");
   addColumnIfMissing(db, "organizations", "primary_branch_id", "TEXT");
@@ -718,6 +717,11 @@ function ensureSchemaMigrations(db) {
   );
   addColumnIfMissing(db, "organizations", "logo_mime_type", "TEXT");
   addColumnIfMissing(db, "organizations", "logo_updated_at", "TEXT");
+
+  seedOrganizations(db);
+  seedRegions(db);
+
+  // These branch columns must exist before seedBranches runs its INSERT.
   addColumnIfMissing(db, "branches", "region_id", "TEXT");
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_organizations_active_slug

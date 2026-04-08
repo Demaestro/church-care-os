@@ -1,4 +1,5 @@
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -104,5 +105,38 @@ describe("platform foundations", () => {
     expect(request?.branch_id).toBe("branch-firstlove-abuja-central");
     expect(request?.status_detail).toContain("receiving branch care team");
     expect(transfer?.status).toBe("completed");
+  });
+
+  test("legacy organization schemas are backfilled before church seeding runs", async () => {
+    const legacyDb = new DatabaseSync(process.env.CARE_DB_PATH);
+    legacyDb.exec(`
+      CREATE TABLE organizations (
+        id TEXT PRIMARY KEY,
+        slug TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        short_name TEXT,
+        support_email TEXT,
+        support_phone TEXT,
+        headquarters_city TEXT,
+        country TEXT,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
+      ) STRICT;
+    `);
+    legacyDb.close();
+
+    const { getDatabase } = await import("@/lib/database");
+    const db = getDatabase();
+    const organizationColumns = db
+      .prepare("PRAGMA table_info(organizations)")
+      .all()
+      .map((column) => column.name);
+    const defaultOrganization = db
+      .prepare("SELECT id, pastor_name FROM organizations WHERE id = ? LIMIT 1")
+      .get("org-firstlove");
+
+    expect(organizationColumns).toContain("pastor_name");
+    expect(organizationColumns).toContain("website_url");
+    expect(defaultOrganization?.id).toBe("org-firstlove");
   });
 });
