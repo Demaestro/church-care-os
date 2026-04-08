@@ -18,12 +18,49 @@
  */
 
 import { NextResponse } from "next/server";
+import { safeEqualValue } from "@/lib/auth-crypto";
 import { getDatabase, parseJson, serializeJson } from "@/lib/database";
 import { createNotifications } from "@/lib/notifications-store";
 
 export const runtime = "nodejs";
 export const preferredRegion = "home";
 export const maxDuration = 300;
+
+function getAuthorizationFailure(request) {
+  const cronSecret = String(process.env.CRON_SECRET || "").trim();
+  if (!cronSecret) {
+    return process.env.NODE_ENV === "production"
+      ? NextResponse.json(
+          { error: "Service unavailable" },
+          {
+            status: 503,
+            headers: {
+              "Cache-Control": "no-store",
+            },
+          }
+        )
+      : null;
+  }
+
+  const authHeader = request.headers.get("authorization");
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice("Bearer ".length)
+    : "";
+
+  if (!token || !safeEqualValue(token, cronSecret)) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      {
+        status: 401,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
+  }
+
+  return null;
+}
 
 // ── reminder schedule ────────────────────────────────────────────────────────
 
@@ -83,12 +120,9 @@ function getRemindersSent(request) {
 
 export async function POST(request) {
   // ── auth ────────────────────────────────────────────────────────────────
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const authHeader = request.headers.get("authorization");
-    if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const authorizationFailure = getAuthorizationFailure(request);
+  if (authorizationFailure) {
+    return authorizationFailure;
   }
 
   const db = getDatabase();
@@ -279,16 +313,23 @@ export async function POST(request) {
     }
   }
 
-  return NextResponse.json({
-    ok: true,
-    requestsScanned: openRequests.length,
-    remindersSent: totalSent,
-    details: results,
-    journeyTouchpointsSent: journeysSent,
-    journeyDetails: journeyResults,
-    serviceRemindersSent,
-    runAt: now,
-  });
+  return NextResponse.json(
+    {
+      ok: true,
+      requestsScanned: openRequests.length,
+      remindersSent: totalSent,
+      details: results,
+      journeyTouchpointsSent: journeysSent,
+      journeyDetails: journeyResults,
+      serviceRemindersSent,
+      runAt: now,
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    }
+  );
 }
 
 export async function GET(request) {

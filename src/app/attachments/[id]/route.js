@@ -39,17 +39,18 @@ export async function GET(_request, context) {
         "Content-Length": String(result.contentLength || 0),
         "Content-Disposition": `attachment; filename="${safeName}"`,
         "Cache-Control": "private, max-age=0, must-revalidate",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "X-Content-Type-Options": "nosniff",
         ...(result.etag ? { ETag: result.etag } : {}),
       },
     });
-  } catch (error) {
-    return new Response(
-      error instanceof Error
-        ? error.message
-        : "You do not have access to that attachment.",
-      {
-        status: 403,
-      }
-    );
+  } catch {
+    return new Response("You do not have access to that attachment.", {
+      status: 403,
+      headers: {
+        "Cache-Control": "private, max-age=0, must-revalidate",
+        "Cross-Origin-Resource-Policy": "same-origin",
+      },
+    });
   }
 }

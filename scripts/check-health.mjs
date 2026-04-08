@@ -6,9 +6,15 @@ const rawBaseUrl =
     : `http://127.0.0.1:${port}/health`);
 
 try {
+  const healthcheckToken = String(process.env.HEALTHCHECK_TOKEN || "").trim();
   const response = await fetch(rawBaseUrl, {
     headers: {
       "cache-control": "no-store",
+      ...(healthcheckToken
+        ? {
+            authorization: `Bearer ${healthcheckToken}`,
+          }
+        : {}),
     },
   });
 
