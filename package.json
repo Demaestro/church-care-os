@@ -22,6 +22,7 @@
     "db:pg:import": "node scripts/import-care-data-to-postgres.mjs",
     "jobs:work": "node scripts/process-jobs.mjs",
     "jobs:drain": "node scripts/process-jobs.mjs --once",
+    "ops:readiness": "node scripts/check-production-readiness.mjs",
     "ops:backup-freshness": "node scripts/check-backup-freshness.mjs",
     "ops:healthcheck": "node scripts/check-health.mjs",
     "ops:retention": "node scripts/run-retention-sweep.mjs"

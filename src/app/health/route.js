@@ -1,18 +1,32 @@
 import { getAttachmentStorageBackend } from "@/lib/blob-storage";
 import { getDatabaseHealth } from "@/lib/database";
-import { getDeploymentStage, isVercelDeployment } from "@/lib/deployment-environment";
+import { getRuntimeReadiness } from "@/lib/runtime-readiness.mjs";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
     const store = getDatabaseHealth();
+    const readiness = getRuntimeReadiness();
 
     return Response.json(
       {
         status: "ok",
         timestamp: new Date().toISOString(),
+        deploymentStage: readiness.deploymentStage,
+        vercel: readiness.vercel,
+        deploymentHostname: readiness.deploymentHostname,
+        appBaseUrl: readiness.appBaseUrl,
+        secureTransport: readiness.secureTransport,
         attachmentBackend: getAttachmentStorageBackend(),
-        deploymentStage: getDeploymentStage(),
-        vercel: isVercelDeployment(),
+        launchProfile: readiness.launchProfile,
+        readyForProduction: readiness.readyForProduction,
+        readyForScale: readiness.readyForScale,
+        checks: readiness.checks,
+        warnings: readiness.warnings,
+        criticalIssues: readiness.criticalIssues,
+        postgresDiagnostics: readiness.postgresDiagnostics,
         ...store,
       },
       {

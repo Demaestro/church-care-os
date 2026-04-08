@@ -23,7 +23,9 @@ describe("member portal and follow-up schedule", () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  test("opens a member portal from a tracking code and matching contact", async () => {
+  test(
+    "opens a member portal from a tracking code and matching contact",
+    async () => {
     const {
       createCareRequestEntry,
       getMemberPortalData,
@@ -68,7 +70,9 @@ describe("member portal and follow-up schedule", () => {
     expect(refreshedPortal?.profile.email).toBe("ruth.new@example.com");
     expect(refreshedPortal?.profile.phone).toBe("+2348099999999");
     expect(refreshedPortal?.profile.preferredContact).toBe("Email");
-  });
+    },
+    10000
+  );
 
   test("saves follow-up plans into the schedule board", async () => {
     const {

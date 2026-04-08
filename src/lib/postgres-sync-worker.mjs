@@ -2,11 +2,16 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { parentPort } from "node:worker_threads";
 import { fileURLToPath } from "node:url";
-import { Client, Pool } from "pg";
+import { Pool } from "pg";
+import {
+  getPostgresConnectionString,
+  resolvePostgresPoolSettings,
+  resolvePostgresSslConfig,
+} from "./postgres-config.mjs";
 
 const workerDir = dirname(fileURLToPath(import.meta.url));
 const schemaPath = resolve(workerDir, "..", "..", "scripts", "postgres", "schema.sql");
-const connectionString = process.env.DATABASE_URL || "";
+const connectionString = getPostgresConnectionString();
 
 if (!parentPort) {
   throw new Error("PostgreSQL sync worker requires a parent port.");
@@ -18,12 +23,8 @@ if (!connectionString) {
 
 const pool = new Pool({
   connectionString,
-  ssl:
-    process.env.PGSSLMODE === "require"
-      ? {
-          rejectUnauthorized: false,
-        }
-      : undefined,
+  ...resolvePostgresPoolSettings(),
+  ssl: resolvePostgresSslConfig(),
 });
 
 const transactionClients = new Map();
@@ -252,16 +253,7 @@ async function runQuery({ sql, params = [], mode = "all", transactionId = "" }) 
 
 async function beginTransaction(transactionId) {
   await ensureSchema();
-  const client = new Client({
-    connectionString,
-    ssl:
-      process.env.PGSSLMODE === "require"
-        ? {
-            rejectUnauthorized: false,
-          }
-        : undefined,
-  });
-  await client.connect();
+  const client = await pool.connect();
   await client.query("BEGIN");
   transactionClients.set(transactionId, client);
 }
@@ -276,7 +268,7 @@ async function commitTransaction(transactionId) {
     await client.query("COMMIT");
   } finally {
     transactionClients.delete(transactionId);
-    await client.end().catch(() => {});
+    client.release();
   }
 }
 
@@ -290,7 +282,7 @@ async function rollbackTransaction(transactionId) {
     await client.query("ROLLBACK");
   } finally {
     transactionClients.delete(transactionId);
-    await client.end().catch(() => {});
+    client.release();
   }
 }
 
@@ -300,7 +292,7 @@ async function shutdown() {
 
   for (const [, client] of openClients) {
     await client.query("ROLLBACK").catch(() => {});
-    await client.end().catch(() => {});
+    client.release();
   }
 
   await pool.end();

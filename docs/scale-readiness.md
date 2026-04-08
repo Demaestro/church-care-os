@@ -26,6 +26,10 @@ Use these settings in real production:
 - `AUTH_SECRET=<strong secret>`
 - `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=<strong key>`
 - `CRON_SECRET=<strong secret>`
+- `PGPOOL_MAX=20`
+- `PGPOOL_MIN=2`
+- `PGPOOL_IDLE_TIMEOUT_MS=30000`
+- `PGPOOL_CONNECTION_TIMEOUT_MS=5000`
 
 Do not rely on local SQLite or local file uploads for high-scale production.
 
@@ -74,6 +78,8 @@ Sessions live in secure cookies and are revocable server-side. That avoids local
    - follow-up board
    - notifications and reminder delivery
 
+Start with the smoke test in `load/k6-smoke.js`, then move into staged write-heavy tests once the read path is stable.
+
 ## Practical recommendation
 
 For early launch:
@@ -89,3 +95,4 @@ For very large usage:
 - read replicas if reporting becomes heavy
 - background queues for delivery fan-out
 - synthetic monitoring and staged rollout by church
+- repeatable load testing using the checklist in `docs/load-testing.md`

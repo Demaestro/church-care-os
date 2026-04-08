@@ -1,18 +1,21 @@
 # Church Care OS
 
-Church Care OS is a Next.js 16 care coordination app for pastors, ministry leaders, volunteers, and headquarters oversight teams. The app supports a local SQLite runtime for development and single-host installs, plus a PostgreSQL runtime path for cloud deployments. It includes branch-scoped internal routes, MFA-capable sign-in, a public member intake flow, private attachment support, and migration tooling for PostgreSQL.
+Church Care OS is a Next.js 16 pastoral care and discipleship app built around one church workspace per signup. A pastor can register the church, set the logo and core branding, and invite staff and members into one shared care rhythm. The app supports a local SQLite runtime for development and single-host installs, plus a PostgreSQL runtime path for stateless cloud deployments.
 
 Core product surfaces already included:
 
+- Church signup and branding
 - Pastor dashboard
+- Follow-up board and pastoral inbox
 - Leader routing and volunteer assignment
 - Volunteer task workflow
 - Household timelines
 - Public care request intake
 - Request status lookup
+- Member self-service sign-in and portal
 - Account recovery
 - Admin users, teams, reports, settings, audit trail, and notifications
-- Regions, branches, transfers, security, attachments, and HQ analytics
+- Security, attachments, background jobs, and PostgreSQL migration tooling
 
 ## Runtime requirements
 
@@ -107,6 +110,7 @@ npm run db:pg:import -- --from /absolute/path/to/export-folder
 npm run db:drill
 npm run jobs:drain
 npm run jobs:work
+npm run ops:readiness
 npm run ops:retention
 npm run ops:healthcheck
 npm run ops:backup-freshness
@@ -205,11 +209,27 @@ The repo now includes Vercel cron scheduling in `vercel.json` for:
 
 That cron frequency usually means a paid Vercel plan is the realistic target for production care workflows.
 
+## Production launch checklist
+
+Before opening the app to real churches, run:
+
+```bash
+npm run ops:readiness
+npm run db:pg:check
+npm run ops:healthcheck
+```
+
+For staging or performance work, also review:
+
+- `docs/scale-readiness.md`
+- `docs/load-testing.md`
+- `load/k6-smoke.js`
+
 ## Operations notes
 
 - Put a reverse proxy such as Nginx or Caddy in front of the Next.js server for TLS, rate limiting, and request buffering.
 - Run only one app instance with the current SQLite file. Multiple replicas will drift unless the data layer is replaced.
-- Internal routes now require login; only `/requests/new`, `/permissions`, `/login`, `/register`, and `/health` should stay public.
+- Internal routes now require login; only `/requests/new`, `/permissions`, `/login`, `/register`, `/register/church`, and `/health` should stay public.
 - If you later scale beyond one instance, set a stable `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` during build and move app data into a shared database.
 
 ## Verification

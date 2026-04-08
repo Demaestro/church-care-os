@@ -25,6 +25,28 @@ try {
   }
 
   console.log(`Health check passed for ${rawBaseUrl}`);
+
+  if (payload.launchProfile) {
+    console.log(`- Launch profile: ${payload.launchProfile}`);
+  }
+
+  if (payload.storeMode) {
+    console.log(`- Database runtime: ${payload.storeMode}`);
+  }
+
+  if (Array.isArray(payload.warnings) && payload.warnings.length > 0) {
+    console.warn("- Warnings:");
+    for (const warning of payload.warnings) {
+      console.warn(`  - ${warning}`);
+    }
+  }
+
+  if (Array.isArray(payload.criticalIssues) && payload.criticalIssues.length > 0) {
+    console.warn("- Critical issues still present:");
+    for (const issue of payload.criticalIssues) {
+      console.warn(`  - ${issue}`);
+    }
+  }
 } catch (error) {
   if (error?.cause?.code === "ECONNREFUSED") {
     console.error(

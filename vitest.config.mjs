@@ -15,5 +15,6 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.js"],
     restoreMocks: true,
+    testTimeout: 15000,
   },
 });

@@ -9,6 +9,7 @@ import {
 } from "node:worker_threads";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { getPostgresRuntimeDiagnostics } from "@/lib/postgres-config.mjs";
 
 // Resolve worker path without new URL() so Turbopack does not attempt
 // to statically bundle the worker file as a module dependency.
@@ -172,6 +173,7 @@ export function getPostgresHealth() {
 
   return {
     storeMode: "postgres",
+    ...getPostgresRuntimeDiagnostics(),
   };
 }
 
@@ -183,15 +185,44 @@ export function getPostgresScopedDatabase() {
 export function withPostgresTransaction(callback) {
   const transactionId = randomUUID();
   callWorker("beginTransaction", { transactionId });
+  let finalized = false;
+
+  const commit = () => {
+    if (!finalized) {
+      finalized = true;
+      callWorker("commitTransaction", { transactionId });
+    }
+  };
+
+  const rollback = () => {
+    if (!finalized) {
+      finalized = true;
+      callWorker("rollbackTransaction", { transactionId });
+    }
+  };
 
   try {
-    return transactionContext.run(transactionId, () => {
-      const result = callback(new PostgresDatabase(transactionId));
-      callWorker("commitTransaction", { transactionId });
-      return result;
-    });
+    const result = transactionContext.run(transactionId, () =>
+      callback(new PostgresDatabase(transactionId))
+    );
+
+    if (result && typeof result.then === "function") {
+      return result.then(
+        (value) => {
+          commit();
+          return value;
+        },
+        (error) => {
+          rollback();
+          throw error;
+        }
+      );
+    }
+
+    commit();
+    return result;
   } catch (error) {
-    callWorker("rollbackTransaction", { transactionId });
+    rollback();
     throw error;
   }
 }

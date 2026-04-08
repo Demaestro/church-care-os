@@ -121,6 +121,20 @@ export function withTransaction(callback) {
 
   try {
     const result = callback(db);
+
+    if (result && typeof result.then === "function") {
+      return result.then(
+        (value) => {
+          db.exec("COMMIT");
+          return value;
+        },
+        (error) => {
+          db.exec("ROLLBACK");
+          throw error;
+        }
+      );
+    }
+
     db.exec("COMMIT");
     return result;
   } catch (error) {

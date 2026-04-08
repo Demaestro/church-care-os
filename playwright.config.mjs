@@ -21,6 +21,9 @@ export default defineConfig({
   expect: {
     timeout: 8_000,
   },
+  // The suite shares one standalone server, one database, and one in-memory
+  // rate-limit store, so running files concurrently creates noisy auth flakes.
+  workers: 1,
   fullyParallel: false,
   retries: 0,
   reporter: [["list"]],

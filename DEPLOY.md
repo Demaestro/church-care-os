@@ -13,6 +13,7 @@ Church Care OS supports two production shapes:
 - Set `CARE_DB_PATH` explicitly in SQLite production deployments.
 - Put a reverse proxy or provider edge in front of the app.
 - Use `/health` as the deployment health check.
+- Run `npm run ops:readiness` before first production traffic.
 - Run `npm run db:init` once if you want to bootstrap a SQLite file before first traffic.
 - Use PostgreSQL before attempting multi-instance or serverless scale.
 - Run scheduled backups and occasional restore drills.
@@ -35,6 +36,7 @@ Recommended production env vars:
 - `CARE_DATABASE_DRIVER=sqlite`
 - `DATABASE_URL` when you are running PostgreSQL
 - `PGSSLMODE=require` when your PostgreSQL host requires TLS
+- `PGPOOL_MAX`, `PGPOOL_MIN`, `PGPOOL_IDLE_TIMEOUT_MS`, and `PGPOOL_CONNECTION_TIMEOUT_MS` if you want to tune pooled PostgreSQL behavior
 - `BLOB_READ_WRITE_TOKEN` when you are using Vercel Blob storage
 - `CRON_SECRET` when you are using cron-triggered routes
 - `RESEND_API_KEY` only when you are ready for live email
@@ -69,6 +71,7 @@ What you still need to do:
 6. Set `CRON_SECRET` to a long random value.
 7. Set `APP_BASE_URL` to your production domain for the production environment only.
 8. Keep preview deployments on separate preview URLs and do not point them at production data.
+9. Run `npm run ops:readiness` and `npm run ops:healthcheck` after the first production deploy.
 
 ## Render
 
@@ -167,6 +170,7 @@ Suggested VPS flow:
 After deployment, validate the host with these commands:
 
 ```bash
+npm run ops:readiness
 npm run db:backup
 npm run db:drill
 npm run jobs:drain
@@ -198,3 +202,4 @@ The PostgreSQL schema lives in `scripts/postgres/schema.sql`.
 - Use Railway if you want a simple container workflow and are comfortable attaching the volume in the dashboard.
 - Use Fly.io if you want region control and are okay with a bit more infrastructure setup.
 - Use a VPS if you want the most direct control and the least platform abstraction.
+- Review `docs/load-testing.md` before claiming large concurrent-user readiness.

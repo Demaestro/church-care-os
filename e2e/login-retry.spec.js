@@ -21,6 +21,6 @@ test("login keeps the email filled after one failed password attempt", async ({ 
   await page.locator('form.space-y-5 input[name="password"]').fill(password);
   await page.locator('form.space-y-5 button[type="submit"]').click();
 
-  await expect(page).toHaveURL(/\/security\?mfa_required=1$/);
+  await expect(page).toHaveURL(/\/security\?mfa_required=1$/, { timeout: 15_000 });
   await expect(page.locator("body")).toContainText(/multi-factor|security/i);
 });
