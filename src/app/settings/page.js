@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { saveChurchSettings, sendTestEmail, sendTestMessage } from "@/app/actions";
 import { cookies } from "next/headers";
 import { FlashBanner } from "@/components/flash-banner";
@@ -28,7 +29,7 @@ export default async function SettingsPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const pageCopy = copy.settings;
-  const user = await requireCurrentUser(["owner"]);
+  const user = await requireCurrentUser(["owner", "pastor"]);
   const preferredBranchId = (await cookies()).get(WORKSPACE_BRANCH_COOKIE)?.value || "";
   const workspace = getWorkspaceContext(user, preferredBranchId);
   const params = await searchParams;
@@ -116,6 +117,52 @@ export default async function SettingsPage({ searchParams }) {
               name="campusName"
               defaultValue={settings?.campusName}
             />
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <Field
+              label="Lead pastor name"
+              name="pastorName"
+              defaultValue={settings?.pastorName}
+            />
+            <Field
+              label="Church website"
+              name="websiteUrl"
+              type="url"
+              defaultValue={settings?.websiteUrl}
+              placeholder="https://yourchurch.org"
+            />
+          </div>
+
+          <div className="mt-4 rounded-[1.2rem] border border-line bg-canvas p-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              {settings?.logoHref ? (
+                <Image
+                  src={settings.logoHref}
+                  alt={`${settings.churchName} logo`}
+                  width={80}
+                  height={80}
+                  unoptimized
+                  className="h-20 w-20 rounded-[1.4rem] border border-line bg-paper object-cover"
+                />
+              ) : (
+                <div className="flex h-20 w-20 items-center justify-center rounded-[1.4rem] border border-dashed border-line bg-paper text-xs font-bold uppercase tracking-[0.18em] text-moss">
+                  Logo
+                </div>
+              )}
+              <label className="block flex-1">
+                <span className="text-sm font-medium text-foreground">Church logo</span>
+                <input
+                  type="file"
+                  name="churchLogo"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="mt-2 block w-full rounded-[1rem] border border-dashed border-line bg-paper px-4 py-3.5 text-sm text-foreground"
+                />
+                <p className="mt-2 text-xs text-muted">
+                  PNG, JPG, or WebP. Members see this on sign-in and member tools.
+                </p>
+              </label>
+            </div>
           </div>
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">

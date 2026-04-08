@@ -1,4 +1,4 @@
-import {
+﻿import {
   createUserAccount,
   lockUserAccount,
   revokeUserSessions,
@@ -62,16 +62,13 @@ export default async function AdminUsersPage({ searchParams }) {
     recoveryStatus:
       typeof params?.recoveryStatus === "string" ? params.recoveryStatus : "all",
   };
+  const normalizedActorRole = currentUser.role === "overseer" ? "owner" : currentUser.role;
   const roleOptions =
-    currentUser.role === "owner"
+    normalizedActorRole === "owner"
       ? internalRoleOptions
-      : currentUser.role === "overseer"
-        ? internalRoleOptions.filter((option) =>
-            ["pastor", "leader", "volunteer"].includes(option.value)
-          )
-        : internalRoleOptions.filter((option) =>
-            ["leader", "volunteer"].includes(option.value)
-          );
+      : internalRoleOptions.filter((option) =>
+          ["leader", "volunteer"].includes(option.value)
+        );
   const localizedRoleOptions = roleOptions.map((option) => ({
     ...option,
     label: translateRoleLabel(option.value, preferences.language),
@@ -79,9 +76,11 @@ export default async function AdminUsersPage({ searchParams }) {
   const branchOptions = workspace.visibleBranches.map((branch) => ({
     value: branch.id,
     label: branch.locationLabel
-      ? `${branch.name} · ${branch.locationLabel}`
+      ? `${branch.name} - ${branch.locationLabel}`
       : branch.name,
   }));
+  const hasMultipleBranches = workspace.visibleBranches.length > 1;
+  const canGrantChurchWideAccess = normalizedActorRole === "owner" && hasMultipleBranches;
   const laneSuggestions = Array.from(
     new Set(teams.map((team) => team.lane).filter(Boolean))
   ).sort((first, second) => first.localeCompare(second));
@@ -149,7 +148,11 @@ export default async function AdminUsersPage({ searchParams }) {
         <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
           <div className="mb-4 rounded-[1.2rem] border border-line bg-canvas px-4 py-3 text-sm text-muted">
             Managing people for <span className="font-semibold text-foreground">{workspace.organization.name}</span>
-            {workspace.activeBranch ? ` · ${workspace.activeBranch.name}` : " · all visible branches"}
+            {workspace.activeBranch
+              ? ` - ${workspace.activeBranch.name}`
+              : hasMultipleBranches
+                ? " - all visible campuses"
+                : ""}
           </div>
           <form action="/admin/users" className="rounded-[1.35rem] border border-line bg-canvas p-4">
             <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.75fr_0.85fr_auto]">
@@ -269,35 +272,52 @@ export default async function AdminUsersPage({ searchParams }) {
               <Field
                 label="Title"
                 name="title"
-                placeholder="Branch pastor, HQ care admin, volunteer..."
+                placeholder="Care lead, volunteer, hospitality coordinator..."
               />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <SelectField
-                label="Branch"
-                name="branchId"
-                defaultValue={workspace.activeBranch?.id || branchOptions[0]?.value}
-                options={branchOptions}
-              />
-              <SelectField
-                label="Access scope"
-                name="accessScope"
-                defaultValue={currentUser.role === "owner" ? "organization" : "branch"}
-                options={[
-                  { value: "branch", label: "Branch only" },
-                  { value: "organization", label: "Organization / HQ" },
-                ]}
-              />
-            </div>
+            {hasMultipleBranches ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <SelectField
+                  label="Campus"
+                  name="branchId"
+                  defaultValue={workspace.activeBranch?.id || branchOptions[0]?.value}
+                  options={branchOptions}
+                />
+                {canGrantChurchWideAccess ? (
+                  <SelectField
+                    label="Access scope"
+                    name="accessScope"
+                    defaultValue="organization"
+                    options={[
+                      { value: "branch", label: "This campus only" },
+                      { value: "organization", label: "Church-wide" },
+                    ]}
+                  />
+                ) : (
+                  <input type="hidden" name="accessScope" value="branch" />
+                )}
+              </div>
+            ) : (
+              <>
+                <input
+                  type="hidden"
+                  name="branchId"
+                  value={workspace.activeBranch?.id || branchOptions[0]?.value || ""}
+                />
+                <input type="hidden" name="accessScope" value="branch" />
+              </>
+            )}
 
-            <div className="mt-4">
-              <Field
-                label="Managed branch IDs (HQ roles only)"
-                name="managedBranchIds"
-                placeholder="Leave blank for all visible branches, or enter comma-separated branch IDs"
-              />
-            </div>
+            {canGrantChurchWideAccess ? (
+              <div className="mt-4">
+                <Field
+                  label="Additional campus IDs (optional)"
+                  name="managedBranchIds"
+                  placeholder="Leave blank for all visible campuses, or enter comma-separated campus IDs"
+                />
+              </div>
+            ) : null}
 
             <div className="grid gap-4 md:grid-cols-2">
               <Field
@@ -715,10 +735,6 @@ function canManageRole(actorRole, role) {
     return true;
   }
 
-  if (actorRole === "overseer") {
-    return ["pastor", "leader", "volunteer"].includes(role);
-  }
-
   if (actorRole === "pastor") {
     return ["leader", "volunteer"].includes(role);
   }
@@ -911,3 +927,4 @@ function getRecoveryStatusClass(status) {
       return "border border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)] text-clay";
   }
 }
+

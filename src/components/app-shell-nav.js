@@ -1,5 +1,6 @@
 'use client';
 
+import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -453,32 +454,45 @@ function WorkspaceMenuPanel({ workspaceSwitcher, onNavigate = () => {} }) {
         <div className="space-y-3">
           {workspaceSwitcher.catalog.map((organization) => (
             <div key={organization.id} className="rounded-[1rem] border border-line bg-canvas p-3">
-              <p className="text-xs uppercase tracking-[0.18em] text-muted">
-                {organization.name}
-              </p>
-              <div className="mt-3 grid gap-2">
-                {organization.branches.map((branch) => (
-                  <form key={branch.id} action={action}>
-                    <input type="hidden" name="organizationId" value={organization.id} />
-                    <input type="hidden" name="branchId" value={branch.id} />
-                    <input type="hidden" name="redirectTo" value={workspaceSwitcher.redirectTo} />
-                    <button
-                      type="submit"
-                      onClick={onNavigate}
-                      className={`w-full rounded-[0.95rem] border px-4 py-3 text-left text-sm font-medium transition ${
-                        workspaceSwitcher.branchId === branch.id
-                          ? "border-[var(--soft-accent-border)] bg-[var(--soft-fill)] text-moss"
-                          : "border-transparent bg-paper text-foreground hover:border-line hover:bg-[var(--surface-hover)]"
-                      }`}
-                    >
-                      <span className="block">{branch.name}</span>
-                      <span className="mt-1 block text-xs uppercase tracking-[0.16em] text-muted">
-                        {branch.locationLabel || branch.code}
-                      </span>
-                    </button>
-                  </form>
-                ))}
-              </div>
+              <form action={action}>
+                <input type="hidden" name="organizationId" value={organization.id} />
+                <input
+                  type="hidden"
+                  name="branchId"
+                  value={organization.defaultBranchId || organization.defaultBranch?.id || ""}
+                />
+                <input type="hidden" name="redirectTo" value={workspaceSwitcher.redirectTo} />
+                <button
+                  type="submit"
+                  onClick={onNavigate}
+                  className={`flex w-full items-center gap-3 rounded-[0.95rem] border px-4 py-3 text-left text-sm font-medium transition ${
+                    workspaceSwitcher.organizationId === organization.id
+                      ? "border-[var(--soft-accent-border)] bg-[var(--soft-fill)] text-moss"
+                      : "border-transparent bg-paper text-foreground hover:border-line hover:bg-[var(--surface-hover)]"
+                  }`}
+                >
+                  {organization.logoHref ? (
+                    <Image
+                      src={organization.logoHref}
+                      alt={`${organization.name} logo`}
+                      width={44}
+                      height={44}
+                      unoptimized
+                      className="h-11 w-11 rounded-2xl border border-line bg-paper object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-line bg-paper text-xs font-bold uppercase text-moss">
+                      {(organization.shortName || organization.name).slice(0, 2)}
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">{organization.name}</span>
+                    <span className="mt-1 block text-xs uppercase tracking-[0.16em] text-muted">
+                      {organization.pastorName || "Member tools and sign-in"}
+                    </span>
+                  </span>
+                </button>
+              </form>
             </div>
           ))}
         </div>

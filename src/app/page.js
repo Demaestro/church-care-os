@@ -56,16 +56,10 @@ export default async function HomePage() {
     return <PastorHome user={user} board={board} />;
   }
 
-  if (
-    [
-      "owner",
-      "overseer",
-      "general_overseer",
-      "hq_care_admin",
-      "regional_overseer",
-    ].includes(role)
-  ) {
-    redirect("/hq");
+  if (["owner", "overseer", "general_overseer", "hq_care_admin", "regional_overseer"].includes(role)) {
+    const { getFollowUpBoard } = await import("@/lib/care-store");
+    const board = getFollowUpBoard(user.organizationId, user.branchId);
+    return <PastorHome user={user} board={board} />;
   }
 
   if (role === "branch_admin") {

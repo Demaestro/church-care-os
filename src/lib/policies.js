@@ -1,9 +1,9 @@
 export const roleLandingPages = {
   owner: "/",
-  overseer: "/hq",
-  general_overseer: "/hq",
-  hq_care_admin: "/hq",
-  regional_overseer: "/hq",
+  overseer: "/",
+  general_overseer: "/",
+  hq_care_admin: "/",
+  regional_overseer: "/",
   branch_admin: "/admin/branch-users",
   pastor: "/",
   leader: "/leader",
@@ -17,10 +17,7 @@ export const roleLandingPages = {
  */
 export const mfaRequiredRoles = [
   "owner",
-  "overseer",
-  "general_overseer",
-  "hq_care_admin",
-  "regional_overseer",
+  "pastor",
 ];
 
 export const internalRoles = Object.keys(roleLandingPages);
@@ -43,15 +40,11 @@ export const protectedRouteRoles = {
 export const internalRoleOptions = [
   {
     value: "owner",
-    label: "Owner",
-  },
-  {
-    value: "overseer",
-    label: "General Overseer",
+    label: "Church admin",
   },
   {
     value: "pastor",
-    label: "Branch Pastor",
+    label: "Pastor",
   },
   {
     value: "leader",
@@ -76,46 +69,17 @@ export const retentionPolicy = {
 
 export const demoAuthUsers = [
   {
-    name: "FirstLove Platform Owner",
+    name: "FirstLove Church Admin",
     email: "owner@firstlove.demo",
     phone: "+2348010000001",
     password: "OwnerDemo!2026",
     role: "owner",
-    title: "Platform owner",
+    title: "Church admin",
     organizationId: "org-firstlove",
     branchId: "branch-firstlove-lagos-hq",
     accessScope: "organization",
     managedBranchIds: [],
     lane: "",
-    volunteerName: "",
-  },
-  {
-    name: "General Overseer Daniel Afolayan",
-    email: "go@firstlove.demo",
-    phone: "+2348010000002",
-    password: "OverseerDemo!2026",
-    role: "overseer",
-    title: "General overseer",
-    organizationId: "org-firstlove",
-    branchId: "branch-firstlove-lagos-hq",
-    accessScope: "organization",
-    managedBranchIds: [],
-    volunteerName: "",
-  },
-  {
-    name: "Regional Overseer Grace Obi",
-    email: "regional.overseer@firstlove.demo",
-    phone: "+2348010000008",
-    password: "RegionDemo!2026",
-    role: "overseer",
-    title: "Regional overseer",
-    organizationId: "org-firstlove",
-    branchId: "branch-firstlove-abuja-central",
-    accessScope: "organization",
-    managedBranchIds: [
-      "branch-firstlove-abuja-central",
-      "branch-firstlove-enugu-city",
-    ],
     volunteerName: "",
   },
   {

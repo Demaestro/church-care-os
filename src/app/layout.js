@@ -1,3 +1,4 @@
+﻿import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import "./globals.css";
@@ -91,11 +92,12 @@ export default async function RootLayout({ children }) {
     null;
   const publicBranchId =
     cookieStore.get(PUBLIC_BRANCH_COOKIE)?.value ||
+    publicOrganization?.defaultBranchId ||
     defaultPrimaryBranchId ||
-    publicOrganization?.branches?.[0]?.id ||
     "";
   const publicBranch =
     publicOrganization?.branches?.find((item) => item.id === publicBranchId) ||
+    publicOrganization?.defaultBranch ||
     publicOrganization?.branches?.find((item) => item.id === defaultPrimaryBranchId) ||
     publicOrganization?.branches?.[0] ||
     null;
@@ -117,15 +119,14 @@ export default async function RootLayout({ children }) {
     : publicOrganization
       ? {
           menuLabel: "Church",
-          eyebrow: publicOrganization.name,
-          title: publicBranch?.name || publicOrganization.name,
+          eyebrow: "Member tools",
+          title: publicOrganization.name,
           body:
-            "Choose the church branch members should use for intake, request tracking, and member tools.",
-          canSwitch:
-            (publicOrganization.branches || []).length > 1 || publicCatalog.length > 1,
+            "Choose the church members should use for request care, status tracking, and member sign-in.",
+          canSwitch: publicCatalog.length > 1,
           redirectTo: "/",
           organizationId: publicOrganization.id,
-          branchId: publicBranch?.id || "",
+          branchId: publicOrganization.defaultBranchId || publicBranch?.id || "",
           catalog: publicCatalog,
         }
       : null;
@@ -135,7 +136,7 @@ export default async function RootLayout({ children }) {
         buttonLabel: user.name.split(" ")[0] || user.name,
         roleLabel: translateRoleLabel(user.role, preferences.language),
         detailLabel: workspace
-          ? `${workspace.organization.shortName} | ${workspace.activeScopeLabel}`
+          ? `${workspace.organization.shortName} - ${workspace.activeScopeLabel}`
           : "",
         workspaceHref,
         switchHref: "/login?switch=1",
@@ -153,12 +154,17 @@ export default async function RootLayout({ children }) {
   const routeLabels = buildRouteLabels(navSections, quickActions);
   const bottomNavItems = buildBottomNav(user, unreadNotificationCount);
   const scopeLabel = user
-    ? workspace?.activeBranch
-      ? `Branch privacy is enforced inside ${workspace.activeBranch.name}.`
-      : `You are viewing ${workspace?.organization?.name || "this organization"} across your allowed branches.`
+        ? workspace?.activeBranch
+          ? `Church privacy is enforced inside ${workspace.organization.name}.`
+          : `You are viewing ${workspace?.organization?.name || "this church"} across your allowed branches.`
     : publicBranch
-      ? `Member tools are currently scoped to ${publicBranch.name}.`
+      ? `Member tools are currently set to ${publicOrganization?.name || publicBranch.name}.`
       : "Member tools are ready for your selected church workspace.";
+  const brandOrganization = user ? workspace?.organization || null : publicOrganization;
+  const brandLogoHref = brandOrganization?.logoHref || "";
+  const brandInitials = (brandOrganization?.shortName || brandOrganization?.name || "CC")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <html
@@ -187,21 +193,13 @@ export default async function RootLayout({ children }) {
             <div className="mx-auto max-w-7xl px-6 lg:px-10">
               <div className="flex h-14 items-center justify-between gap-2 sm:h-16 sm:gap-4">
                 <Link href="/" className="group flex flex-shrink-0 items-center gap-3">
-                  <span
-                    className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold tracking-wide text-white transition-all duration-200 group-hover:scale-105"
-                    style={{
-                      background: "linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)",
-                      boxShadow: "0 3px 12px rgba(37,99,235,0.38)",
-                    }}
-                  >
-                    CC
-                  </span>
+                  <BrandMark logoHref={brandLogoHref} initials={brandInitials} />
                   <span className="hidden sm:block">
                     <span className="block text-[0.6rem] font-bold uppercase tracking-[0.28em] text-muted leading-none">
                       {copy.layout.brandKicker}
                     </span>
                     <span className="mt-0.5 block text-[0.875rem] font-bold leading-tight text-foreground">
-                      {copy.layout.brandTitle}
+                      {brandOrganization?.name || copy.layout.brandTitle}
                     </span>
                   </span>
                 </Link>
@@ -270,6 +268,35 @@ export default async function RootLayout({ children }) {
         </div>
       </body>
     </html>
+  );
+}
+
+function BrandMark({ logoHref = "", initials = "CC" }) {
+  if (logoHref) {
+    return (
+      <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-line bg-paper shadow-sm transition-all duration-200 group-hover:scale-105">
+        <Image
+          src={logoHref}
+          alt="Church logo"
+          width={40}
+          height={40}
+          unoptimized
+          className="h-full w-full object-cover"
+        />
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold tracking-wide text-white transition-all duration-200 group-hover:scale-105"
+      style={{
+        background: "linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)",
+        boxShadow: "0 3px 12px rgba(37,99,235,0.38)",
+      }}
+    >
+      {initials}
+    </span>
   );
 }
 
@@ -347,7 +374,13 @@ function buildQuickActions(user, copy) {
     },
   ];
 
-  if (["leader", "pastor", "overseer", "owner"].includes(user.role)) {
+  const normalizedRole = ["overseer", "general_overseer", "hq_care_admin", "regional_overseer", "branch_admin"].includes(
+    user.role
+  )
+    ? "owner"
+    : user.role;
+
+  if (["leader", "pastor", "owner"].includes(normalizedRole)) {
     items.unshift({
       id: "action:new-request",
       href: "/requests/new",
@@ -355,17 +388,6 @@ function buildQuickActions(user, copy) {
       description: "Capture a fresh care need without leaving the workspace",
       section: "Quick actions",
       type: "action",
-    });
-  }
-
-  if (["general_overseer", "hq_care_admin", "regional_overseer", "overseer", "owner"].includes(user.role)) {
-    items.push({
-      id: "action:hq",
-      href: "/hq",
-      label: "HQ command centre",
-      description: "Review branch health, trends, and pressure points",
-      section: "Quick actions",
-      type: "branch",
     });
   }
 
@@ -387,7 +409,7 @@ function buildCommandItems({ sections, quickActions, searchIndex }) {
     id: `household:${household.slug}`,
     href: `/households/${household.slug}`,
     label: household.name,
-    description: `${titleCase(household.stage)} · ${titleCase(household.risk)} risk`,
+    description: `${titleCase(household.stage)} - ${titleCase(household.risk)} risk`,
     keywords: [household.owner, ...(household.tags || [])],
     section: "Households",
     type: "household",
@@ -397,7 +419,7 @@ function buildCommandItems({ sections, quickActions, searchIndex }) {
     id: `request:${request.id}`,
     href: request.householdSlug ? `/households/${request.householdSlug}` : "/follow-up",
     label: request.householdName,
-    description: `${request.trackingCode || "Request"} · ${request.need || "Care request"}`,
+    description: `${request.trackingCode || "Request"} - ${request.need || "Care request"}`,
     keywords: [
       request.trackingCode,
       request.need,
@@ -430,16 +452,6 @@ function buildBottomNav(user, unreadNotificationCount = 0) {
     ];
   }
 
-  if (["general_overseer", "hq_care_admin", "regional_overseer"].includes(user.role)) {
-    return [
-      { href: "/hq", label: "HQ", type: "branch" },
-      { href: "/follow-up", label: "Follow-up", type: "follow-up" },
-      { href: "/reports", label: "Reports", type: "action" },
-      { href: "/branches", label: "Branches", type: "branch" },
-      { href: "/member", label: "Member", type: "member" },
-    ];
-  }
-
   if (user.role === "member") {
     return [
       { href: "/", label: "Home", type: "action" },
@@ -459,16 +471,6 @@ function buildBottomNav(user, unreadNotificationCount = 0) {
       },
       { href: "/member", label: "Profile", type: "member" },
       { href: "/security", label: "Security", type: "action" },
-    ];
-  }
-
-  if (user.role === "branch_admin") {
-    return [
-      { href: "/admin/branch-users", label: "People", type: "action" },
-      { href: "/new-members", label: "New", type: "member" },
-      { href: "/households", label: "Households", type: "household" },
-      { href: "/notifications", label: "Inbox", type: "inbox" },
-      { href: "/member", label: "Member", type: "member" },
     ];
   }
 
@@ -503,10 +505,6 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
       href: "/member",
       label: copy.layout.nav.memberPortal,
     },
-    {
-      href: "/permissions",
-      label: copy.layout.nav.permissions,
-    },
   ];
 
   if (!user) {
@@ -525,9 +523,14 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
 
   const operationItems = [];
   const oversightItems = [];
+  const normalizedRole = ["overseer", "general_overseer", "hq_care_admin", "regional_overseer", "branch_admin"].includes(
+    user.role
+  )
+    ? "owner"
+    : user.role;
 
-  // ── Member-specific nav ──
-  if (user.role === "member") {
+  // -- Member-specific nav --
+  if (normalizedRole === "member") {
     operationItems.push({ href: "/", label: "My home" });
     operationItems.push({ href: "/requests/new", label: copy.layout.nav.requestCare });
     operationItems.push({ href: "/member", label: "My profile & requests" });
@@ -540,7 +543,7 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
     });
   }
 
-  if (["pastor", "overseer", "owner"].includes(user.role)) {
+  if (["pastor", "owner"].includes(normalizedRole)) {
     operationItems.push({
       href: "/",
       label: copy.layout.nav.dashboard,
@@ -550,7 +553,7 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
     operationItems.push({ href: "/discipleship", label: "Discipleship" });
   }
 
-  if (["leader", "pastor", "overseer", "owner"].includes(user.role)) {
+  if (["leader", "pastor", "owner"].includes(normalizedRole)) {
     operationItems.push({
       href: "/leader",
       label: copy.layout.nav.leaderView,
@@ -565,7 +568,7 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
     });
   }
 
-  if (["volunteer", "leader", "pastor", "overseer", "owner"].includes(user.role)) {
+  if (["volunteer", "leader", "pastor", "owner"].includes(normalizedRole)) {
     operationItems.push({
       href: "/volunteer",
       label: copy.layout.nav.volunteerView,
@@ -579,7 +582,7 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
     });
   }
 
-  if (["pastor", "overseer", "owner"].includes(user.role)) {
+  if (["pastor", "owner"].includes(normalizedRole)) {
     oversightItems.push({
       href: "/teams",
       label: copy.layout.nav.teams,
@@ -606,51 +609,7 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
     });
   }
 
-  if (["general_overseer", "hq_care_admin", "regional_overseer"].includes(user.role)) {
-    oversightItems.unshift({
-      href: "/hq",
-      label: "HQ Dashboard",
-    });
-    oversightItems.push({
-      href: "/new-members",
-      label: "New Members",
-    });
-  }
-
-  if (["overseer", "owner"].includes(user.role)) {
-    oversightItems.unshift({
-      href: "/hq",
-      label: "HQ Dashboard",
-    });
-  }
-
-  if (user.role === "branch_admin") {
-    oversightItems.push({
-      href: "/admin/branch-users",
-      label: "Branch People",
-    });
-    oversightItems.push({
-      href: "/new-members",
-      label: "New Members",
-    });
-  }
-
-  if (["overseer", "owner"].includes(user.role)) {
-    oversightItems.push({
-      href: "/branches",
-      label: copy.layout.nav.branches,
-    });
-    oversightItems.push({
-      href: "/regions",
-      label: copy.layout.nav.regions || "Regions",
-    });
-    oversightItems.push({
-      href: "/transfers",
-      label: copy.layout.nav.transfers || "Transfers",
-    });
-  }
-
-  if (user.role === "owner") {
+  if (["pastor", "owner"].includes(normalizedRole)) {
     oversightItems.push({
       href: "/settings",
       label: copy.layout.nav.settings,
@@ -683,3 +642,4 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
       : []),
   ];
 }
+

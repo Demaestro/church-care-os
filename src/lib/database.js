@@ -220,9 +220,16 @@ function createSchema(db) {
       slug TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
       short_name TEXT,
+      pastor_name TEXT,
+      website_url TEXT,
+      primary_branch_id TEXT,
       support_email TEXT,
       support_phone TEXT,
       headquarters_city TEXT,
+      logo_path TEXT,
+      logo_storage_backend TEXT NOT NULL DEFAULT 'local',
+      logo_mime_type TEXT,
+      logo_updated_at TEXT,
       country TEXT,
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL
@@ -313,6 +320,7 @@ function createSchema(db) {
       privacy_json TEXT NOT NULL DEFAULT '{}',
       tracking_code TEXT,
       status_detail TEXT,
+      next_contact_due TEXT,
       assigned_volunteer_json TEXT,
       escalation_json TEXT
     ) STRICT;
@@ -664,6 +672,18 @@ function createSchema(db) {
       ON member_transfers (organization_id, from_branch_id, to_branch_id, status, requested_at DESC);
     CREATE INDEX IF NOT EXISTS idx_jobs_status_run_after
       ON jobs (status, run_after, queue);
+    CREATE INDEX IF NOT EXISTS idx_organizations_active_slug
+      ON organizations (active, slug);
+    CREATE INDEX IF NOT EXISTS idx_branches_org_active_name
+      ON branches (organization_id, active, name);
+    CREATE INDEX IF NOT EXISTS idx_requests_scope_due
+      ON requests (organization_id, branch_id, status, due_at);
+    CREATE INDEX IF NOT EXISTS idx_requests_scope_next_contact
+      ON requests (organization_id, branch_id, next_contact_due);
+    CREATE INDEX IF NOT EXISTS idx_households_scope_touchpoint
+      ON households (organization_id, branch_id, next_touchpoint);
+    CREATE INDEX IF NOT EXISTS idx_users_org_role_active
+      ON users (organization_id, role, active);
   `);
 }
 
@@ -672,8 +692,22 @@ function ensureSchemaMigrations(db) {
   seedRegions(db);
 
   // These columns must exist on branches BEFORE seedBranches runs its INSERT.
+  addColumnIfMissing(db, "organizations", "pastor_name", "TEXT");
+  addColumnIfMissing(db, "organizations", "website_url", "TEXT");
+  addColumnIfMissing(db, "organizations", "primary_branch_id", "TEXT");
+  addColumnIfMissing(db, "organizations", "logo_path", "TEXT");
+  addColumnIfMissing(
+    db,
+    "organizations",
+    "logo_storage_backend",
+    `TEXT NOT NULL DEFAULT 'local'`
+  );
+  addColumnIfMissing(db, "organizations", "logo_mime_type", "TEXT");
+  addColumnIfMissing(db, "organizations", "logo_updated_at", "TEXT");
   addColumnIfMissing(db, "branches", "region_id", "TEXT");
   db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_organizations_active_slug
+      ON organizations (active, slug);
     CREATE INDEX IF NOT EXISTS idx_branches_org_region
       ON branches (organization_id, region_id, active, name);
   `);
@@ -1063,10 +1097,18 @@ function ensureSchemaMigrations(db) {
       ON requests (tracking_code);
     CREATE INDEX IF NOT EXISTS idx_households_scope
       ON households (organization_id, branch_id);
+    CREATE INDEX IF NOT EXISTS idx_households_scope_touchpoint
+      ON households (organization_id, branch_id, next_touchpoint);
     CREATE INDEX IF NOT EXISTS idx_requests_scope
       ON requests (organization_id, branch_id, status);
+    CREATE INDEX IF NOT EXISTS idx_requests_scope_due
+      ON requests (organization_id, branch_id, status, due_at);
+    CREATE INDEX IF NOT EXISTS idx_requests_scope_next_contact
+      ON requests (organization_id, branch_id, next_contact_due);
     CREATE INDEX IF NOT EXISTS idx_users_scope
       ON users (organization_id, branch_id, role);
+    CREATE INDEX IF NOT EXISTS idx_users_org_role_active
+      ON users (organization_id, role, active);
     CREATE INDEX IF NOT EXISTS idx_teams_scope
       ON teams (organization_id, branch_id);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_scope
@@ -1090,9 +1132,10 @@ function addColumnIfMissing(db, tableName, columnName, columnDefinition) {
 function seedOrganizations(db) {
   const insert = db.prepare(`
     INSERT OR IGNORE INTO organizations (
-      id, slug, name, short_name, support_email, support_phone,
-      headquarters_city, country, active, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, slug, name, short_name, pastor_name, website_url, primary_branch_id,
+      support_email, support_phone, headquarters_city, logo_path,
+      logo_storage_backend, logo_mime_type, logo_updated_at, country, active, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const now = new Date().toISOString();
 
@@ -1102,9 +1145,16 @@ function seedOrganizations(db) {
       organization.slug,
       organization.name,
       organization.shortName || null,
+      organization.pastorName || null,
+      organization.websiteUrl || null,
+      organization.primaryBranchId || null,
       organization.supportEmail || null,
       organization.supportPhone || null,
       organization.headquartersCity || null,
+      organization.logoPath || null,
+      organization.logoStorageBackend || "local",
+      organization.logoMimeType || null,
+      organization.logoUpdatedAt || null,
       organization.country || null,
       1,
       now

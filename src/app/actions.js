@@ -1,4 +1,4 @@
-'use server';
+﻿'use server';
 
 import { randomUUID } from "node:crypto";
 import { cookies, headers } from "next/headers";
@@ -86,12 +86,14 @@ import {
 import {
   createMinistryTeamEntry,
   createBranchEntry,
+  createOrganizationEntry,
   createRegionEntry,
   getBranchSettings,
   getBranchOverview,
   createRecoveryRequestEntry,
   getChurchSettings,
   getEffectiveChurchSettings,
+  getOrganizationBySlug,
   getPublicWorkspaceCatalog,
   getWorkspaceContext,
   listRegions,
@@ -101,6 +103,7 @@ import {
   updateBranchSettingsEntry,
   updateBranchEntry,
   updateChurchSettingsEntry,
+  updateOrganizationEntry,
   updateMinistryTeamEntry,
   updateRegionEntry,
 } from "@/lib/organization-store";
@@ -124,6 +127,7 @@ import {
   createMemberTransferEntry,
 } from "@/lib/member-transfer-store";
 import { saveHouseholdAttachment } from "@/lib/attachment-store";
+import { saveChurchLogo } from "@/lib/church-branding";
 import {
   createVolunteerApplication as createVolunteerApplicationEntry,
   hasPendingApplication,
@@ -199,6 +203,32 @@ function splitList(value) {
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeWebsiteUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+  try {
+    return new URL(candidate).toString();
+  } catch {
+    return "";
+  }
+}
+
+function buildChurchSlug(value) {
+  return (
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || "church"
+  );
 }
 
 function getBoundedString(formData, key, maxLength) {
@@ -371,8 +401,11 @@ function resolvePublicWorkspaceSelection(
     ? catalog.find((item) => item.id === organizationId) || null
     : catalog.find((item) => item.id === organizationId) || catalog[0] || null;
   const branch = strict
-    ? organization?.branches.find((item) => item.id === branchId) || null
+    ? organization?.branches.find((item) => item.id === branchId) ||
+      organization?.defaultBranch ||
+      null
     : organization?.branches.find((item) => item.id === branchId) ||
+      organization?.defaultBranch ||
       organization?.branches[0] ||
       null;
 
@@ -636,7 +669,10 @@ async function getPublicSelection() {
 
   return {
     organizationId: selection.organizationId || defaultPrimaryOrganizationId,
-    branchId: selection.branchId || defaultPrimaryBranchId,
+    branchId:
+      selection.branchId ||
+      selection.organization?.defaultBranchId ||
+      defaultPrimaryBranchId,
   };
 }
 
@@ -1256,20 +1292,20 @@ export async function createCareRequest(prevState, formData) {
     submittedBy ||
     `Private care request ${anonymousSuffix}`;
   const preferredContactLabel =
-    preferredContact === "email" ? (contactEmail ? `Email — ${contactEmail}` : "Email") :
-    preferredContact === "phone" ? (contactPhone ? `Phone — ${contactPhone}` : "Phone call") :
+    preferredContact === "email" ? (contactEmail ? `Email - ${contactEmail}` : "Email") :
+    preferredContact === "phone" ? (contactPhone ? `Phone - ${contactPhone}` : "Phone call") :
     preferredContact === "in-person" ? "In person" :
     preferredContact || null;
   const safePreferredContact =
     preferredContactLabel ||
-    (contactEmail ? `Email — ${contactEmail}` : "") ||
-    (contactPhone ? `Phone — ${contactPhone}` : "") ||
+    (contactEmail ? `Email - ${contactEmail}` : "") ||
+    (contactPhone ? `Phone - ${contactPhone}` : "") ||
     (allowContact ? "Follow up through church office" : "No direct contact requested");
   const safeSummary =
     summary || "Member asked for support and chose to share more detail later.";
   const normalizedPreferredContact = safePreferredContact
-    .replaceAll("â€”", "-")
-    .replaceAll("—", "-");
+    .replaceAll("Ã¢â‚¬â€", "-")
+    .replaceAll("-", "-");
 
   const { householdSlug, trackingCode } = await createCareRequestEntry({
     organizationId: publicSelection.organizationId,
@@ -2279,7 +2315,7 @@ export async function switchPublicBranch(formData) {
   );
   const selection = resolvePublicWorkspaceSelection(organizationId, branchId);
   const organization = selection.organization;
-  const branch = selection.branch;
+  const branch = selection.branch || selection.organization?.defaultBranch || null;
   const cookieOptions = getPreferenceCookieOptions();
 
   if (organization?.id) {
@@ -2291,6 +2327,227 @@ export async function switchPublicBranch(formData) {
   }
 
   redirect(redirectTo);
+}
+
+export async function registerChurchWorkspace(formData) {
+  const rateLimit = consumeRateLimit(
+    `register-church:${await getRequestFingerprint()}`,
+    registerRateLimit
+  );
+
+  if (!rateLimit.allowed) {
+    redirectWithError(
+      "/register/church",
+      "Too many signup attempts. Please wait a moment and try again."
+    );
+  }
+
+  const churchName = getBoundedString(formData, "churchName", maxAuthFieldLengths.name);
+  const campusName = getBoundedString(formData, "campusName", maxAuthFieldLengths.name);
+  const pastorName = getBoundedString(formData, "pastorName", maxAuthFieldLengths.name);
+  const email = normalizeEmail(
+    getBoundedString(formData, "email", maxAuthFieldLengths.email)
+  );
+  const supportEmail = normalizeEmail(
+    getBoundedString(formData, "supportEmail", maxAuthFieldLengths.email)
+  );
+  const phone = normalizePhoneNumber(
+    getBoundedString(formData, "phone", maxAuthFieldLengths.phone)
+  );
+  const supportPhone = normalizePhoneNumber(
+    getBoundedString(formData, "supportPhone", maxAuthFieldLengths.phone)
+  );
+  const websiteUrl = normalizeWebsiteUrl(getString(formData, "websiteUrl"));
+  const city = getBoundedString(formData, "city", maxAuthFieldLengths.name);
+  const state = getBoundedString(formData, "state", maxAuthFieldLengths.name);
+  const country = getBoundedString(formData, "country", maxAuthFieldLengths.name);
+  const timezone = getString(formData, "timezone");
+  const password = getBoundedPassword(formData, "password");
+  const confirmPassword = getBoundedPassword(formData, "confirmPassword");
+  const churchLogo = formData.get("churchLogo");
+
+  if (!churchName || !pastorName || !email || !password) {
+    redirectWithError(
+      "/register/church",
+      "Church name, pastor name, email, and password are required."
+    );
+  }
+
+  if (!isValidEmailAddress(email)) {
+    redirectWithError("/register/church", "Enter a valid church workspace email address.");
+  }
+
+  if (supportEmail && !isValidEmailAddress(supportEmail)) {
+    redirectWithError("/register/church", "Enter a valid public support email address.");
+  }
+
+  if (phone && !isValidMessagingPhone(phone)) {
+    redirectWithError(
+      "/register/church",
+      "Enter the pastor phone in international format, like +2348012345678."
+    );
+  }
+
+  if (supportPhone && !isValidMessagingPhone(supportPhone)) {
+    redirectWithError(
+      "/register/church",
+      "Enter the public support phone in international format, like +2348012345678."
+    );
+  }
+
+  if (getString(formData, "websiteUrl") && !websiteUrl) {
+    redirectWithError("/register/church", "Enter a valid church website URL.");
+  }
+
+  if (password.length < 8) {
+    redirectWithError("/register/church", "Passwords must be at least 8 characters.");
+  }
+
+  if (password !== confirmPassword) {
+    redirectWithError("/register/church", "Passwords do not match yet.");
+  }
+
+  if (findUserByEmail(email)) {
+    redirectWithError(
+      "/register/church",
+      "That email is already tied to another care workspace account."
+    );
+  }
+
+  const baseSlug = buildChurchSlug(churchName);
+  if (getOrganizationBySlug(baseSlug)) {
+    redirectWithError(
+      "/register/church",
+      "That church name is already in use. Add a city or unique variation and try again."
+    );
+  }
+
+  const branchName = campusName || `${churchName} Central`;
+  const branchSlug = `${baseSlug}-${randomUUID().slice(0, 6).toLowerCase()}`;
+  const branchCode = `CH-${randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+  const resolvedSupportEmail = supportEmail || email;
+  const resolvedSupportPhone = supportPhone || phone;
+  const cookieStore = await cookies();
+  const cookieOptions = getPreferenceCookieOptions();
+
+  let organizationId = "";
+  let branchId = "";
+
+  try {
+    organizationId = createOrganizationEntry({
+      slug: baseSlug,
+      name: churchName,
+      shortName: churchName,
+      pastorName,
+      websiteUrl,
+      supportEmail: resolvedSupportEmail || null,
+      supportPhone: resolvedSupportPhone || null,
+      headquartersCity: city || null,
+      country: country || null,
+      primaryBranchId: null,
+    });
+
+    branchId = createBranchEntry({
+      organizationId,
+      slug: branchSlug,
+      code: branchCode,
+      name: branchName,
+      city: city || null,
+      state: state || null,
+      country: country || null,
+      pastorName,
+      supportEmail: resolvedSupportEmail || null,
+      supportPhone: resolvedSupportPhone || null,
+      isHeadquarters: true,
+    });
+
+    let logoUpdate = null;
+    if (churchLogo && typeof churchLogo === "object" && Number(churchLogo.size || 0) > 0) {
+      logoUpdate = await saveChurchLogo({
+        organizationSlug: baseSlug,
+        file: churchLogo,
+      });
+    }
+
+    updateOrganizationEntry(organizationId, {
+      slug: baseSlug,
+      name: churchName,
+      shortName: churchName,
+      pastorName,
+      websiteUrl,
+      primaryBranchId: branchId,
+      supportEmail: resolvedSupportEmail || null,
+      supportPhone: resolvedSupportPhone || null,
+      headquartersCity: city || null,
+      country: country || null,
+      ...(logoUpdate || {}),
+    });
+
+    updateChurchSettingsEntry({
+      organizationId,
+      churchName,
+      campusName: branchName,
+      supportEmail: resolvedSupportEmail || "",
+      supportPhone: resolvedSupportPhone || "",
+      timezone: timezone || "Africa/Lagos",
+      intakeConfirmationText:
+        "Thank you for reaching out. Your church care team has received your request and will follow up with a clear next step.",
+      emergencyBanner:
+        "If someone is in immediate danger, please contact local emergency services first and then let the church know how to support you safely.",
+      emailFromName: `${churchName} Care Team`,
+      emailFromAddress: resolvedSupportEmail || "",
+      emailReplyTo: resolvedSupportEmail || "",
+      emailSubjectPrefix: churchName,
+      notificationChannels: ["email", "whatsapp"],
+    });
+
+    const userId = createUserEntry({
+      name: pastorName,
+      email,
+      phone: phone || null,
+      role: "pastor",
+      title: "Lead pastor",
+      password,
+      active: true,
+      organizationId,
+      branchId,
+      accessScope: "branch",
+      managedBranchIds: [branchId],
+    });
+    const newUser = findUserById(userId);
+
+    recordAuditLog({
+      actorUserId: userId,
+      actorName: pastorName,
+      actorRole: "pastor",
+      organizationId,
+      branchId,
+      action: "auth.church_workspace_registered",
+      targetType: "organization",
+      targetId: organizationId,
+      summary: `${pastorName} created the ${churchName} church workspace.`,
+    });
+
+    if (organizationId) {
+      cookieStore.set(PUBLIC_ORGANIZATION_COOKIE, organizationId, cookieOptions);
+    }
+    if (branchId) {
+      cookieStore.set(PUBLIC_BRANCH_COOKIE, branchId, cookieOptions);
+    }
+
+    await createSession(newUser);
+  } catch (error) {
+    redirectWithError(
+      "/register/church",
+      getActionErrorMessage(error, "We could not create the church workspace yet.")
+    );
+  }
+
+  revalidateCarePaths();
+  redirectWithNotice(
+    "/settings",
+    "Your church workspace is ready. Review your branding and contact settings next."
+  );
 }
 
 export async function createUserAccount(formData) {
@@ -3166,15 +3423,23 @@ export async function updateBranch(branchId, formData) {
 }
 
 export async function saveChurchSettings(formData) {
-  const actor = await requireCurrentUser(["owner"]);
+  const actor = await requireCurrentUser(["owner", "pastor"]);
   const scope = await getWorkspaceSelection(actor);
   const supportEmail = normalizeEmail(getString(formData, "supportEmail"));
   const billingContactEmail = normalizeEmail(getString(formData, "billingContactEmail"));
   const emailFromAddress = normalizeEmail(getString(formData, "emailFromAddress"));
   const emailReplyTo = normalizeEmail(getString(formData, "emailReplyTo"));
+  const pastorName = getBoundedString(formData, "pastorName", maxAuthFieldLengths.name);
+  const websiteUrl = normalizeWebsiteUrl(getString(formData, "websiteUrl"));
   const smsFromNumber = normalizePhoneNumber(getString(formData, "smsFromNumber"));
   const whatsappFromNumber = normalizePhoneNumber(getString(formData, "whatsappFromNumber"));
+  const churchName = getBoundedString(formData, "churchName", maxAuthFieldLengths.name);
+  const churchLogo = formData.get("churchLogo");
   const redirectPath = getScopedPath("/settings", scope.preferredBranchId);
+
+  if (!churchName) {
+    redirectWithError(redirectPath, "Enter your church name first.");
+  }
 
   if (supportEmail && !isValidEmailAddress(supportEmail)) {
     redirectWithError(redirectPath, "Enter a valid support email address.");
@@ -3192,6 +3457,10 @@ export async function saveChurchSettings(formData) {
     redirectWithError(redirectPath, "Enter a valid reply-to email address.");
   }
 
+  if (getString(formData, "websiteUrl") && !websiteUrl) {
+    redirectWithError(redirectPath, "Enter a valid church website URL.");
+  }
+
   if (smsFromNumber && !isValidMessagingPhone(smsFromNumber)) {
     redirectWithError(
       redirectPath,
@@ -3207,9 +3476,27 @@ export async function saveChurchSettings(formData) {
   }
 
   try {
+    let logoUpdate = null;
+    if (churchLogo && typeof churchLogo === "object" && Number(churchLogo.size || 0) > 0) {
+      logoUpdate = await saveChurchLogo({
+        organizationSlug: buildChurchSlug(churchName),
+        file: churchLogo,
+      });
+    }
+
+    updateOrganizationEntry(scope.organizationId, {
+      name: churchName,
+      shortName: churchName,
+      pastorName,
+      websiteUrl,
+      supportEmail,
+      supportPhone: getString(formData, "supportPhone"),
+      ...(logoUpdate || {}),
+    });
+
     updateChurchSettingsEntry({
       organizationId: scope.organizationId,
-      churchName: getString(formData, "churchName"),
+      churchName,
       campusName: getString(formData, "campusName"),
       supportEmail,
       supportPhone: getString(formData, "supportPhone"),
@@ -3241,7 +3528,7 @@ export async function saveChurchSettings(formData) {
       action: "admin.settings_updated",
       targetType: "church_settings",
       targetId: scope.organizationId,
-      summary: `${actor.name} updated church settings, billing, and delivery preferences.`,
+      summary: `${actor.name} updated church branding, contacts, and delivery preferences.`,
     });
   } catch (error) {
     redirectWithError(
@@ -3840,7 +4127,7 @@ export async function uploadHouseholdAttachment(householdSlug, formData) {
   redirectWithNotice(redirectPath, "Attachment uploaded.");
 }
 
-// ── New Member Journey actions ────────────────────────────────────────────────
+// -- New Member Journey actions ------------------------------------------------
 
 export async function registerNewMember(prevState, formData) {
   const user = await requireCurrentUser(["pastor","overseer","owner","branch_admin","leader","volunteer","general_overseer"]);
@@ -3918,7 +4205,7 @@ export async function saveServiceSchedule(formData) {
   redirect("/settings/service?notice=Service+schedule+saved");
 }
 
-// ── Self-registration (public — no auth required) ─────────────────────────────
+// -- Self-registration (public - no auth required) -----------------------------
 
 export async function selfRegister(formData) {
   const rateLimit = consumeRateLimit(
@@ -3948,17 +4235,20 @@ export async function selfRegister(formData) {
     : "member";
   const publicSelection = resolvePublicWorkspaceSelection(
     getString(formData, "organizationId"),
-    getString(formData, "branchId"),
+    "",
     true
   );
   const organizationId = publicSelection.organizationId;
-  const branchId = publicSelection.branchId;
+  const branchId =
+    publicSelection.branchId ||
+    publicSelection.organization?.defaultBranchId ||
+    "";
 
   if (!name)  return { error: "Full name is required." };
   if (!email) return { error: "A valid email address is required." };
   if (!isValidEmailAddress(email)) return { error: "Please enter a valid email address." };
   if (!password || password.length < 8) return { error: "Password must be at least 8 characters." };
-  if (!organizationId || !branchId) return { error: "Please choose a valid church and branch." };
+  if (!organizationId || !branchId) return { error: "Please choose a valid church." };
 
   const existing = findUserByEmail(email);
   if (existing) {
@@ -4114,7 +4404,7 @@ export async function reviewVolunteerApplicationAction(prevState, formData) {
         ? "Welcome to the volunteer team!"
         : "Volunteer application update",
       body: status === "approved"
-        ? `${actor.name} has approved your volunteer application. You're now part of the care ministry team — check your tasks in the volunteer board.`
+        ? `${actor.name} has approved your volunteer application. You're now part of the care ministry team - check your tasks in the volunteer board.`
         : `${actor.name} has reviewed your volunteer application. Please speak with your pastor if you have any questions.`,
       href: status === "approved" ? "/volunteer" : "/",
     }]);
@@ -4133,3 +4423,4 @@ export async function reviewVolunteerApplicationAction(prevState, formData) {
   revalidatePath("/volunteer/applications");
   return { success: true, status };
 }
+

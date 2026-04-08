@@ -5,9 +5,16 @@ CREATE TABLE IF NOT EXISTS organizations (
   slug text NOT NULL UNIQUE,
   name text NOT NULL,
   short_name text,
+  pastor_name text,
+  website_url text,
+  primary_branch_id text,
   support_email text,
   support_phone text,
   headquarters_city text,
+  logo_path text,
+  logo_storage_backend text NOT NULL DEFAULT 'local',
+  logo_mime_type text,
+  logo_updated_at timestamptz,
   country text,
   active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL
@@ -95,6 +102,7 @@ CREATE TABLE IF NOT EXISTS requests (
   privacy_json jsonb NOT NULL DEFAULT '{}'::jsonb,
   tracking_code text,
   status_detail text,
+  next_contact_due timestamptz,
   assigned_volunteer_json jsonb,
   escalation_json jsonb
 );
@@ -446,12 +454,24 @@ CREATE INDEX IF NOT EXISTS idx_member_transfers_scope
   ON member_transfers (organization_id, from_branch_id, to_branch_id, status, requested_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_status_run_after
   ON jobs (status, run_after, queue);
+CREATE INDEX IF NOT EXISTS idx_organizations_active_slug
+  ON organizations (active, slug);
+CREATE INDEX IF NOT EXISTS idx_branches_org_active_name
+  ON branches (organization_id, active, name);
 CREATE INDEX IF NOT EXISTS idx_households_scope
   ON households (organization_id, branch_id);
+CREATE INDEX IF NOT EXISTS idx_households_scope_touchpoint
+  ON households (organization_id, branch_id, next_touchpoint);
 CREATE INDEX IF NOT EXISTS idx_requests_scope
   ON requests (organization_id, branch_id, status);
+CREATE INDEX IF NOT EXISTS idx_requests_scope_due
+  ON requests (organization_id, branch_id, status, due_at);
+CREATE INDEX IF NOT EXISTS idx_requests_scope_next_contact
+  ON requests (organization_id, branch_id, next_contact_due);
 CREATE INDEX IF NOT EXISTS idx_users_scope
   ON users (organization_id, branch_id, role);
+CREATE INDEX IF NOT EXISTS idx_users_org_role_active
+  ON users (organization_id, role, active);
 CREATE INDEX IF NOT EXISTS idx_teams_scope
   ON teams (organization_id, branch_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_scope

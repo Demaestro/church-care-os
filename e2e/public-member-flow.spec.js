@@ -11,10 +11,9 @@ test("public request flow continues into status and member portal", async ({ pag
   await page.locator('[name="preferredContact"]').fill("Phone call");
   await page.getByRole("button", { name: /submit care request/i }).click();
 
-  const trackingSummary = page.getByText(/Tracking code:/i);
-  await expect(trackingSummary).toBeVisible();
-  const trackingCode =
-    (await trackingSummary.textContent())?.match(/CCO-[A-Z0-9]{8}/)?.[0] || "";
+  await expect(page.locator("body")).toContainText(/Tracking code:/i);
+  const successText = (await page.locator("main").textContent()) || "";
+  const trackingCode = successText.match(/CCO-[A-Z0-9]{8}/)?.[0] || "";
   expect(trackingCode).toBeTruthy();
 
   await page.getByRole("link", { name: /track this request/i }).click();

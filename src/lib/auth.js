@@ -76,11 +76,11 @@ export async function requireCurrentUser(roles) {
 export function getRoleLabel(role) {
   switch (role) {
     case "owner":
-      return "Owner";
+      return "Church admin";
     case "overseer":
-      return "General Overseer";
+      return "Church admin";
     case "pastor":
-      return "Branch Pastor";
+      return "Pastor";
     case "leader":
       return "Leader";
     case "volunteer":

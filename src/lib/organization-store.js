@@ -27,6 +27,29 @@ import {
   resolveUserOrganizationId,
 } from "@/lib/workspace-scope";
 
+function isEnabledFlag(value) {
+  return value === 1 || value === true || value === "1";
+}
+
+function getOrganizationLogoHref(organization) {
+  if (!organization?.slug || !organization?.logoPath) {
+    return "";
+  }
+
+  return `/church-assets/${organization.slug}/logo`;
+}
+
+function slugifyOrganizationValue(value, fallback = "church") {
+  return (
+    String(value || fallback)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || fallback
+  );
+}
+
 function listOrganizationsInternal() {
   return getDatabase()
     .prepare(`
@@ -35,9 +58,16 @@ function listOrganizationsInternal() {
         slug,
         name,
         short_name,
+        pastor_name,
+        website_url,
+        primary_branch_id,
         support_email,
         support_phone,
         headquarters_city,
+        logo_path,
+        logo_storage_backend,
+        logo_mime_type,
+        logo_updated_at,
         country,
         active,
         created_at
@@ -51,12 +81,21 @@ function listOrganizationsInternal() {
       slug: row.slug,
       name: row.name,
       shortName: row.short_name || row.name,
+      pastorName: row.pastor_name || "",
+      websiteUrl: row.website_url || "",
+      defaultBranchId: row.primary_branch_id || "",
       supportEmail: row.support_email || "",
       supportPhone: row.support_phone || "",
       headquartersCity: row.headquarters_city || "",
+      logoPath: row.logo_path || "",
+      logoStorageBackend: row.logo_storage_backend || "local",
+      logoMimeType: row.logo_mime_type || "",
+      logoUpdatedAt: row.logo_updated_at || "",
       country: row.country || "",
-      active: row.active === 1,
+      active: isEnabledFlag(row.active),
       createdAt: row.created_at,
+      logoHref:
+        row.logo_path && row.slug ? `/church-assets/${row.slug}/logo` : "",
     }));
 }
 
@@ -100,8 +139,8 @@ function listBranchesInternal(organizationId = "") {
       pastorName: row.pastor_name || "",
       supportEmail: row.support_email || "",
       supportPhone: row.support_phone || "",
-      isHeadquarters: row.is_headquarters === 1,
-      active: row.active === 1,
+      isHeadquarters: isEnabledFlag(row.is_headquarters),
+      active: isEnabledFlag(row.active),
       createdAt: row.created_at,
         updatedAt: row.updated_at,
         locationLabel: [row.city, row.state].filter(Boolean).join(", "),
@@ -213,6 +252,19 @@ export const listOrganizations = cache(function listOrganizations() {
   return listOrganizationsInternal();
 });
 
+export const getOrganizationBySlug = cache(function getOrganizationBySlug(slug = "") {
+  const normalizedSlug = slugifyOrganizationValue(slug, "");
+  if (!normalizedSlug) {
+    return null;
+  }
+
+  return (
+    listOrganizationsInternal().find(
+      (organization) => organization.slug === normalizedSlug
+    ) || null
+  );
+});
+
 export const listBranches = cache(function listBranches(organizationId) {
   return listBranchesInternal(organizationId);
 });
@@ -313,10 +365,26 @@ export const getPublicWorkspaceCatalog = cache(function getPublicWorkspaceCatalo
   const organizations = listOrganizationsInternal();
   const branches = listBranchesInternal();
 
-  return organizations.map((organization) => ({
-    ...organization,
-    branches: branches.filter((branch) => branch.organizationId === organization.id),
-  }));
+  return organizations.map((organization) => {
+    const organizationBranches = branches.filter(
+      (branch) => branch.organizationId === organization.id
+    );
+    const defaultBranch =
+      organizationBranches.find(
+        (branch) => branch.id === organization.defaultBranchId
+      ) ||
+      organizationBranches.find((branch) => branch.isHeadquarters) ||
+      organizationBranches[0] ||
+      null;
+
+    return {
+      ...organization,
+      defaultBranchId: defaultBranch?.id || organization.defaultBranchId || "",
+      defaultBranch,
+      branches: organizationBranches,
+      logoHref: getOrganizationLogoHref(organization),
+    };
+  });
 });
 
 export const getChurchSettings = cache(function getChurchSettings(
@@ -359,11 +427,17 @@ export const getChurchSettings = cache(function getChurchSettings(
 
   if (!row) {
     const organization = resolveOrganization(organizationId);
+    const campusBranch =
+      listBranchesInternal(organizationId).find(
+        (branch) => branch.id === organization.defaultBranchId
+      ) ||
+      listBranchesInternal(organizationId)[0] ||
+      resolveBranch(defaultPrimaryBranchId);
     return {
       id: `settings-${organization.id}`,
       organizationId: organization.id,
       churchName: organization.name,
-      campusName: resolveBranch(defaultPrimaryBranchId).name,
+      campusName: campusBranch?.name || "",
       supportEmail: organization.supportEmail || defaultChurchSettings.supportEmail,
       supportPhone: organization.supportPhone || defaultChurchSettings.supportPhone,
       timezone: defaultChurchSettings.timezone,
@@ -390,8 +464,15 @@ export const getChurchSettings = cache(function getChurchSettings(
       updatedAt: "",
       updatedLabel: "",
       renewalLabel: formatDateTime(defaultChurchSettings.nextRenewalDate),
+      pastorName: organization.pastorName || "",
+      websiteUrl: organization.websiteUrl || "",
+      logoPath: organization.logoPath || "",
+      logoMimeType: organization.logoMimeType || "",
+      logoHref: getOrganizationLogoHref(organization),
     };
   }
+
+  const organization = resolveOrganization(organizationId);
 
   return {
     id: row.id,
@@ -432,6 +513,11 @@ export const getChurchSettings = cache(function getChurchSettings(
     updatedAt: row.updated_at,
     updatedLabel: formatDateTime(row.updated_at),
     renewalLabel: formatDateTime(row.next_renewal_date),
+    pastorName: organization.pastorName || "",
+    websiteUrl: organization.websiteUrl || "",
+    logoPath: organization.logoPath || "",
+    logoMimeType: organization.logoMimeType || "",
+    logoHref: getOrganizationLogoHref(organization),
   };
 });
 
@@ -548,35 +634,63 @@ export function updateChurchSettingsEntry(input) {
 
   getDatabase()
     .prepare(`
-      UPDATE church_settings
-      SET
-        church_name = ?,
-        campus_name = ?,
-        support_email = ?,
-        support_phone = ?,
-        timezone = ?,
-        intake_confirmation_text = ?,
-        emergency_banner = ?,
-        plan_name = ?,
-        billing_contact_email = ?,
-        monthly_seat_allowance = ?,
-        next_renewal_date = ?,
-        backup_expectation = ?,
-        email_delivery_mode = ?,
-        email_provider = ?,
-        email_from_name = ?,
-        email_from_address = ?,
-        email_reply_to = ?,
-        email_subject_prefix = ?,
-        message_delivery_mode = ?,
-        message_provider = ?,
-        sms_from_number = ?,
-        whatsapp_from_number = ?,
-        notification_channels_json = ?,
-        updated_at = ?
-      WHERE organization_id = ?
+      INSERT INTO church_settings (
+        id,
+        organization_id,
+        church_name,
+        campus_name,
+        support_email,
+        support_phone,
+        timezone,
+        intake_confirmation_text,
+        emergency_banner,
+        plan_name,
+        billing_contact_email,
+        monthly_seat_allowance,
+        next_renewal_date,
+        backup_expectation,
+        email_delivery_mode,
+        email_provider,
+        email_from_name,
+        email_from_address,
+        email_reply_to,
+        email_subject_prefix,
+        message_delivery_mode,
+        message_provider,
+        sms_from_number,
+        whatsapp_from_number,
+        notification_channels_json,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(organization_id) DO UPDATE SET
+        church_name = excluded.church_name,
+        campus_name = excluded.campus_name,
+        support_email = excluded.support_email,
+        support_phone = excluded.support_phone,
+        timezone = excluded.timezone,
+        intake_confirmation_text = excluded.intake_confirmation_text,
+        emergency_banner = excluded.emergency_banner,
+        plan_name = excluded.plan_name,
+        billing_contact_email = excluded.billing_contact_email,
+        monthly_seat_allowance = excluded.monthly_seat_allowance,
+        next_renewal_date = excluded.next_renewal_date,
+        backup_expectation = excluded.backup_expectation,
+        email_delivery_mode = excluded.email_delivery_mode,
+        email_provider = excluded.email_provider,
+        email_from_name = excluded.email_from_name,
+        email_from_address = excluded.email_from_address,
+        email_reply_to = excluded.email_reply_to,
+        email_subject_prefix = excluded.email_subject_prefix,
+        message_delivery_mode = excluded.message_delivery_mode,
+        message_provider = excluded.message_provider,
+        sms_from_number = excluded.sms_from_number,
+        whatsapp_from_number = excluded.whatsapp_from_number,
+        notification_channels_json = excluded.notification_channels_json,
+        updated_at = excluded.updated_at
     `)
     .run(
+      current.id || randomUUID(),
+      organizationId,
       input.churchName || current.churchName,
       input.campusName || "",
       input.supportEmail || "",
@@ -600,8 +714,7 @@ export function updateChurchSettingsEntry(input) {
       input.smsFromNumber || current.smsFromNumber,
       input.whatsappFromNumber || current.whatsappFromNumber,
       serializeJson(input.notificationChannels || []),
-      now,
-      organizationId
+      now
     );
 }
 
@@ -1525,6 +1638,7 @@ export async function buildReportExport(type, viewer = null, preferredBranchId =
 export function createBranchEntry(input) {
   const now = new Date().toISOString();
   const organizationId = input.organizationId || defaultPrimaryOrganizationId;
+  const branchId = input.id || randomUUID();
 
   getDatabase()
     .prepare(`
@@ -1535,7 +1649,7 @@ export function createBranchEntry(input) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
-      randomUUID(),
+      branchId,
       organizationId,
       input.regionId || null,
       input.slug,
@@ -1551,6 +1665,104 @@ export function createBranchEntry(input) {
       input.active === false ? 0 : 1,
       now,
       now
+    );
+
+  return branchId;
+}
+
+export function createOrganizationEntry(input) {
+  const now = new Date().toISOString();
+  const organizationId = input.id || randomUUID();
+
+  getDatabase()
+    .prepare(`
+      INSERT INTO organizations (
+        id,
+        slug,
+        name,
+        short_name,
+        pastor_name,
+        website_url,
+        primary_branch_id,
+        support_email,
+        support_phone,
+        headquarters_city,
+        logo_path,
+        logo_storage_backend,
+        logo_mime_type,
+        logo_updated_at,
+        country,
+        active,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      organizationId,
+      slugifyOrganizationValue(input.slug || input.name, "church"),
+      input.name,
+      input.shortName || input.name,
+      input.pastorName || null,
+      input.websiteUrl || null,
+      input.primaryBranchId || null,
+      input.supportEmail || null,
+      input.supportPhone || null,
+      input.headquartersCity || null,
+      input.logoPath || null,
+      input.logoStorageBackend || "local",
+      input.logoMimeType || null,
+      input.logoUpdatedAt || null,
+      input.country || null,
+      input.active === false ? 0 : 1,
+      now
+    );
+
+  return organizationId;
+}
+
+export function updateOrganizationEntry(organizationId, input) {
+  const existing = resolveOrganization(organizationId);
+  if (!existing) {
+    throw new Error("Organization not found.");
+  }
+
+  getDatabase()
+    .prepare(`
+      UPDATE organizations
+      SET
+        slug = ?,
+        name = ?,
+        short_name = ?,
+        pastor_name = ?,
+        website_url = ?,
+        primary_branch_id = ?,
+        support_email = ?,
+        support_phone = ?,
+        headquarters_city = ?,
+        logo_path = ?,
+        logo_storage_backend = ?,
+        logo_mime_type = ?,
+        logo_updated_at = ?,
+        country = ?,
+        active = ?
+      WHERE id = ?
+    `)
+    .run(
+      slugifyOrganizationValue(input.slug || existing.slug, "church"),
+      input.name ?? existing.name,
+      input.shortName ?? existing.shortName ?? existing.name,
+      input.pastorName ?? existing.pastorName ?? null,
+      input.websiteUrl ?? existing.websiteUrl ?? null,
+      input.primaryBranchId ?? existing.defaultBranchId ?? null,
+      input.supportEmail ?? existing.supportEmail ?? null,
+      input.supportPhone ?? existing.supportPhone ?? null,
+      input.headquartersCity ?? existing.headquartersCity ?? null,
+      input.logoPath ?? existing.logoPath ?? null,
+      input.logoStorageBackend ?? existing.logoStorageBackend ?? "local",
+      input.logoMimeType ?? existing.logoMimeType ?? null,
+      input.logoUpdatedAt ?? existing.logoUpdatedAt ?? null,
+      input.country ?? existing.country ?? null,
+      input.active === undefined ? (existing.active ? 1 : 0) : input.active ? 1 : 0,
+      organizationId
     );
 }
 

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { updateMemberContactProfile } from "@/app/actions";
@@ -42,6 +43,7 @@ export default async function MemberPortalPage({ searchParams }) {
     null;
   const branchId =
     cookieStore.get(PUBLIC_BRANCH_COOKIE)?.value ||
+    organization?.defaultBranchId ||
     defaultPrimaryBranchId ||
     organization?.branches?.[0]?.id ||
     "";
@@ -97,9 +99,18 @@ export default async function MemberPortalPage({ searchParams }) {
               {pageCopy.description}
             </p>
             {scopedOrganization ? (
-              <div className="mt-5 inline-flex flex-wrap items-center gap-2 rounded-full border border-line bg-canvas px-4 py-2 text-sm text-muted">
+              <div className="mt-5 inline-flex flex-wrap items-center gap-3 rounded-full border border-line bg-canvas px-4 py-2 text-sm text-muted">
+                {scopedOrganization.logoHref ? (
+                  <Image
+                    src={scopedOrganization.logoHref}
+                    alt={`${scopedOrganization.name} logo`}
+                    width={36}
+                    height={36}
+                    unoptimized
+                    className="h-9 w-9 rounded-full border border-line bg-paper object-cover"
+                  />
+                ) : null}
                 <span className="font-semibold text-foreground">{scopedOrganization.name}</span>
-                {scopedBranch ? <span>/ {scopedBranch.name}</span> : null}
               </div>
             ) : null}
           </div>

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { listOrganizations, listBranches } from "@/lib/organization-store";
+import { listOrganizations } from "@/lib/organization-store";
 import { RegisterForm } from "@/components/register-form";
 
 export const metadata = {
@@ -16,17 +16,6 @@ export default async function RegisterPage({ searchParams }) {
 
   const orgs = listOrganizations();
   const preselectedOrgId = typeof params?.org === "string" ? params.org : "";
-  const preselectedBranchId =
-    typeof params?.branch === "string" ? params.branch : "";
-  const preselectedOrg = preselectedOrgId
-    ? orgs.find((org) => org.id === preselectedOrgId)
-    : null;
-  const preselectedBranches = preselectedOrg ? listBranches(preselectedOrg.id) : [];
-  const safePreselectedBranchId = preselectedBranches.some(
-    (branch) => branch.id === preselectedBranchId
-  )
-    ? preselectedBranchId
-    : "";
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] items-start justify-center px-4 py-12 sm:py-20">
@@ -41,8 +30,6 @@ export default async function RegisterPage({ searchParams }) {
           <RegisterForm
             orgs={orgs}
             preselectedOrgId={preselectedOrgId}
-            preselectedBranchId={safePreselectedBranchId}
-            preselectedBranches={preselectedBranches}
           />
         </div>
 
@@ -50,6 +37,12 @@ export default async function RegisterPage({ searchParams }) {
           Already have an account?{" "}
           <Link href="/login" className="font-semibold text-moss hover:underline">
             Sign in
+          </Link>
+        </p>
+        <p className="mt-2 text-center text-sm text-muted">
+          Are you a pastor setting up your church?{" "}
+          <Link href="/register/church" className="font-semibold text-moss hover:underline">
+            Create a church workspace
           </Link>
         </p>
       </div>

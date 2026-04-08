@@ -1,7 +1,7 @@
 'use client';
 
+import Image from "next/image";
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { selfRegister } from "@/app/actions";
 
 const STEPS = ["Church", "Details", "Done"];
@@ -9,56 +9,21 @@ const STEPS = ["Church", "Details", "Done"];
 export function RegisterForm({
   orgs = [],
   preselectedOrgId = "",
-  preselectedBranchId = "",
-  preselectedBranches = [],
 }) {
-  const router = useRouter();
-  const [step, setStep] = useState(
-    preselectedOrgId && preselectedBranchId ? 2 : 1
-  );
+  const [step, setStep] = useState(preselectedOrgId ? 2 : 1);
   const [orgId, setOrgId] = useState(preselectedOrgId);
-  const [branchId, setBranchId] = useState(preselectedBranchId);
-  const [branches, setBranches] = useState(preselectedBranches);
-  const [loadingBranches, setLoadingBranches] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [verificationPath, setVerificationPath] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  async function handleOrgChange(event) {
-    const selectedOrgId = event.target.value;
-    setOrgId(selectedOrgId);
-    setBranchId("");
-    setBranches([]);
+  const selectedOrg = orgs.find((org) => org.id === orgId) || null;
 
-    if (!selectedOrgId) {
-      return;
-    }
-
-    setLoadingBranches(true);
-    try {
-      const response = await fetch(
-        `/api/branches?orgId=${encodeURIComponent(selectedOrgId)}`
-      );
-      const data = await response.json();
-      setBranches(data.branches || []);
-    } catch {
-      setBranches([]);
-    } finally {
-      setLoadingBranches(false);
-    }
-  }
-
-  function handleStep1Submit(event) {
+  function handleChurchStepSubmit(event) {
     event.preventDefault();
 
     if (!orgId) {
-      setError("Please select your church.");
-      return;
-    }
-
-    if (!branchId) {
-      setError("Please select your branch.");
+      setError("Please choose your church first.");
       return;
     }
 
@@ -66,13 +31,12 @@ export function RegisterForm({
     setStep(2);
   }
 
-  function handleStep2Submit(event) {
+  function handleDetailsSubmit(event) {
     event.preventDefault();
     setError("");
 
     const formData = new FormData(event.target);
     formData.set("organizationId", orgId);
-    formData.set("branchId", branchId);
 
     const name = formData.get("name")?.toString().trim();
     const email = formData.get("email")?.toString().trim();
@@ -115,9 +79,6 @@ export function RegisterForm({
     });
   }
 
-  const orgName = orgs.find((org) => org.id === orgId)?.name || "";
-  const branchName = branches.find((branch) => branch.id === branchId)?.name || "";
-
   return (
     <div>
       <div className="mb-8 flex items-center justify-center gap-2">
@@ -152,20 +113,18 @@ export function RegisterForm({
         })}
       </div>
 
-      {step === 1 && (
-        <form onSubmit={handleStep1Submit} className="space-y-5">
+      {step === 1 ? (
+        <form onSubmit={handleChurchStepSubmit} className="space-y-5">
           <div>
             <p className="mb-5 text-sm font-semibold text-foreground">
-              Which church are you part of?
+              Which church should this member account belong to?
             </p>
 
             <label className="block">
-              <span className="text-sm font-medium text-foreground">
-                Church / Organisation
-              </span>
+              <span className="text-sm font-medium text-foreground">Church</span>
               <select
                 value={orgId}
-                onChange={handleOrgChange}
+                onChange={(event) => setOrgId(event.target.value)}
                 className="mt-2 block w-full rounded-[1rem] border border-line bg-paper px-4 py-3.5 text-sm text-foreground focus:border-moss focus:outline-none"
               >
                 <option value="">Select your church...</option>
@@ -177,37 +136,43 @@ export function RegisterForm({
               </select>
             </label>
 
-            {orgId && (
-              <label className="mt-4 block">
-                <span className="text-sm font-medium text-foreground">
-                  Branch / Campus
-                </span>
-                {loadingBranches ? (
-                  <div className="mt-2 h-12 animate-pulse rounded-[1rem] bg-canvas" />
-                ) : (
-                  <select
-                    value={branchId}
-                    onChange={(event) => setBranchId(event.target.value)}
-                    className="mt-2 block w-full rounded-[1rem] border border-line bg-paper px-4 py-3.5 text-sm text-foreground focus:border-moss focus:outline-none"
-                  >
-                    <option value="">Select your branch...</option>
-                    {branches.map((branch) => (
-                      <option key={branch.id} value={branch.id}>
-                        {branch.name}
-                        {branch.locationLabel ? ` - ${branch.locationLabel}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </label>
-            )}
+            {selectedOrg ? (
+              <div className="mt-4 rounded-[1rem] border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] p-4">
+                <div className="flex items-center gap-3">
+                  {selectedOrg.logoHref ? (
+                    <Image
+                      src={selectedOrg.logoHref}
+                      alt={`${selectedOrg.name} logo`}
+                      width={48}
+                      height={48}
+                      unoptimized
+                      className="h-12 w-12 rounded-2xl border border-line bg-paper object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-paper text-xs font-bold uppercase text-moss">
+                      {(selectedOrg.shortName || selectedOrg.name).slice(0, 2)}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">
+                      {selectedOrg.name}
+                    </p>
+                    {selectedOrg.pastorName ? (
+                      <p className="text-xs text-muted">
+                        Pastor: {selectedOrg.pastorName}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
 
-          {error && (
+          {error ? (
             <p className="rounded-[0.9rem] border border-[rgba(220,38,38,0.2)] bg-[rgba(220,38,38,0.06)] px-4 py-3 text-sm text-red-600">
               {error}
             </p>
-          )}
+          ) : null}
 
           <button
             type="submit"
@@ -216,16 +181,33 @@ export function RegisterForm({
             Continue
           </button>
         </form>
-      )}
+      ) : null}
 
-      {step === 2 && (
-        <form onSubmit={handleStep2Submit} className="space-y-5">
-          {orgName && (
+      {step === 2 ? (
+        <form onSubmit={handleDetailsSubmit} className="space-y-5">
+          {selectedOrg ? (
             <div className="flex items-center gap-3 rounded-[1rem] border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] px-4 py-3">
-              <span className="text-moss">BR</span>
+              {selectedOrg.logoHref ? (
+                <Image
+                  src={selectedOrg.logoHref}
+                  alt={`${selectedOrg.name} logo`}
+                  width={44}
+                  height={44}
+                  unoptimized
+                  className="h-11 w-11 rounded-2xl border border-line bg-paper object-cover"
+                />
+              ) : (
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-line bg-paper text-xs font-bold uppercase text-moss">
+                  {(selectedOrg.shortName || selectedOrg.name).slice(0, 2)}
+                </span>
+              )}
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-moss">{orgName}</p>
-                {branchName && <p className="text-xs text-muted">{branchName}</p>}
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-moss">
+                  Member account
+                </p>
+                <p className="text-sm font-semibold text-foreground">
+                  {selectedOrg.name}
+                </p>
               </div>
               <button
                 type="button"
@@ -235,7 +217,7 @@ export function RegisterForm({
                 Change
               </button>
             </div>
-          )}
+          ) : null}
 
           <p className="text-sm font-semibold text-foreground">Your details</p>
 
@@ -260,144 +242,97 @@ export function RegisterForm({
             label="Phone number"
             name="phone"
             type="tel"
-            placeholder="+234 800 000 0000"
+            placeholder="+2348012345678"
             autoComplete="tel"
-            inputMode="tel"
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              label="Birthday"
+              name="birthday"
+              type="date"
+              autoComplete="bday"
+            />
+            <SelectField
+              label="Gender"
+              name="gender"
+              defaultValue="unspecified"
+              options={[
+                { value: "unspecified", label: "Prefer not to say" },
+                { value: "male", label: "Male" },
+                { value: "female", label: "Female" },
+              ]}
+            />
+          </div>
+
+          <SelectField
+            label="How should the church describe your connection right now?"
+            name="memberType"
+            defaultValue="member"
+            options={[
+              { value: "member", label: "Member" },
+              { value: "new_member", label: "New member" },
+              { value: "visitor", label: "Visitor" },
+            ]}
           />
 
-          <div className="grid grid-cols-2 gap-4">
-            <label className="block">
-              <span className="text-sm font-medium text-foreground">
-                Date of birth
-              </span>
-              <input
-                type="date"
-                name="birthday"
-                className="mt-2 block w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground focus:border-moss focus:outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-medium text-foreground">Gender</span>
-              <select
-                name="gender"
-                className="mt-2 block w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground focus:border-moss focus:outline-none"
-              >
-                <option value="unspecified">Prefer not to say</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-              </select>
-            </label>
-          </div>
+          <FormField
+            label="Password"
+            name="password"
+            type="password"
+            placeholder="Choose a strong password"
+            autoComplete="new-password"
+            required
+          />
+          <FormField
+            label="Confirm password"
+            name="confirmPassword"
+            type="password"
+            placeholder="Repeat your password"
+            autoComplete="new-password"
+            required
+          />
 
-          <label className="block">
-            <span className="text-sm font-medium text-foreground">
-              Are you a new member?
-            </span>
-            <select
-              name="memberType"
-              className="mt-2 block w-full rounded-[1rem] border border-line bg-paper px-4 py-3 text-sm text-foreground focus:border-moss focus:outline-none"
-            >
-              <option value="member">I am a regular member</option>
-              <option value="new_member">I recently joined this church</option>
-              <option value="visitor">I am visiting</option>
-            </select>
-            <p className="mt-1.5 text-xs text-muted">
-              New members are enrolled in a 30-day welcome journey.
-            </p>
-          </label>
-
-          <div className="border-t border-line pt-4">
-            <p className="mb-3 text-sm font-medium text-foreground">
-              Set a password
-            </p>
-            <FormField
-              label="Password"
-              name="password"
-              type="password"
-              placeholder="Min. 8 characters"
-              autoComplete="new-password"
-              required
-            />
-            <div className="mt-4">
-              <FormField
-                label="Confirm password"
-                name="confirmPassword"
-                type="password"
-                placeholder="Repeat your password"
-                autoComplete="new-password"
-                required
-              />
-            </div>
-          </div>
-
-          {error && (
+          {error ? (
             <p className="rounded-[0.9rem] border border-[rgba(220,38,38,0.2)] bg-[rgba(220,38,38,0.06)] px-4 py-3 text-sm text-red-600">
               {error}
             </p>
-          )}
+          ) : null}
 
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="inline-flex w-1/3 items-center justify-center rounded-[1.15rem] border border-line bg-canvas px-4 py-4 text-sm font-medium text-foreground transition hover:bg-paper"
-            >
-              Back
-            </button>
-            <button
-              type="submit"
-              disabled={isPending}
-              className="inline-flex flex-1 items-center justify-center rounded-[1.15rem] bg-[linear-gradient(135deg,#2563eb,#4f46e5)] px-6 py-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
-            >
-              {isPending ? "Creating account..." : "Create account"}
-            </button>
-          </div>
-
-          <p className="text-center text-xs text-muted">
-            Your information is private and only visible to your church care team.
-          </p>
+          <button
+            type="submit"
+            disabled={isPending}
+            className="inline-flex w-full items-center justify-center rounded-[1.15rem] bg-[linear-gradient(135deg,#2563eb,#4f46e5)] px-6 py-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isPending ? "Creating account..." : "Create member account"}
+          </button>
         </form>
-      )}
+      ) : null}
 
-      {step === 3 && (
-        <div className="py-6 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--soft-fill)] text-3xl">
+      {step === 3 ? (
+        <div className="space-y-5 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--soft-fill)] text-2xl text-moss">
             OK
           </div>
-          <h2 className="mt-5 text-xl font-bold text-foreground">Check your email</h2>
-          <p className="mt-2 text-sm text-muted">
-            {successMessage || "We sent the next secure step to your email address."}
-          </p>
-          <div className="mt-5 space-y-3 text-sm text-muted">
-            <p>
-              Before your first sign-in, verify your email address. After that, you can return to the login page and use the password you just created.
-            </p>
-            {verificationPath ? (
-              <p className="rounded-[0.9rem] border border-[rgba(37,99,235,0.14)] bg-[rgba(37,99,235,0.06)] px-4 py-3 text-left text-[0.95rem] text-foreground">
-                Local testing mode is active, so you can finish verification right here without waiting for email delivery.
-              </p>
-            ) : null}
+          <div>
+            <h3 className="text-2xl font-bold text-foreground">Check your email</h3>
+            <p className="mt-3 text-sm leading-7 text-muted">{successMessage}</p>
           </div>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-            {verificationPath ? (
-              <button
-                type="button"
-                onClick={() => router.push(verificationPath)}
-                className="inline-flex items-center justify-center rounded-[1.15rem] bg-[linear-gradient(135deg,#2563eb,#4f46e5)] px-6 py-4 text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                Verify email now
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => router.push("/login")}
-              className="inline-flex items-center justify-center rounded-[1.15rem] border border-line bg-canvas px-6 py-4 text-sm font-medium text-foreground transition hover:bg-paper"
+          {verificationPath ? (
+            <a
+              href={verificationPath}
+              className="inline-flex items-center justify-center rounded-[1rem] border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] px-5 py-3 text-sm font-semibold text-moss transition hover:bg-[var(--soft-fill-strong)]"
             >
-              Go to sign in
-            </button>
-          </div>
+              Verify email now
+            </a>
+          ) : null}
+          <a
+            href="/login"
+            className="inline-flex items-center justify-center rounded-[1rem] border border-line bg-paper px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-canvas"
+          >
+            Continue to sign in
+          </a>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -405,20 +340,16 @@ export function RegisterForm({
 function FormField({
   label,
   name,
-  type = "text",
   placeholder,
-  required = false,
+  type = "text",
   autoComplete,
   autoCapitalize,
   spellCheck,
-  inputMode,
+  required = false,
 }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-foreground">
-        {label}
-        {required && <span className="ml-1 text-red-500">*</span>}
-      </span>
+      <span className="text-sm font-medium text-foreground">{label}</span>
       <input
         type={type}
         name={name}
@@ -426,9 +357,28 @@ function FormField({
         autoComplete={autoComplete}
         autoCapitalize={autoCapitalize}
         spellCheck={spellCheck}
-        inputMode={inputMode}
-        className="mt-2 block w-full rounded-[1rem] border border-line bg-paper px-4 py-3.5 text-sm text-foreground placeholder:text-muted focus:border-moss focus:outline-none"
+        required={required}
+        className="mt-2 block w-full rounded-[1rem] border border-line bg-paper px-4 py-3.5 text-sm text-foreground focus:border-moss focus:outline-none"
       />
+    </label>
+  );
+}
+
+function SelectField({ label, name, defaultValue, options = [] }) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        className="mt-2 block w-full rounded-[1rem] border border-line bg-paper px-4 py-3.5 text-sm text-foreground focus:border-moss focus:outline-none"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }
