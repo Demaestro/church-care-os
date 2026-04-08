@@ -1,6 +1,7 @@
 ﻿import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { getCurrentUser, getUserLandingPage } from "@/lib/auth";
 import { getWorkspaceSearchIndex } from "@/lib/care-store";
@@ -30,8 +31,10 @@ import {
   WORKSPACE_BRANCH_COOKIE,
 } from "@/lib/workspace-scope";
 
-const interFontUrl =
-  "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap";
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+});
 
 export const metadata = {
   title: {
@@ -173,13 +176,8 @@ export default async function RootLayout({ children }) {
       data-theme={preferences.theme}
       data-privacy-mode={preferences.privacyMode}
       suppressHydrationWarning
-      className="h-full antialiased"
+      className={`${inter.className} h-full antialiased`}
     >
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href={interFontUrl} rel="stylesheet" />
-      </head>
       <body suppressHydrationWarning className="min-h-full text-foreground">
         <div className="relative isolate min-h-screen overflow-x-hidden">
           <div

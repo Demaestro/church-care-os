@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { findUserByEmail, findUserById } from "@/lib/auth-store";
 import { verifyPassword } from "@/lib/auth-crypto";
 import { getOptionalSession, getRoleLandingPage } from "@/lib/session";
+import { normalizeInternalRole, normalizeInternalRoles } from "@/lib/policies";
 
 export async function authenticateCredentials(email, password) {
   const user = findUserByEmail(email);
@@ -66,7 +67,9 @@ export async function requireCurrentUser(roles) {
     redirect("/login");
   }
 
-  if (!roles.includes(user.role)) {
+  const allowedRoles = normalizeInternalRoles(roles);
+
+  if (!allowedRoles.includes(normalizeInternalRole(user.role))) {
     redirect(getRoleLandingPage(user.role));
   }
 
@@ -74,7 +77,7 @@ export async function requireCurrentUser(roles) {
 }
 
 export function getRoleLabel(role) {
-  switch (role) {
+  switch (normalizeInternalRole(role)) {
     case "owner":
       return "Church admin";
     case "overseer":

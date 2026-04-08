@@ -69,4 +69,26 @@ describe("security hardening", () => {
     expect(payload.checks).toBeDefined();
     expect(payload.storeMode).toBeDefined();
   });
+
+  test("legacy administrative roles normalize to the smaller canonical role set", async () => {
+    const { normalizeInternalRole, normalizeInternalRoles } = await import("@/lib/policies");
+
+    expect(normalizeInternalRole("overseer")).toBe("owner");
+    expect(normalizeInternalRole("general_overseer")).toBe("owner");
+    expect(normalizeInternalRole("branch_admin")).toBe("pastor");
+    expect(normalizeInternalRoles(["overseer", "owner", "branch_admin"])).toEqual([
+      "owner",
+      "pastor",
+    ]);
+  });
+
+  test("file-signature validation rejects mismatched uploads", async () => {
+    const { assertExpectedFileSignature } = await import("@/lib/file-signatures");
+
+    const disguisedPdf = Buffer.from("not-a-real-png");
+
+    expect(() =>
+      assertExpectedFileSignature(disguisedPdf, "image/png", "attachment")
+    ).toThrow(/did not match/i);
+  });
 });

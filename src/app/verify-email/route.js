@@ -86,10 +86,10 @@ export async function GET(request) {
       request,
       "Email verified. You can sign in now."
     );
-  } catch (error) {
+  } catch {
     return buildRedirect(
       request,
-      error instanceof Error ? error.message : "This verification link could not be used."
+      "This verification link could not be used."
     );
   }
 }

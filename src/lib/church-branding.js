@@ -7,6 +7,7 @@ import {
   readAttachmentObject,
   storeAttachmentObject,
 } from "@/lib/blob-storage";
+import { assertExpectedFileSignature } from "@/lib/file-signatures";
 
 const allowedLogoMimeTypes = new Set([
   "image/png",
@@ -52,6 +53,7 @@ export async function saveChurchLogo({ organizationSlug, file }) {
 
   const slug = sanitizeSlug(organizationSlug);
   const uploadedBuffer = Buffer.from(await file.arrayBuffer());
+  assertExpectedFileSignature(uploadedBuffer, mimeType, "church logo");
   const extension =
     extensionByMimeType[mimeType] ||
     path.extname(String(file.name || "")).toLowerCase() ||

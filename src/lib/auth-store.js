@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { getDatabase } from "@/lib/database";
 import { hashPassword } from "@/lib/auth-crypto";
+import { normalizeInternalRole } from "@/lib/policies";
 
 export function findUserByEmail(email) {
   if (!email) {
@@ -80,6 +81,7 @@ export function createUserEntry(input) {
   const now = new Date().toISOString();
   const passwordHash = hashPassword(input.password);
   const userId = randomUUID();
+  const normalizedRole = normalizeInternalRole(input.role);
 
   db.prepare(`
     INSERT INTO users (
@@ -93,7 +95,7 @@ export function createUserEntry(input) {
     input.name,
     input.email.trim().toLowerCase(),
     input.phone || null,
-    input.role,
+    normalizedRole,
     passwordHash,
     input.lane || null,
     input.volunteerName || null,
@@ -126,6 +128,7 @@ export function updateUserEntry(userId, input) {
   if (!existing) {
     throw new Error("User not found.");
   }
+  const nextRole = normalizeInternalRole(input.role ?? existing.role);
 
   getDatabase()
     .prepare(`
@@ -153,7 +156,7 @@ export function updateUserEntry(userId, input) {
       input.name ?? existing.name,
       (input.email ?? existing.email).trim().toLowerCase(),
       input.phone ?? existing.phone ?? null,
-      input.role ?? existing.role,
+      nextRole,
       input.lane ?? existing.lane ?? null,
       input.volunteerName ?? existing.volunteerName ?? null,
       input.active === undefined ? (existing.active ? 1 : 0) : input.active ? 1 : 0,
@@ -351,7 +354,7 @@ function mapUserRow(row) {
     name: row.name,
     email: row.email,
     phone: row.phone || "",
-    role: row.role,
+    role: normalizeInternalRole(row.role),
     passwordHash: row.password_hash,
     lane: row.lane || "",
     volunteerName: row.volunteer_name || "",

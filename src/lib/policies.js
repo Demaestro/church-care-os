@@ -1,3 +1,21 @@
+export function normalizeInternalRole(role) {
+  switch (String(role || "").trim()) {
+    case "overseer":
+    case "general_overseer":
+    case "hq_care_admin":
+    case "regional_overseer":
+      return "owner";
+    case "branch_admin":
+      return "pastor";
+    default:
+      return String(role || "").trim();
+  }
+}
+
+export function normalizeInternalRoles(roles = []) {
+  return [...new Set((roles || []).map(normalizeInternalRole).filter(Boolean))];
+}
+
 export const roleLandingPages = {
   owner: "/",
   overseer: "/",
@@ -15,12 +33,9 @@ export const roleLandingPages = {
  * If a user with one of these roles does not yet have MFA set up, they will
  * be redirected to /security to complete enrollment after their first login.
  */
-export const mfaRequiredRoles = [
-  "owner",
-  "pastor",
-];
+export const mfaRequiredRoles = ["owner", "pastor"];
 
-export const internalRoles = Object.keys(roleLandingPages);
+export const internalRoles = normalizeInternalRoles(Object.keys(roleLandingPages));
 
 export const protectedRouteRoles = {
   dashboard: ["pastor", "overseer", "owner"],

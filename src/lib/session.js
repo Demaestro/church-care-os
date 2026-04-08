@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDatabase } from "@/lib/database";
 import { shouldUseSecureTransport } from "@/lib/deployment-environment";
-import { roleLandingPages } from "@/lib/policies";
+import { normalizeInternalRole, normalizeInternalRoles, roleLandingPages } from "@/lib/policies";
 import { safeEqualValue, signValue } from "@/lib/auth-crypto";
 
 const sessionCookieName = "care_session";
@@ -70,7 +70,10 @@ function decodeSession(token) {
       return null;
     }
 
-    return payload;
+    return {
+      ...payload,
+      role: normalizeInternalRole(payload.role),
+    };
   } catch {
     return null;
   }
@@ -98,18 +101,11 @@ export const getOptionalSession = cache(async function getOptionalSession() {
 
 export async function createSession(user) {
   const expiresAt = Date.now() + sessionDurationSeconds * 1000;
+  const normalizedRole = normalizeInternalRole(user.role);
   const token = encodeSession({
     sessionId: randomUUID(),
     userId: user.id,
-    role: user.role,
-    name: user.name,
-    email: user.email,
-    lane: user.lane || "",
-    volunteerName: user.volunteerName || "",
-    organizationId: user.organizationId || "",
-    branchId: user.branchId || "",
-    accessScope: user.accessScope || "branch",
-    managedBranchIds: user.managedBranchIds || [],
+    role: normalizedRole,
     sessionVersion: Number(user.sessionVersion || 1),
     exp: expiresAt,
   });
@@ -127,9 +123,7 @@ export async function createPendingSession(user, purpose = "mfa") {
   const expiresAt = Date.now() + pendingSessionDurationSeconds * 1000;
   const token = encodeSession({
     userId: user.id,
-    role: user.role,
-    organizationId: user.organizationId || "",
-    branchId: user.branchId || "",
+    role: normalizeInternalRole(user.role),
     purpose,
     exp: expiresAt,
   });
@@ -179,8 +173,9 @@ export async function requireSession() {
 
 export async function requireRole(roles) {
   const session = await requireSession();
+  const allowedRoles = normalizeInternalRoles(roles);
 
-  if (!roles.includes(session.role)) {
+  if (!allowedRoles.includes(normalizeInternalRole(session.role))) {
     redirect(getRoleLandingPage(session.role));
   }
 
@@ -188,11 +183,13 @@ export async function requireRole(roles) {
 }
 
 export function getRoleLandingPage(role) {
-  if (role === "member") {
+  const normalizedRole = normalizeInternalRole(role);
+
+  if (normalizedRole === "member") {
     return "/";
   }
 
-  return roleLandingPages[role] || "/login";
+  return roleLandingPages[normalizedRole] || "/login";
 }
 
 export function revokeSessionEntry(session) {

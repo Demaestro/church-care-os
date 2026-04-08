@@ -44,10 +44,10 @@ export async function GET(request) {
       request,
       "Your account is unlocked. You can sign in now."
     );
-  } catch (error) {
+  } catch {
     return buildRedirect(
       request,
-      error instanceof Error ? error.message : "This unlock link could not be used."
+      "This unlock link could not be used."
     );
   }
 }

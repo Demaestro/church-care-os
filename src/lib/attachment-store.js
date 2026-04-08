@@ -9,6 +9,7 @@ import {
   storeAttachmentObject,
 } from "@/lib/blob-storage";
 import { getDatabase } from "@/lib/database";
+import { assertExpectedFileSignature } from "@/lib/file-signatures";
 import {
   buildViewerScope,
   recordMatchesViewerScope,
@@ -226,6 +227,7 @@ export async function saveHouseholdAttachment({
   ].join("/");
   const now = new Date().toISOString();
   const buffer = Buffer.from(await file.arrayBuffer());
+  assertExpectedFileSignature(buffer, mimeType, "attachment");
   const storage = await storeAttachmentObject({
     storageKey,
     mimeType,

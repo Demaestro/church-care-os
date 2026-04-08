@@ -149,7 +149,7 @@ import {
   defaultPrimaryBranchId,
   defaultPrimaryOrganizationId,
 } from "@/lib/organization-defaults";
-import { mfaRequiredRoles } from "@/lib/policies";
+import { mfaRequiredRoles, normalizeInternalRole } from "@/lib/policies";
 import {
   createJourneyEntry,
   logJourneyContact,
@@ -574,16 +574,15 @@ async function getWorkspaceSelection(user) {
 }
 
 function canManageRole(actorRole, role) {
-  if (actorRole === "owner") {
+  const normalizedActorRole = normalizeInternalRole(actorRole);
+  const normalizedTargetRole = normalizeInternalRole(role);
+
+  if (normalizedActorRole === "owner") {
     return true;
   }
 
-  if (actorRole === "overseer") {
-    return ["pastor", "leader", "volunteer"].includes(role);
-  }
-
-  if (actorRole === "pastor") {
-    return ["leader", "volunteer"].includes(role);
+  if (normalizedActorRole === "pastor") {
+    return ["leader", "volunteer"].includes(normalizedTargetRole);
   }
 
   return false;
@@ -627,6 +626,7 @@ function assertScopedUserManagement(
 
 function resolveManagedScopeFromForm(actor, formData, role) {
   const organizationId = resolveUserOrganizationId(actor);
+  const normalizedRole = normalizeInternalRole(role);
   const requestedBranchId =
     getString(formData, "branchId") ||
     getString(formData, "managedBranchIds").split(",")[0] ||
@@ -635,16 +635,11 @@ function resolveManagedScopeFromForm(actor, formData, role) {
     ? requestedBranchId || resolveUserBranchId(actor)
     : resolveUserBranchId(actor);
   const managedBranchIds =
-    role === "owner"
+    normalizedRole === "owner"
       ? []
-      : role === "overseer"
-        ? normalizeManagedBranchIds(
-            getString(formData, "managedBranchIds"),
-            branchId
-          )
-        : [branchId];
+      : [branchId];
   const accessScope =
-    role === "owner" || role === "overseer"
+    normalizedRole === "owner"
       ? normalizeAccessScope(getString(formData, "accessScope") || "organization")
       : "branch";
 
@@ -2584,7 +2579,7 @@ export async function createUserAccount(formData) {
     redirectWithError(redirectPath, "Passwords should be at least 8 characters.");
   }
 
-  if (!["owner", "overseer", "pastor", "leader", "volunteer"].includes(role)) {
+  if (!["owner", "pastor", "leader", "volunteer"].includes(role)) {
     redirectWithError(redirectPath, "Select a valid role for the new account.");
   }
 
@@ -2706,7 +2701,7 @@ export async function updateUserAccess(userId, formData) {
     redirectWithError(redirectPath, "Name, email, and role are required.");
   }
 
-  if (!["owner", "overseer", "pastor", "leader", "volunteer"].includes(role)) {
+  if (!["owner", "pastor", "leader", "volunteer"].includes(role)) {
     redirectWithError(redirectPath, "Select a valid role for that account.");
   }
 
