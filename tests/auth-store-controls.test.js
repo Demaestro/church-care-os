@@ -24,6 +24,7 @@ describe("auth store controls", () => {
   test("tracks last login and session version changes", async () => {
     const {
       bumpUserSessionVersionEntry,
+      createUserEntry,
       findUserByEmail,
       touchUserLoginEntry,
     } = await import("@/lib/auth-store");
@@ -39,5 +40,24 @@ describe("auth store controls", () => {
     bumpUserSessionVersionEntry(before.id);
     const afterBump = findUserByEmail("pastor.lagos@firstlove.demo");
     expect(afterBump?.sessionVersion).toBe(2);
+
+    const createdId = createUserEntry({
+      name: "Test Member",
+      email: "member.test@example.com",
+      password: "TestMember!2026",
+      role: "member",
+      organizationId: "org-firstlove",
+      branchId: "branch-firstlove-lagos-hq",
+      accessScope: "branch",
+      emailVerifiedAt: null,
+      gender: "female",
+      memberType: "new_member",
+    });
+
+    const created = findUserByEmail("member.test@example.com");
+    expect(created?.id).toBe(createdId);
+    expect(created?.emailVerifiedAt).toBe("");
+    expect(created?.branchId).toBe("branch-firstlove-lagos-hq");
+    expect(created?.memberType).toBe("new_member");
   });
 });

@@ -7,6 +7,7 @@ import {
   logout,
   switchPublicBranch,
   switchWorkspaceBranch,
+  togglePrivacyModePreference,
   toggleThemePreference,
 } from "@/app/actions";
 import { DisplayPreferencesForm } from "@/components/display-preferences-form";
@@ -17,6 +18,7 @@ export function AppShellNav({
   currentLanguage,
   currentDisplayMode,
   currentTheme,
+  currentPrivacyMode = "open",
   languageOptions,
   displayModeOptions,
   copy,
@@ -26,7 +28,7 @@ export function AppShellNav({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [desktopOpenKey, setDesktopOpenKey] = useState(null);
-  const [mobileOpenKey, setMobileOpenKey] = useState(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const redirectTo = `${pathname}${searchParams?.toString() ? `?${searchParams.toString()}` : ""}`;
   const visibleSections = useMemo(
@@ -35,8 +37,7 @@ export function AppShellNav({
   );
 
   return (
-    <div className="flex min-w-0 items-center gap-2">
-      {/* ── Desktop nav menus ── */}
+    <div className="relative flex min-w-0 items-center gap-2">
       <div className="hidden items-center gap-1 xl:flex">
         {visibleSections.map((section) => (
           <DesktopMenu
@@ -54,6 +55,22 @@ export function AppShellNav({
           </DesktopMenu>
         ))}
 
+        <DesktopMenu
+          menuKey="preferences"
+          label={copy.preferencesMenuLabel || "Language"}
+          openKey={desktopOpenKey}
+          setOpenKey={setDesktopOpenKey}
+          wide
+        >
+          <LanguageMenuPanel
+            currentLanguage={currentLanguage}
+            currentDisplayMode={currentDisplayMode}
+            languageOptions={languageOptions}
+            displayModeOptions={displayModeOptions}
+            copy={copy}
+          />
+        </DesktopMenu>
+
         {workspaceSwitcher ? (
           <DesktopMenu
             menuKey="workspace"
@@ -70,15 +87,26 @@ export function AppShellNav({
         ) : null}
       </div>
 
-      {/* ── Right-side controls: theme toggle + account ── */}
       <div className="flex items-center gap-2">
         <PwaInstallControl copy={copy} />
-
+        <PrivacyToggleButton
+          currentPrivacyMode={currentPrivacyMode}
+          redirectTo={redirectTo}
+        />
         <ThemeToggleButton
           currentTheme={currentTheme}
           redirectTo={redirectTo}
           copy={copy}
         />
+
+        {userSummary?.switchHref ? (
+          <Link
+            href={userSummary.switchHref}
+            className="hidden min-h-11 items-center rounded-full border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] px-4 py-2 text-sm font-semibold text-moss transition hover:bg-[var(--soft-fill-strong)] xl:inline-flex"
+          >
+            {copy.switchAccount || "Switch account"}
+          </Link>
+        ) : null}
 
         {userSummary ? (
           <DesktopMenu
@@ -93,66 +121,92 @@ export function AppShellNav({
         ) : (
           <Link
             href="/login"
-            className="inline-flex h-10 items-center justify-center rounded-full border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] px-4 text-sm font-semibold text-moss transition hover:bg-[var(--soft-fill-strong)]"
+            className="hidden min-h-11 items-center justify-center rounded-full border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] px-4 py-2 text-sm font-semibold text-moss transition hover:bg-[var(--soft-fill-strong)] xl:inline-flex"
           >
             {copy.signIn}
           </Link>
         )}
 
-        {/* ── Mobile hamburger ── */}
-        <div className="xl:hidden">
-          <MobileMenuButton
-            label="Menu"
-            active={mobileOpenKey === "__mobile__"}
-            onClick={() =>
-              setMobileOpenKey((current) =>
-                current === "__mobile__" ? null : "__mobile__"
-              )
-            }
-          />
-        </div>
+        <button
+          type="button"
+          className="xl:hidden inline-flex min-h-11 items-center justify-center rounded-full border border-line bg-[var(--header-pill-bg)] px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-paper"
+          onClick={() => setMobileOpen((current) => !current)}
+        >
+          {mobileOpen ? "Close" : "Menu"}
+        </button>
       </div>
 
-      {/* ── Mobile expanded drawer ── */}
-      {mobileOpenKey === "__mobile__" && (
-        <div
-          className="absolute left-0 right-0 z-50 border-b border-line bg-paper shadow-[var(--menu-shadow)] xl:hidden"
-          style={{ top: "100%", maxHeight: "calc(100dvh - 4rem)", overflowY: "auto" }}
-        >
-          <div className="px-4 py-4 space-y-4">
+      {mobileOpen ? (
+        <div className="absolute inset-x-0 top-full z-50 mt-2 rounded-[1.5rem] border border-line bg-paper p-4 shadow-[var(--menu-shadow)] xl:hidden">
+          <div className="space-y-5">
             {visibleSections.map((section) => (
               <div key={section.label}>
                 <p className="eyebrow mb-2 px-1">{section.label}</p>
                 <NavMenuList
                   items={section.items}
                   pathname={pathname}
-                  stacked
-                  onNavigate={() => setMobileOpenKey(null)}
+                  onNavigate={() => setMobileOpen(false)}
                 />
               </div>
             ))}
 
+            <div>
+              <p className="eyebrow mb-2 px-1">{copy.preferencesMenuLabel || "Language"}</p>
+              <LanguageMenuPanel
+                currentLanguage={currentLanguage}
+                currentDisplayMode={currentDisplayMode}
+                languageOptions={languageOptions}
+                displayModeOptions={displayModeOptions}
+                copy={copy}
+              />
+            </div>
+
             {workspaceSwitcher ? (
               <div>
-                <p className="eyebrow mb-2 px-1">{workspaceSwitcher.eyebrow}</p>
-                <WorkspaceMenuPanel workspaceSwitcher={workspaceSwitcher} onNavigate={() => setMobileOpenKey(null)} />
+                <p className="eyebrow mb-2 px-1">{workspaceSwitcher.menuLabel}</p>
+                <WorkspaceMenuPanel
+                  workspaceSwitcher={workspaceSwitcher}
+                  onNavigate={() => setMobileOpen(false)}
+                />
               </div>
             ) : null}
+
+            <div className="grid grid-cols-2 gap-3">
+              <ThemeToggleButton
+                currentTheme={currentTheme}
+                redirectTo={redirectTo}
+                copy={copy}
+                mobile
+              />
+              <PrivacyToggleButton
+                currentPrivacyMode={currentPrivacyMode}
+                redirectTo={redirectTo}
+                mobile
+              />
+            </div>
 
             {userSummary ? (
               <div>
                 <p className="eyebrow mb-2 px-1">Account</p>
                 <AccountMenuPanel copy={copy} userSummary={userSummary} mobile />
               </div>
-            ) : null}
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setMobileOpen(false)}
+                className="inline-flex w-full items-center justify-center rounded-[1rem] border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] px-4 py-3 text-sm font-semibold text-moss transition hover:bg-[var(--soft-fill-strong)]"
+              >
+                {copy.signIn}
+              </Link>
+            )}
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
 
-function ThemeToggleButton({ currentTheme, redirectTo, copy }) {
+function ThemeToggleButton({ currentTheme, redirectTo, copy, mobile = false }) {
   const darkMode = currentTheme === "dark";
 
   return (
@@ -161,11 +215,36 @@ function ThemeToggleButton({ currentTheme, redirectTo, copy }) {
       <input type="hidden" name="theme" value={darkMode ? "light" : "dark"} />
       <button
         type="submit"
-        aria-label={copy.themeToggleLabel}
-        title={copy.themeToggleLabel}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-line bg-[var(--header-pill-bg)] text-base text-foreground transition hover:border-[var(--soft-accent-border)] hover:bg-paper"
+        aria-label={copy.themeToggleLabel || "Toggle dark mode"}
+        title={copy.themeToggleLabel || "Toggle dark mode"}
+        className={`inline-flex items-center justify-center rounded-full border border-line bg-[var(--header-pill-bg)] text-sm font-semibold text-foreground transition hover:border-[var(--soft-accent-border)] hover:bg-paper ${
+          mobile ? "min-h-11 w-full gap-2 px-4 py-3" : "h-11 w-11"
+        }`}
       >
         {darkMode ? <SunGlyph /> : <MoonGlyph />}
+        {mobile ? <span>{darkMode ? "Light mode" : "Dark mode"}</span> : null}
+      </button>
+    </form>
+  );
+}
+
+function PrivacyToggleButton({ currentPrivacyMode, redirectTo, mobile = false }) {
+  const guarded = currentPrivacyMode === "guarded";
+
+  return (
+    <form action={togglePrivacyModePreference}>
+      <input type="hidden" name="redirectTo" value={redirectTo} />
+      <input type="hidden" name="privacyMode" value={guarded ? "open" : "guarded"} />
+      <button
+        type="submit"
+        aria-label="Toggle privacy guard"
+        title="Toggle privacy guard"
+        className={`inline-flex items-center justify-center rounded-full border border-line bg-[var(--header-pill-bg)] text-sm font-semibold text-foreground transition hover:border-[var(--soft-accent-border)] hover:bg-paper ${
+          mobile ? "min-h-11 w-full gap-2 px-4 py-3" : "h-11 w-11"
+        }`}
+      >
+        {guarded ? <EyeOffGlyph /> : <EyeGlyph />}
+        {mobile ? <span>{guarded ? "Privacy guarded" : "Privacy open"}</span> : null}
       </button>
     </form>
   );
@@ -219,7 +298,7 @@ function DesktopMenu({
       </button>
 
       <div
-        className={`absolute right-0 top-full z-50 mt-1 transition ${
+        className={`absolute right-0 top-full z-50 mt-2 transition ${
           open
             ? "pointer-events-auto translate-y-0 opacity-100"
             : "pointer-events-none -translate-y-1 opacity-0"
@@ -234,24 +313,6 @@ function DesktopMenu({
         </div>
       </div>
     </div>
-  );
-}
-
-function MobileMenuButton({ label, active, onClick, accent = false }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`shrink-0 rounded-full border px-4 py-3 text-sm font-medium transition ${
-        accent
-          ? "border-[var(--soft-accent-border)] bg-[var(--soft-fill)] text-moss"
-          : active
-            ? "border-line bg-paper text-foreground"
-            : "border-line bg-[var(--header-pill-bg)] text-muted"
-      }`}
-    >
-      {label}
-    </button>
   );
 }
 
@@ -291,9 +352,12 @@ function LanguageMenuPanel({
   return (
     <div>
       <p className="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-muted">
-        {copy.preferencesTitle}
+        {copy.preferencesTitle || "Language and reading"}
       </p>
-      <p className="mt-2 text-sm leading-7 text-muted">{copy.preferencesBody}</p>
+      <p className="mt-2 text-sm leading-7 text-muted">
+        {copy.preferencesBody ||
+          "Choose the language and text size that make the workspace easiest to read."}
+      </p>
       <div className="mt-4">
         <DisplayPreferencesForm
           currentLanguage={currentLanguage}
@@ -313,7 +377,7 @@ function AccountMenuPanel({ copy, userSummary, mobile = false }) {
     <div className="space-y-4">
       <div>
         <p className="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-muted">
-          {copy.workspaceSignedIn}
+          {copy.workspaceSignedIn || "Signed in"}
         </p>
         <p className="mt-2 text-sm font-semibold text-foreground">{userSummary.name}</p>
         <p className="mt-1 text-sm text-muted">{userSummary.roleLabel}</p>
@@ -329,13 +393,13 @@ function AccountMenuPanel({ copy, userSummary, mobile = false }) {
           href={userSummary.workspaceHref}
           className="rounded-[1rem] border border-transparent bg-canvas px-4 py-3 text-sm font-medium text-foreground transition hover:border-line hover:bg-[var(--surface-hover)]"
         >
-          {copy.returnToWorkspace}
+          {copy.returnToWorkspace || "Return to workspace"}
         </Link>
         <Link
           href="/member"
           className="rounded-[1rem] border border-transparent bg-canvas px-4 py-3 text-sm font-medium text-foreground transition hover:border-line hover:bg-[var(--surface-hover)]"
         >
-          {copy.memberTools}
+          {copy.memberTools || "Member tools"}
         </Link>
         <Link
           href="/security"
@@ -343,6 +407,14 @@ function AccountMenuPanel({ copy, userSummary, mobile = false }) {
         >
           {copy.securityControls || "Security"}
         </Link>
+        {userSummary.switchHref ? (
+          <Link
+            href={userSummary.switchHref}
+            className="rounded-[1rem] border border-transparent bg-canvas px-4 py-3 text-sm font-medium text-foreground transition hover:border-line hover:bg-[var(--surface-hover)]"
+          >
+            {copy.switchAccount || "Switch account"}
+          </Link>
+        ) : null}
       </div>
 
       <form action={logout}>
@@ -352,7 +424,7 @@ function AccountMenuPanel({ copy, userSummary, mobile = false }) {
             mobile ? "w-full" : ""
           }`}
         >
-          {copy.signOut}
+          {copy.signOut || "Sign out"}
         </button>
       </form>
     </div>
@@ -516,6 +588,44 @@ function MoonGlyph() {
       strokeLinejoin="round"
     >
       <path d="M20 15.35A8.5 8.5 0 1 1 8.65 4 6.75 6.75 0 0 0 20 15.35Z" />
+    </svg>
+  );
+}
+
+function EyeGlyph() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOffGlyph() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 3 21 21" />
+      <path d="M10.58 10.58A3 3 0 0 0 14 14" />
+      <path d="M9.88 5.09A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a17.73 17.73 0 0 1-4.11 4.95" />
+      <path d="M6.1 6.09A17.74 17.74 0 0 0 2 12s3.5 7 10 7a10.9 10.9 0 0 0 4.18-.8" />
     </svg>
   );
 }

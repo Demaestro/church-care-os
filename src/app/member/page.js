@@ -21,7 +21,7 @@ import {
 export const metadata = {
   title: "Member Portal",
   description:
-    "A gentle self-service hub for reviewing request history and keeping contact details current.",
+    "A calm self-service hub for checking care progress and keeping your contact details current.",
 };
 
 export default async function MemberPortalPage({ searchParams }) {
@@ -60,9 +60,8 @@ export default async function MemberPortalPage({ searchParams }) {
     query: typeof params?.q === "string" ? params.q.trim() : "",
     status: typeof params?.status === "string" ? params.status : "all",
   };
-  const portal = trackingCode && contact
-    ? await getMemberPortalData(trackingCode, contact)
-    : null;
+  const portal =
+    trackingCode && contact ? await getMemberPortalData(trackingCode, contact) : null;
   const scopedOrganization =
     portal?.requests?.[0]?.organizationId
       ? catalog.find((item) => item.id === portal.requests[0].organizationId) || organization
@@ -78,6 +77,10 @@ export default async function MemberPortalPage({ searchParams }) {
   const showClearFilters = hasActiveFilters(filters);
   const emptyStateMessage =
     trackingCode && contact && !portal ? pageCopy.notFound : pageCopy.helperBody;
+  const nextOpenRequest = sortPortalRequests(portal?.openRequests || [])[0] || null;
+  const spotlightRequest =
+    nextOpenRequest || sortPortalRequests(portal?.requests || [])[0] || null;
+  const latestTimelineEvent = spotlightRequest?.timeline?.[0] || null;
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-10 pb-16 lg:px-10 lg:py-14">
@@ -90,7 +93,9 @@ export default async function MemberPortalPage({ searchParams }) {
             <h1 className="mt-4 text-5xl leading-none tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-6xl">
               {pageCopy.title}
             </h1>
-            <p className="mt-5 text-lg leading-8 text-muted">{pageCopy.description}</p>
+            <p className="mt-5 text-lg leading-8 text-muted">
+              {pageCopy.description}
+            </p>
             {scopedOrganization ? (
               <div className="mt-5 inline-flex flex-wrap items-center gap-2 rounded-full border border-line bg-canvas px-4 py-2 text-sm text-muted">
                 <span className="font-semibold text-foreground">{scopedOrganization.name}</span>
@@ -123,9 +128,29 @@ export default async function MemberPortalPage({ searchParams }) {
             errorTitle={copy.common.flashError}
           />
         </div>
+
+        {portal ? (
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <JourneySignalCard
+              label="Next planned touchpoint"
+              value={spotlightRequest?.dueLabel || "Being prepared"}
+              body="This is the next visible follow-up window the care team has on record for you."
+            />
+            <JourneySignalCard
+              label="Current care state"
+              value={spotlightRequest?.statusLabel || "Received"}
+              body={spotlightRequest?.statusDetail || "Your request is safely on the care board."}
+            />
+            <JourneySignalCard
+              label="Privacy promise"
+              value={spotlightRequest?.privacyLabel || "Pastor-led privacy"}
+              body="The portal only shows member-safe updates. Internal notes stay inside the care team."
+            />
+          </div>
+        ) : null}
       </section>
 
-      <section className="mt-8 grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+      <section className="mt-8 grid gap-6 xl:grid-cols-[0.88fr_1.12fr]">
         <article className="surface-card rounded-[1.8rem] border border-line bg-paper p-6">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
             {pageCopy.lookupEyebrow}
@@ -156,11 +181,28 @@ export default async function MemberPortalPage({ searchParams }) {
             </button>
           </form>
 
-          <div className="mt-6 rounded-[1.25rem] border border-line bg-canvas p-4">
+          <div className="mt-6 rounded-[1.25rem] border border-line bg-canvas p-5">
             <p className="text-xs uppercase tracking-[0.18em] text-muted">
-              {pageCopy.helpTitle}
+              What happens here
             </p>
-            <p className="mt-3 text-sm leading-7 text-muted">{emptyStateMessage}</p>
+            <div className="mt-4 space-y-4">
+              <PortalStep
+                index="01"
+                title="Unlock your history with one request"
+                body="Use a tracking code together with the contact detail you used when the request was sent."
+              />
+              <PortalStep
+                index="02"
+                title="See only the member-safe care story"
+                body="You will see progress, next touchpoints, and household-level reassurance without internal staff notes."
+              />
+              <PortalStep
+                index="03"
+                title="Keep your contact details current"
+                body="Update email, phone, or your preferred contact method so the team can follow up the right way."
+              />
+            </div>
+            <p className="mt-5 text-sm leading-7 text-muted">{emptyStateMessage}</p>
           </div>
         </article>
 
@@ -186,7 +228,39 @@ export default async function MemberPortalPage({ searchParams }) {
                 />
               </div>
 
-              <form action={updateMemberContactProfile} className="mt-6 space-y-4 rounded-[1.35rem] border border-line bg-canvas p-5">
+              <div className="mt-6 grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
+                <div className="rounded-[1.35rem] border border-line bg-canvas p-5">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted">
+                    Your current next step
+                  </p>
+                  <h3 className="mt-3 text-2xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
+                    {spotlightRequest?.statusLabel || "Your request is safely in the system"}
+                  </h3>
+                  <p className="mt-3 text-sm leading-7 text-muted">
+                    {spotlightRequest?.statusDetail ||
+                      "The care team is reviewing the next safe step for your request."}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted">
+                    {spotlightRequest?.dueLabel ? (
+                      <span className="rounded-full border border-line bg-paper px-3 py-1">
+                        Next touchpoint: {spotlightRequest.dueLabel}
+                      </span>
+                    ) : null}
+                    {spotlightRequest?.trackingCode ? (
+                      <span className="rounded-full border border-line bg-paper px-3 py-1">
+                        Tracking code: {spotlightRequest.trackingCode}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                <TimelinePreviewCard event={latestTimelineEvent} />
+              </div>
+
+              <form
+                action={updateMemberContactProfile}
+                className="mt-6 space-y-4 rounded-[1.35rem] border border-line bg-canvas p-5"
+              >
                 <input type="hidden" name="trackingCode" value={portal.trackingCode} />
                 <input type="hidden" name="currentContact" value={portal.contactValue} />
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
@@ -294,11 +368,21 @@ export default async function MemberPortalPage({ searchParams }) {
               </div>
             </form>
 
-            <div className="mt-6 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+            <div className="mt-6 grid gap-6 xl:grid-cols-[1.04fr_0.96fr]">
               <section>
-                <h2 className="text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
-                  {pageCopy.historyTitle}
-                </h2>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
+                      {pageCopy.historyTitle}
+                    </h2>
+                    <p className="mt-2 text-sm leading-7 text-muted">
+                      Requests stay grouped here so you can see progress without learning the internal workflow.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-line bg-canvas px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                    {visibleRequests.length} visible
+                  </span>
+                </div>
 
                 <div className="mt-5 space-y-4">
                   {visibleOpenRequests.map((request) => (
@@ -328,9 +412,14 @@ export default async function MemberPortalPage({ searchParams }) {
               </section>
 
               <section className="space-y-4">
-                <h2 className="text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
-                  {pageCopy.householdsTitle}
-                </h2>
+                <div>
+                  <h2 className="text-3xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
+                    {pageCopy.householdsTitle}
+                  </h2>
+                  <p className="mt-2 text-sm leading-7 text-muted">
+                    Households help you understand where multiple requests connect without exposing internal notes.
+                  </p>
+                </div>
                 {portal.connectedHouseholds.map((household) => (
                   <article
                     key={household.slug}
@@ -354,6 +443,15 @@ export default async function MemberPortalPage({ searchParams }) {
   );
 }
 
+function sortPortalRequests(requests) {
+  return [...requests].sort((left, right) => {
+    const leftTime = Date.parse(left.dueAt || left.createdAt || "");
+    const rightTime = Date.parse(right.dueAt || right.createdAt || "");
+    return (Number.isNaN(leftTime) ? Number.MAX_SAFE_INTEGER : leftTime) -
+      (Number.isNaN(rightTime) ? Number.MAX_SAFE_INTEGER : rightTime);
+  });
+}
+
 function buildMemberHref(code, contact) {
   const params = new URLSearchParams();
   if (code) {
@@ -364,6 +462,50 @@ function buildMemberHref(code, contact) {
   }
   const query = params.toString();
   return query ? `/member?${query}` : "/member";
+}
+
+function JourneySignalCard({ label, value, body }) {
+  return (
+    <article className="rounded-[1.25rem] border border-line bg-canvas p-5">
+      <p className="text-xs uppercase tracking-[0.18em] text-muted">{label}</p>
+      <p className="mt-3 text-2xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
+        {value}
+      </p>
+      <p className="mt-3 text-sm leading-7 text-muted">{body}</p>
+    </article>
+  );
+}
+
+function PortalStep({ index, title, body }) {
+  return (
+    <div className="flex gap-4">
+      <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-paper text-xs font-semibold text-foreground">
+        {index}
+      </span>
+      <div>
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        <p className="mt-1 text-sm leading-7 text-muted">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+function TimelinePreviewCard({ event }) {
+  return (
+    <div className="rounded-[1.35rem] border border-line bg-canvas p-5">
+      <p className="text-xs uppercase tracking-[0.18em] text-muted">Latest visible update</p>
+      <h3 className="mt-3 text-xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
+        {event?.label || "Your request is on the care board"}
+      </h3>
+      <p className="mt-3 text-sm leading-7 text-muted">
+        {event?.detail ||
+          "Once the care team records a clear next step, it will appear here in calm member-facing language."}
+      </p>
+      {event?.createdLabel ? (
+        <p className="mt-3 text-sm font-medium text-foreground">{event.createdLabel}</p>
+      ) : null}
+    </div>
+  );
 }
 
 function MetricCard({ label, value }) {
@@ -378,6 +520,8 @@ function MetricCard({ label, value }) {
 }
 
 function RequestCard({ request, label, language, copy }) {
+  const latestEvent = request.timeline?.[0] || null;
+
   return (
     <article className="rounded-[1.35rem] border border-line bg-canvas p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -405,10 +549,19 @@ function RequestCard({ request, label, language, copy }) {
         </div>
         <div>
           <p className="text-xs uppercase tracking-[0.16em] text-muted">
-            {copy.requestStatusLookup.infoCards.responseWindow}
+            Next visible touchpoint
           </p>
           <p className="mt-2 text-sm text-foreground">{request.dueLabel}</p>
         </div>
+      </div>
+      <div className="mt-4 rounded-[1rem] border border-line bg-paper px-4 py-3">
+        <p className="text-xs uppercase tracking-[0.16em] text-muted">Latest update</p>
+        <p className="mt-2 text-sm font-semibold text-foreground">
+          {latestEvent?.label || "Request received"}
+        </p>
+        <p className="mt-1 text-sm leading-7 text-muted">
+          {latestEvent?.detail || "We logged your request and recorded your privacy choices."}
+        </p>
       </div>
     </article>
   );

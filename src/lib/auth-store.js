@@ -87,7 +87,7 @@ export function createUserEntry(input) {
       organization_id, branch_id, access_scope, title, managed_branch_ids_json,
       mfa_enabled, mfa_mode, mfa_secret, mfa_backup_codes_json,
       email_verified_at, failed_login_attempts, locked_at, birthday, gender, member_type
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     userId,
     input.name,

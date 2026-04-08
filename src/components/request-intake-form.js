@@ -84,6 +84,21 @@ export function RequestIntakeForm({ language = "en", copy, currentUser = null })
         aria-hidden="true"
       />
 
+      <div className="flex flex-wrap gap-2">
+        {[
+          intakeCopy.steps.support,
+          currentUser ? "Step 2 · contact from account" : intakeCopy.steps.contact,
+          intakeCopy.steps.privacy,
+        ].map((step) => (
+          <span
+            key={step}
+            className="rounded-full border border-line bg-canvas px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted"
+          >
+            {step}
+          </span>
+        ))}
+      </div>
+
       <section className="space-y-5">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
@@ -133,6 +148,15 @@ export function RequestIntakeForm({ language = "en", copy, currentUser = null })
             label: translateUrgencyOption(option.value, language, option.label),
           }))}
         />
+
+        <div className="rounded-[1.25rem] border border-line bg-canvas p-4">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted">
+            What the team sees first
+          </p>
+          <p className="mt-3 text-sm leading-7 text-muted">
+            Your support type, urgency, and privacy choices help the pastor decide the safest next step before any wider handoff happens.
+          </p>
+        </div>
       </section>
 
       {currentUser ? (
@@ -145,7 +169,6 @@ export function RequestIntakeForm({ language = "en", copy, currentUser = null })
         <GuestContactSection
           state={state}
           intakeCopy={intakeCopy}
-          language={language}
         />
       )}
 
@@ -153,6 +176,9 @@ export function RequestIntakeForm({ language = "en", copy, currentUser = null })
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
           {intakeCopy.steps.privacy}
         </p>
+        <h3 className="mt-2 text-2xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
+          Choose how private this request should stay
+        </h3>
         <p className="max-w-3xl text-base leading-8 text-muted">
           {intakeCopy.privacyIntro}
         </p>
@@ -200,6 +226,18 @@ function SignedInContactSection({ user, defaultPreferred, intakeCopy }) {
   const hasPhone = Boolean(user.phone);
   return (
     <section className="space-y-4">
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
+          {intakeCopy.steps.contact}
+        </p>
+        <h3 className="mt-2 text-2xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
+          Keep this simple
+        </h3>
+        <p className="mt-2 text-sm leading-7 text-muted">
+          Because you are already signed in, we will use your account details. Just choose the best way for the care team to reach you.
+        </p>
+      </div>
+
       <div className="flex items-center gap-3 rounded-[1.5rem] border border-line bg-canvas px-5 py-4">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--soft-fill)] text-sm font-bold text-moss">
           {user.name.charAt(0).toUpperCase()}
@@ -255,6 +293,12 @@ function GuestContactSection({ state, intakeCopy }) {
       <div className="sm:col-span-2">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
           {intakeCopy.steps.contact}
+        </p>
+        <h3 className="mt-2 text-2xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
+          Tell us how to reach you
+        </h3>
+        <p className="mt-2 text-sm leading-7 text-muted">
+          These details are optional, but they make follow-up much smoother if you want the team to contact you directly.
         </p>
       </div>
       <Field

@@ -7,10 +7,12 @@ import { redirect } from "next/navigation";
 import {
   DISPLAY_MODE_COOKIE,
   LANGUAGE_COOKIE,
+  PRIVACY_MODE_COOKIE,
   THEME_COOKIE,
   getPreferenceCookieOptions,
   normalizeDisplayMode,
   normalizeLanguage,
+  normalizePrivacyMode,
   normalizeTheme,
 } from "@/lib/app-preferences";
 import {
@@ -47,6 +49,7 @@ import {
 import {
   addHouseholdNoteEntry,
   addVolunteerTaskNoteEntry,
+  applyFollowUpPlaybookEntry,
   declineVolunteerTaskEntry,
   assignRequestVolunteerEntry,
   closeCareRequestEntry,
@@ -55,6 +58,7 @@ import {
   createCareRequestEntry,
   escalateRequestToPastorEntry,
   getMemberRequestStatusByTrackingCode,
+  logFollowUpTouchpointEntry,
   recordAuditLog,
   saveFollowUpPlanEntry,
   updateMemberContactProfileEntry,
@@ -153,6 +157,10 @@ import {
   consumeAuthChallengeEntry,
   issueAuthChallengeEntry,
 } from "@/lib/auth-challenge-store";
+import {
+  buildPlaybookTouchpoint,
+  getFollowUpPlaybook,
+} from "@/lib/follow-up-playbooks";
 
 const loginRateLimit = {
   maxAttempts: 5,
@@ -2186,7 +2194,12 @@ export async function saveDisplayPreferences(formData) {
   const cookieStore = await cookies();
   const language = normalizeLanguage(getString(formData, "language"));
   const displayMode = normalizeDisplayMode(getString(formData, "displayMode"));
-  const theme = normalizeTheme(getString(formData, "theme"));
+  const theme = normalizeTheme(
+    getString(formData, "theme") || cookieStore.get(THEME_COOKIE)?.value
+  );
+  const privacyMode = normalizePrivacyMode(
+    getString(formData, "privacyMode") || cookieStore.get(PRIVACY_MODE_COOKIE)?.value
+  );
   const redirectTo = sanitizeInternalRedirect(
     getString(formData, "redirectTo"),
     "/"
@@ -2196,6 +2209,7 @@ export async function saveDisplayPreferences(formData) {
   cookieStore.set(LANGUAGE_COOKIE, language, cookieOptions);
   cookieStore.set(DISPLAY_MODE_COOKIE, displayMode, cookieOptions);
   cookieStore.set(THEME_COOKIE, theme, cookieOptions);
+  cookieStore.set(PRIVACY_MODE_COOKIE, privacyMode, cookieOptions);
 
   redirect(redirectTo);
 }
@@ -2210,6 +2224,20 @@ export async function toggleThemePreference(formData) {
   const cookieOptions = getPreferenceCookieOptions();
 
   cookieStore.set(THEME_COOKIE, theme, cookieOptions);
+
+  redirect(redirectTo);
+}
+
+export async function togglePrivacyModePreference(formData) {
+  const cookieStore = await cookies();
+  const privacyMode = normalizePrivacyMode(getString(formData, "privacyMode"));
+  const redirectTo = sanitizeInternalRedirect(
+    getString(formData, "redirectTo"),
+    "/"
+  );
+  const cookieOptions = getPreferenceCookieOptions();
+
+  cookieStore.set(PRIVACY_MODE_COOKIE, privacyMode, cookieOptions);
 
   redirect(redirectTo);
 }
@@ -3319,6 +3347,121 @@ export async function saveFollowUpPlan(householdSlug, formData) {
   redirectWithNotice("/schedule", "Follow-up plan updated.");
 }
 
+export async function applyFollowUpPlaybook(requestId, formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const playbookId = getString(formData, "playbookId");
+  const redirectTo = sanitizeInternalRedirect(
+    getString(formData, "redirectTo"),
+    getScopedPath("/follow-up", scope.preferredBranchId)
+  );
+  const playbook = getFollowUpPlaybook(playbookId);
+
+  if (!requestId || !playbook) {
+    redirectWithError(redirectTo, "Choose a valid follow-up playbook first.");
+  }
+
+  const nextTouchpoint = buildPlaybookTouchpoint(playbook);
+
+  try {
+    const request = await applyFollowUpPlaybookEntry(
+      requestId,
+      {
+        nextContactDue: nextTouchpoint,
+        nextTouchpoint,
+        followUpRhythm: playbook.followUpRhythm,
+        followUpGoal: playbook.followUpGoal,
+        followUpTemplate: playbook.followUpTemplate,
+        discipleshipStage: playbook.discipleshipStage,
+        followUpOwnerName: actor.name,
+        outcome: playbook.defaultOutcome,
+        noteKind: playbook.noteKind,
+        note: playbook.note,
+        author: actor.name,
+      },
+      actor,
+      scope.preferredBranchId
+    );
+
+    recordAuditLog({
+      ...buildActorLog(actor, scope),
+      action: "care.follow_up_playbook_applied",
+      targetType: "request",
+      targetId: requestId,
+      summary: `${actor.name} applied the ${playbook.title} playbook.`,
+      metadata: {
+        householdSlug: request?.householdSlug || "",
+        playbookId: playbook.id,
+      },
+    });
+
+    revalidateCarePaths(request?.householdSlug || "");
+    redirectWithNotice(redirectTo, `${playbook.title} playbook applied.`);
+  } catch (error) {
+    redirectWithError(
+      redirectTo,
+      getActionErrorMessage(error, "We could not apply that follow-up playbook.")
+    );
+  }
+}
+
+export async function logFollowUpTouchpoint(requestId, formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const redirectTo = sanitizeInternalRedirect(
+    getString(formData, "redirectTo"),
+    getScopedPath("/follow-up", scope.preferredBranchId)
+  );
+  const outcome = getString(formData, "outcome");
+  const note = getString(formData, "note");
+  const nextTouchpoint = getString(formData, "nextTouchpoint");
+  const owner = getString(formData, "owner") || actor.name;
+
+  if (!requestId || !outcome) {
+    redirectWithError(redirectTo, "Choose the follow-up outcome before saving.");
+  }
+
+  if (nextTouchpoint && !isValidDateTime(nextTouchpoint)) {
+    redirectWithError(redirectTo, "Choose a valid next touchpoint.");
+  }
+
+  try {
+    const request = await logFollowUpTouchpointEntry(
+      requestId,
+      {
+        outcome,
+        note,
+        nextTouchpoint,
+        owner,
+        author: actor.name,
+        noteKind: "Touchpoint",
+      },
+      actor,
+      scope.preferredBranchId
+    );
+
+    recordAuditLog({
+      ...buildActorLog(actor, scope),
+      action: "care.follow_up_logged",
+      targetType: "request",
+      targetId: requestId,
+      summary: `${actor.name} logged a follow-up touchpoint.`,
+      metadata: {
+        householdSlug: request?.householdSlug || "",
+        outcome,
+      },
+    });
+
+    revalidateCarePaths(request?.householdSlug || "");
+    redirectWithNotice(redirectTo, "Follow-up touchpoint logged.");
+  } catch (error) {
+    redirectWithError(
+      redirectTo,
+      getActionErrorMessage(error, "We could not log that follow-up touchpoint.")
+    );
+  }
+}
+
 export async function sendTestEmail(formData) {
   const actor = await requireCurrentUser(["owner"]);
   const scope = await getWorkspaceSelection(actor);
@@ -3954,11 +4097,27 @@ export async function reviewVolunteerApplicationAction(prevState, formData) {
     reviewedByName: actor.name,
   });
 
-  if (status === "approved") {
-    const application = getVolunteerApplicationEntry(applicationId);
-    if (application?.userId) {
-      updateUserEntry(application.userId, { role: "volunteer" });
-    }
+  const application = getVolunteerApplicationEntry(applicationId);
+
+  if (status === "approved" && application?.userId) {
+    updateUserEntry(application.userId, { role: "volunteer" });
+  }
+
+  // Notify the applicant directly
+  if (application?.userId) {
+    createNotifications([{
+      userId: application.userId,
+      organizationId: actor.organizationId,
+      branchId: actor.branchId,
+      kind: status === "approved" ? "alert" : "info",
+      title: status === "approved"
+        ? "Welcome to the volunteer team!"
+        : "Volunteer application update",
+      body: status === "approved"
+        ? `${actor.name} has approved your volunteer application. You're now part of the care ministry team — check your tasks in the volunteer board.`
+        : `${actor.name} has reviewed your volunteer application. Please speak with your pastor if you have any questions.`,
+      href: status === "approved" ? "/volunteer" : "/",
+    }]);
   }
 
   recordAuditLog({

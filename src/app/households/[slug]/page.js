@@ -16,7 +16,7 @@ import { requireCurrentUser } from "@/lib/auth";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import { listHouseholdAttachments } from "@/lib/attachment-store";
 import { toDateTimeLocalValue } from "@/lib/care-format";
-import { getHouseholdBySlug } from "@/lib/care-store";
+import { getHouseholdBySlug, listAuditLogs } from "@/lib/care-store";
 import { getDiscipleshipRecord } from "@/lib/discipleship-store";
 import { listMemberTransfers } from "@/lib/member-transfer-store";
 import {
@@ -112,6 +112,27 @@ export default async function HouseholdDetailPage({ params, searchParams }) {
   const openTasks = household.relatedRequests
     ? household.relatedRequests.filter(r => r.status === "Open")
     : [];
+  const relatedRequestIds = new Set(household.relatedRequests.map((request) => request.id));
+  const recentAuditEntries = listAuditLogs(120, user, preferredBranchId)
+    .filter((entry) => {
+      if (entry.targetId === household.slug) {
+        return true;
+      }
+
+      if (relatedRequestIds.has(entry.targetId)) {
+        return true;
+      }
+
+      return entry.metadata?.householdSlug === household.slug;
+    })
+    .slice(0, 5);
+  const journeySignals = buildJourneySignals({
+    household,
+    attachments,
+    transfers,
+    discipleshipRecord,
+    recentAuditEntries,
+  });
 
   const tabs = [
     { key: "overview",     label: "Overview" },
@@ -361,6 +382,58 @@ export default async function HouseholdDetailPage({ params, searchParams }) {
                         className="inline-flex items-center rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-paper transition hover:bg-[#2b251f] disabled:cursor-not-allowed disabled:opacity-70"
                       />
                     </form>
+                  </Card>
+
+                  <Card
+                    title="Journey snapshot"
+                    eyebrow="Care, discipleship, and privacy context in one place"
+                  >
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {journeySignals.map((signal) => (
+                        <DetailCard
+                          key={signal.label}
+                          label={signal.label}
+                          value={signal.value}
+                          detail={signal.detail}
+                          tone={signal.tone}
+                        />
+                      ))}
+                    </div>
+                  </Card>
+
+                  <Card
+                    title="Recent privacy activity"
+                    eyebrow="Who touched this record recently"
+                  >
+                    {recentAuditEntries.length > 0 ? (
+                      <div className="space-y-4">
+                        {recentAuditEntries.map((entry) => (
+                          <article
+                            key={entry.id}
+                            className="rounded-[1.1rem] border border-line bg-canvas p-4"
+                          >
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                  {entry.actorName}
+                                </p>
+                                <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted">
+                                  {entry.actorRole}
+                                </p>
+                              </div>
+                              <p className="text-xs text-muted">{entry.createdLabel}</p>
+                            </div>
+                            <p className="mt-3 text-sm leading-7 text-muted">
+                              {entry.summary}
+                            </p>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm leading-7 text-muted">
+                        No recent audit activity is visible for this household in the current branch scope.
+                      </p>
+                    )}
                   </Card>
                 </div>
               </div>
@@ -828,6 +901,25 @@ function DetailItem({ label, value }) {
   );
 }
 
+function DetailCard({ label, value, detail, tone = "default" }) {
+  const toneClass =
+    tone === "alert"
+      ? "border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)]"
+      : tone === "calm"
+        ? "border-[var(--soft-accent-border)] bg-[var(--soft-fill)]"
+        : "border-line bg-canvas";
+
+  return (
+    <article className={`rounded-[1rem] border p-4 ${toneClass}`}>
+      <p className="text-xs uppercase tracking-[0.16em] text-muted">{label}</p>
+      <p className="mt-3 text-sm font-semibold leading-7 text-foreground">{value}</p>
+      {detail ? (
+        <p className="mt-2 text-sm leading-7 text-muted">{detail}</p>
+      ) : null}
+    </article>
+  );
+}
+
 function Field({
   label,
   name,
@@ -902,4 +994,69 @@ function getVolunteerStatus(request, pageCopy) {
   }
 
   return pageCopy.awaitingVolunteer;
+}
+
+function buildJourneySignals({
+  household,
+  attachments,
+  transfers,
+  discipleshipRecord,
+  recentAuditEntries,
+}) {
+  const lastTransfer = transfers[0] || null;
+  const activeVolunteer = household.relatedRequests.find(
+    (request) => request.assignedVolunteer?.name
+  );
+  const attendanceSignal = discipleshipRecord
+    ? discipleshipRecord.attendingRegularly
+      ? "Attending regularly"
+      : "Follow-up still needed"
+    : "Not started";
+
+  return [
+    {
+      label: "Next touchpoint",
+      value: household.nextTouchpointLabel,
+      detail: household.summaryNote || "Keep the next pastoral or volunteer touchpoint visible here.",
+      tone: household.risk === "urgent" ? "alert" : "calm",
+    },
+    {
+      label: "Current pathway",
+      value: discipleshipRecord
+        ? STAGE_LABELS[discipleshipRecord.stage] || discipleshipRecord.stage
+        : "Care only",
+      detail: discipleshipRecord?.nextStep || "No discipleship step has been set yet.",
+      tone: discipleshipRecord ? "calm" : "default",
+    },
+    {
+      label: "Attendance signal",
+      value: attendanceSignal,
+      detail: discipleshipRecord?.smallGroupConnected
+        ? "Small-group connection is already active."
+        : "Use this to decide whether group connection or service reminders are the next move.",
+    },
+    {
+      label: "Volunteer handoff",
+      value: activeVolunteer?.assignedVolunteer?.name || "No volunteer assigned",
+      detail: activeVolunteer
+        ? activeVolunteer.assignedVolunteer?.volunteerBrief ||
+          activeVolunteer.summary ||
+          "Volunteer context is on the linked request."
+        : "A branch leader can assign a volunteer once this household is ready for handoff.",
+    },
+    {
+      label: "Transfer status",
+      value: lastTransfer ? lastTransfer.status : "No transfer in motion",
+      detail: lastTransfer
+        ? `${lastTransfer.fromBranchName} to ${lastTransfer.toBranchName}`
+        : "Household care is currently staying inside this branch.",
+    },
+    {
+      label: "Protected context",
+      value: `${attachments.length} attachment${attachments.length === 1 ? "" : "s"}`,
+      detail: recentAuditEntries[0]
+        ? `Last protected activity: ${recentAuditEntries[0].summary}`
+        : "No recent privacy-sensitive activity is visible in the audit trail.",
+    },
+  ];
 }

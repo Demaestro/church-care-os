@@ -54,7 +54,7 @@ export default async function NewRequestPage() {
   const settings = getEffectiveChurchSettings(organization?.id, branch?.id || "");
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 pb-16 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
+    <div className="mx-auto max-w-7xl px-4 py-8 pb-16 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
       <section className="surface-card rounded-[1.5rem] border border-line bg-paper p-5 sm:rounded-[2rem] sm:p-8 lg:p-10">
         <div className="max-w-4xl">
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-muted">
@@ -66,6 +66,11 @@ export default async function NewRequestPage() {
           <p className="mt-5 text-base leading-8 text-muted sm:text-lg">
             {copy.requestNew.description}
           </p>
+          {settings?.publicIntro ? (
+            <p className="mt-4 max-w-3xl text-sm leading-7 text-muted">
+              {settings.publicIntro}
+            </p>
+          ) : null}
           {organization ? (
             <div className="mt-5 inline-flex flex-wrap items-center gap-2 rounded-full border border-line bg-canvas px-4 py-2 text-sm text-muted">
               <span className="font-semibold text-foreground">{organization.name}</span>
@@ -87,11 +92,38 @@ export default async function NewRequestPage() {
         </div>
 
         <div className="mt-8 border-t border-line pt-8">
-          <RequestIntakeForm
-            language={preferences.language}
-            copy={copy.intakeForm}
-            currentUser={currentUser ? { name: currentUser.name, email: currentUser.email, phone: currentUser.phone } : null}
-          />
+          <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+            <aside className="space-y-4">
+              <SupportPromiseCard
+                title="What happens next"
+                body="Your pastor or a care lead reviews every request before it is routed more widely. If you mark this as sensitive, the first review stays pastor-led."
+              />
+              <SupportPromiseCard
+                title="Why this feels calmer"
+                body="You can choose how much to share, whether contact is allowed, and how private the request should remain. The form is designed to ask only for the next useful piece of information."
+              />
+              <SupportPromiseCard
+                title="How to follow up later"
+                body="After you submit, save the tracking code. You can use it in the member portal or the status page without needing an internal staff account."
+              />
+            </aside>
+
+            <div>
+              <RequestIntakeForm
+                language={preferences.language}
+                copy={copy.intakeForm}
+                currentUser={
+                  currentUser
+                    ? {
+                        name: currentUser.name,
+                        email: currentUser.email,
+                        phone: currentUser.phone,
+                      }
+                    : null
+                }
+              />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -122,5 +154,14 @@ export default async function NewRequestPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function SupportPromiseCard({ title, body }) {
+  return (
+    <article className="rounded-[1.35rem] border border-line bg-canvas p-5">
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      <p className="mt-3 text-sm leading-7 text-muted">{body}</p>
+    </article>
   );
 }

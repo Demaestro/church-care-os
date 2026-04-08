@@ -2,8 +2,11 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import "./globals.css";
 import { getCurrentUser, getUserLandingPage } from "@/lib/auth";
+import { getWorkspaceSearchIndex } from "@/lib/care-store";
 import { AppShellNav } from "@/components/app-shell-nav";
-import { LanguageSelect } from "@/components/language-select";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { WorkspaceBreadcrumbs } from "@/components/workspace-breadcrumbs";
+import { WorkspaceCommandBar } from "@/components/workspace-command-bar";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import {
   getCopy,
@@ -26,7 +29,6 @@ import {
   WORKSPACE_BRANCH_COOKIE,
 } from "@/lib/workspace-scope";
 
-// Inter font loaded via Google Fonts for premium typography
 const interFontUrl =
   "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap";
 
@@ -119,7 +121,8 @@ export default async function RootLayout({ children }) {
           title: publicBranch?.name || publicOrganization.name,
           body:
             "Choose the church branch members should use for intake, request tracking, and member tools.",
-          canSwitch: (publicOrganization.branches || []).length > 1 || publicCatalog.length > 1,
+          canSwitch:
+            (publicOrganization.branches || []).length > 1 || publicCatalog.length > 1,
           redirectTo: "/",
           organizationId: publicOrganization.id,
           branchId: publicBranch?.id || "",
@@ -138,12 +141,31 @@ export default async function RootLayout({ children }) {
         switchHref: "/login?switch=1",
       }
     : null;
+  const searchIndex = user
+    ? getWorkspaceSearchIndex(user, workspace?.activeBranch?.id || "")
+    : { households: [], requests: [] };
+  const quickActions = buildQuickActions(user, copy);
+  const commandItems = buildCommandItems({
+    sections: navSections,
+    quickActions,
+    searchIndex,
+  });
+  const routeLabels = buildRouteLabels(navSections, quickActions);
+  const bottomNavItems = buildBottomNav(user, unreadNotificationCount);
+  const scopeLabel = user
+    ? workspace?.activeBranch
+      ? `Branch privacy is enforced inside ${workspace.activeBranch.name}.`
+      : `You are viewing ${workspace?.organization?.name || "this organization"} across your allowed branches.`
+    : publicBranch
+      ? `Member tools are currently scoped to ${publicBranch.name}.`
+      : "Member tools are ready for your selected church workspace.";
 
   return (
     <html
       lang={preferences.language}
       data-display-mode={preferences.displayMode}
       data-theme={preferences.theme}
+      data-privacy-mode={preferences.privacyMode}
       suppressHydrationWarning
       className="h-full antialiased"
     >
@@ -164,8 +186,7 @@ export default async function RootLayout({ children }) {
           <header className="sticky top-0 z-40 border-b border-line bg-[var(--header-bg)] shadow-[var(--header-shadow)] backdrop-blur-2xl">
             <div className="mx-auto max-w-7xl px-6 lg:px-10">
               <div className="flex h-14 items-center justify-between gap-2 sm:h-16 sm:gap-4">
-                {/* ── Brand logo ── */}
-                <Link href="/" className="flex flex-shrink-0 items-center gap-3 group">
+                <Link href="/" className="group flex flex-shrink-0 items-center gap-3">
                   <span
                     className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold tracking-wide text-white transition-all duration-200 group-hover:scale-105"
                     style={{
@@ -179,39 +200,64 @@ export default async function RootLayout({ children }) {
                     <span className="block text-[0.6rem] font-bold uppercase tracking-[0.28em] text-muted leading-none">
                       {copy.layout.brandKicker}
                     </span>
-                    <span className="block text-[0.875rem] font-bold text-foreground leading-tight mt-0.5">
+                    <span className="mt-0.5 block text-[0.875rem] font-bold leading-tight text-foreground">
                       {copy.layout.brandTitle}
                     </span>
                   </span>
                 </Link>
 
-                {/* ── Nav menus (centre/right) ── */}
                 <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
                   <AppShellNav
                     sections={navSections}
                     currentLanguage={preferences.language}
                     currentDisplayMode={preferences.displayMode}
                     currentTheme={preferences.theme}
+                    currentPrivacyMode={preferences.privacyMode}
                     languageOptions={languageOptions}
                     displayModeOptions={displayModeOptions}
                     copy={copy.layout}
                     workspaceSwitcher={workspaceSwitcher}
                     userSummary={userSummary}
                   />
+                </div>
+              </div>
+            </div>
 
-                  {/* ── Language dropdown — always visible in the bar ── */}
-                  <LanguageSelect
-                    currentLanguage={preferences.language}
-                    currentDisplayMode={preferences.displayMode}
-                    currentTheme={preferences.theme}
-                    languageOptions={languageOptions}
+            <div className="border-t border-line/70 bg-[color:color-mix(in_srgb,var(--header-bg)_78%,var(--paper))]">
+              <div className="mx-auto max-w-7xl px-6 py-3 lg:px-10">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                  <WorkspaceBreadcrumbs
+                    routeLabels={routeLabels}
+                    organizationName={
+                      user
+                        ? workspace?.organization?.name || ""
+                        : publicOrganization?.name || ""
+                    }
+                    branchName={
+                      user
+                        ? workspace?.activeBranch?.name || workspace?.activeScopeLabel || ""
+                        : publicBranch?.name || ""
+                    }
+                    scopeLabel={scopeLabel}
                   />
+
+                  <div className="w-full xl:max-w-2xl">
+                    <WorkspaceCommandBar
+                      items={commandItems}
+                      quickActions={quickActions}
+                      placeholder={
+                        user
+                          ? "Jump to a person, request, household, or workflow"
+                          : "Jump to request care, track a request, or open the member portal"
+                      }
+                    />
+                  </div>
                 </div>
               </div>
             </div>
           </header>
 
-          <main>{children}</main>
+          <main className="pb-24 lg:pb-0">{children}</main>
 
           <footer className="border-t border-line">
             <div className="mx-auto flex max-w-7xl flex-col gap-3 px-6 py-8 text-sm text-muted lg:flex-row lg:items-center lg:justify-between lg:px-10">
@@ -219,10 +265,228 @@ export default async function RootLayout({ children }) {
               <p>{copy.layout.footerSecondary}</p>
             </div>
           </footer>
+
+          <MobileBottomNav items={bottomNavItems} />
         </div>
       </body>
     </html>
   );
+}
+
+function flattenNavItems(sections = []) {
+  return sections.flatMap((section) =>
+    (section.items || []).map((item) => ({
+      ...item,
+      section: section.label,
+    }))
+  );
+}
+
+function buildQuickActions(user, copy) {
+  if (!user) {
+    return [
+      {
+        id: "action:request-care",
+        href: "/requests/new",
+        label: copy.layout.nav.requestCare,
+        description: "Start a new care request",
+        section: "Quick actions",
+        type: "action",
+      },
+      {
+        id: "action:track-request",
+        href: "/requests/status",
+        label: copy.layout.nav.trackRequest,
+        description: "Check the current status of one request",
+        section: "Quick actions",
+        type: "follow-up",
+      },
+      {
+        id: "action:member-portal",
+        href: "/member",
+        label: copy.layout.nav.memberPortal,
+        description: "Open request history and update your contact details",
+        section: "Quick actions",
+        type: "member",
+      },
+      {
+        id: "action:register",
+        href: "/register",
+        label: "Create account",
+        description: "Start a secure self-service member account",
+        section: "Quick actions",
+        type: "action",
+      },
+    ];
+  }
+
+  const items = [
+    {
+      id: "action:follow-up",
+      href: "/follow-up",
+      label: "Log follow-up",
+      description: "Open the follow-up board and record the next touchpoint",
+      section: "Quick actions",
+      type: "follow-up",
+    },
+    {
+      id: "action:households",
+      href: "/households",
+      label: "Open households",
+      description: "Review care journeys, notes, and attachments",
+      section: "Quick actions",
+      type: "household",
+    },
+    {
+      id: "action:member-tools",
+      href: "/member",
+      label: "Preview member tools",
+      description: "See the member-facing request and follow-up experience",
+      section: "Quick actions",
+      type: "member",
+    },
+  ];
+
+  if (["leader", "pastor", "overseer", "owner"].includes(user.role)) {
+    items.unshift({
+      id: "action:new-request",
+      href: "/requests/new",
+      label: "New request",
+      description: "Capture a fresh care need without leaving the workspace",
+      section: "Quick actions",
+      type: "action",
+    });
+  }
+
+  if (["general_overseer", "hq_care_admin", "regional_overseer", "overseer", "owner"].includes(user.role)) {
+    items.push({
+      id: "action:hq",
+      href: "/hq",
+      label: "HQ command centre",
+      description: "Review branch health, trends, and pressure points",
+      section: "Quick actions",
+      type: "branch",
+    });
+  }
+
+  return items;
+}
+
+function buildCommandItems({ sections, quickActions, searchIndex }) {
+  const navItems = flattenNavItems(sections).map((item) => ({
+    id: `nav:${item.href}`,
+    href: item.href,
+    label: item.label,
+    description: item.section,
+    keywords: [item.section, item.label],
+    section: item.section,
+    type: "action",
+  }));
+
+  const householdItems = (searchIndex?.households || []).map((household) => ({
+    id: `household:${household.slug}`,
+    href: `/households/${household.slug}`,
+    label: household.name,
+    description: `${titleCase(household.stage)} · ${titleCase(household.risk)} risk`,
+    keywords: [household.owner, ...(household.tags || [])],
+    section: "Households",
+    type: "household",
+  }));
+
+  const requestItems = (searchIndex?.requests || []).map((request) => ({
+    id: `request:${request.id}`,
+    href: request.householdSlug ? `/households/${request.householdSlug}` : "/follow-up",
+    label: request.householdName,
+    description: `${request.trackingCode || "Request"} · ${request.need || "Care request"}`,
+    keywords: [
+      request.trackingCode,
+      request.need,
+      request.owner,
+      request.followUpGoal,
+      request.followUpTemplate,
+    ],
+    section: "Requests",
+    type: "request",
+  }));
+
+  return [...quickActions, ...navItems, ...householdItems, ...requestItems];
+}
+
+function buildRouteLabels(sections, quickActions) {
+  return Object.fromEntries(
+    [...flattenNavItems(sections), ...quickActions]
+      .filter((item) => item.href)
+      .map((item) => [item.href, item.label])
+  );
+}
+
+function buildBottomNav(user, unreadNotificationCount = 0) {
+  if (!user) {
+    return [
+      { href: "/requests/new", label: "Request", type: "action" },
+      { href: "/requests/status", label: "Track", type: "follow-up" },
+      { href: "/member", label: "Portal", type: "member" },
+      { href: "/login", label: "Sign in", type: "member" },
+    ];
+  }
+
+  if (["general_overseer", "hq_care_admin", "regional_overseer"].includes(user.role)) {
+    return [
+      { href: "/hq", label: "HQ", type: "branch" },
+      { href: "/follow-up", label: "Follow-up", type: "follow-up" },
+      { href: "/reports", label: "Reports", type: "action" },
+      { href: "/branches", label: "Branches", type: "branch" },
+      { href: "/member", label: "Member", type: "member" },
+    ];
+  }
+
+  if (user.role === "member") {
+    return [
+      { href: "/", label: "Home", type: "action" },
+      { href: "/requests/new", label: "Request care", type: "action" },
+      { href: "/member", label: "My profile", type: "member" },
+      { href: "/volunteer/apply", label: "Serve", type: "follow-up" },
+    ];
+  }
+
+  if (user.role === "volunteer") {
+    return [
+      { href: "/volunteer", label: "Tasks", type: "follow-up" },
+      {
+        href: "/notifications",
+        label: unreadNotificationCount > 0 ? `Inbox ${unreadNotificationCount}` : "Inbox",
+        type: "inbox",
+      },
+      { href: "/member", label: "Profile", type: "member" },
+      { href: "/security", label: "Security", type: "action" },
+    ];
+  }
+
+  if (user.role === "branch_admin") {
+    return [
+      { href: "/admin/branch-users", label: "People", type: "action" },
+      { href: "/new-members", label: "New", type: "member" },
+      { href: "/households", label: "Households", type: "household" },
+      { href: "/notifications", label: "Inbox", type: "inbox" },
+      { href: "/member", label: "Member", type: "member" },
+    ];
+  }
+
+  return [
+    { href: "/", label: "Home", type: "action" },
+    { href: "/follow-up", label: "Follow-up", type: "follow-up" },
+    { href: "/households", label: "Households", type: "household" },
+    { href: "/inbox", label: "Inbox", type: "inbox" },
+    { href: "/member", label: "Member", type: "member" },
+  ];
+}
+
+function titleCase(value = "") {
+  return String(value || "")
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function buildNavSections(user, unreadNotificationCount = 0, copy) {
@@ -261,6 +525,20 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
 
   const operationItems = [];
   const oversightItems = [];
+
+  // ── Member-specific nav ──
+  if (user.role === "member") {
+    operationItems.push({ href: "/", label: "My home" });
+    operationItems.push({ href: "/requests/new", label: copy.layout.nav.requestCare });
+    operationItems.push({ href: "/member", label: "My profile & requests" });
+    operationItems.push({ href: "/volunteer/apply", label: "Serve as a volunteer" });
+    operationItems.push({
+      href: "/notifications",
+      label: unreadNotificationCount > 0
+        ? `Notifications (${unreadNotificationCount})`
+        : "Notifications",
+    });
+  }
 
   if (["pastor", "overseer", "owner"].includes(user.role)) {
     operationItems.push({
@@ -328,9 +606,7 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
     });
   }
 
-  if (
-    ["general_overseer", "hq_care_admin", "regional_overseer"].includes(user.role)
-  ) {
+  if (["general_overseer", "hq_care_admin", "regional_overseer"].includes(user.role)) {
     oversightItems.unshift({
       href: "/hq",
       label: "HQ Dashboard",

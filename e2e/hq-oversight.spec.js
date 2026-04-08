@@ -29,7 +29,9 @@ test("owner can access headquarters oversight surfaces", async ({ page }) => {
   await assertSecurityPromptIfShown(page);
 
   await page.goto("/hq");
-  await expect(page.locator("body")).toContainText("HQ Command Centre");
+  await expect(page.locator("body")).toContainText(
+    "HQ command centre for branch-wide care oversight."
+  );
 
   await page.goto("/regions");
   await expect(page.locator("body")).toContainText(

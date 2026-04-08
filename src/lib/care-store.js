@@ -403,6 +403,13 @@ function readStore(viewer = null, preferredBranchId = "") {
       privacy_json,
       tracking_code,
       status_detail,
+      next_contact_due,
+      follow_up_rhythm,
+      follow_up_goal,
+      follow_up_template,
+      last_contact_outcome,
+      follow_up_owner_name,
+      discipleship_stage,
       assigned_volunteer_json,
       escalation_json
     FROM requests
@@ -446,6 +453,13 @@ function readStore(viewer = null, preferredBranchId = "") {
         privacy: parseJson(row.privacy_json, defaultPrivacyPreference),
         trackingCode: row.tracking_code || "",
         statusDetail: row.status_detail || "",
+        nextContactDue: row.next_contact_due || "",
+        followUpRhythm: row.follow_up_rhythm || "",
+        followUpGoal: row.follow_up_goal || "",
+        followUpTemplate: row.follow_up_template || "",
+        lastContactOutcome: row.last_contact_outcome || "",
+        followUpOwnerName: row.follow_up_owner_name || "",
+        discipleshipStage: row.discipleship_stage || "",
         assignedVolunteer: parseJson(row.assigned_volunteer_json, null),
         escalation: parseJson(row.escalation_json, null),
       })),
@@ -502,6 +516,13 @@ function getRequestRecord(id) {
         privacy_json,
         tracking_code,
         status_detail,
+        next_contact_due,
+        follow_up_rhythm,
+        follow_up_goal,
+        follow_up_template,
+        last_contact_outcome,
+        follow_up_owner_name,
+        discipleship_stage,
         assigned_volunteer_json,
         escalation_json
       FROM requests
@@ -532,6 +553,13 @@ function getRequestRecordByTrackingCode(trackingCode) {
         privacy_json,
         tracking_code,
         status_detail,
+        next_contact_due,
+        follow_up_rhythm,
+        follow_up_goal,
+        follow_up_template,
+        last_contact_outcome,
+        follow_up_owner_name,
+        discipleship_stage,
         assigned_volunteer_json,
         escalation_json
       FROM requests
@@ -581,6 +609,13 @@ function mapRequestRecord(record) {
     privacy: parseJson(record.privacy_json, defaultPrivacyPreference),
     trackingCode: record.tracking_code || "",
     statusDetail: record.status_detail || "",
+    nextContactDue: record.next_contact_due || "",
+    followUpRhythm: record.follow_up_rhythm || "",
+    followUpGoal: record.follow_up_goal || "",
+    followUpTemplate: record.follow_up_template || "",
+    lastContactOutcome: record.last_contact_outcome || "",
+    followUpOwnerName: record.follow_up_owner_name || "",
+    discipleshipStage: record.discipleship_stage || "",
     assignedVolunteer: parseJson(record.assigned_volunteer_json, null),
     escalation: parseJson(record.escalation_json, null),
   };
@@ -950,6 +985,49 @@ export async function getMemberPortalData(trackingCode, contactValue) {
     requests: matchingRequests,
     openRequests: matchingRequests.filter((item) => item.isOpen),
     resolvedRequests: matchingRequests.filter((item) => !item.isOpen),
+    connectedHouseholds,
+  };
+}
+
+export async function getMemberPortalDataByEmail(email, organizationId) {
+  const normalizedEmail = normalizeContactValue(email);
+  if (!normalizedEmail || !normalizedEmail.includes("@")) return null;
+
+  const db = getDatabase();
+  const store = readStore();
+  const householdMap = new Map(store.households.map((h) => [h.slug, h]));
+
+  const matchingRequests = sortRequests(
+    store.requests.filter(
+      (item) =>
+        (!organizationId || item.organizationId === organizationId) &&
+        normalizeContactValue(item.requester?.email) === normalizedEmail
+    )
+  ).map((item) => buildMemberSafeRequest(item, buildHouseholdDetail(store, item.householdSlug)));
+
+  const connectedHouseholds = Array.from(
+    new Map(
+      matchingRequests.map((item) => [
+        item.householdSlug,
+        {
+          slug: item.householdSlug,
+          name: item.householdName,
+          openRequests: matchingRequests.filter(
+            (r) => r.householdSlug === item.householdSlug && r.isOpen
+          ).length,
+          lastUpdate:
+            householdMap.get(item.householdSlug)?.nextTouchpoint ||
+            householdMap.get(item.householdSlug)?.createdAt || "",
+        },
+      ])
+    ).values()
+  ).map((item) => ({ ...item, lastUpdateLabel: formatDateTime(item.lastUpdate) }));
+
+  return {
+    email: normalizedEmail,
+    requests: matchingRequests,
+    openRequests: matchingRequests.filter((r) => r.isOpen),
+    resolvedRequests: matchingRequests.filter((r) => !r.isOpen),
     connectedHouseholds,
   };
 }
@@ -1968,9 +2046,9 @@ export function getFollowUpBoard(organizationId, branchId) {
 
   const all = db.prepare(`
     SELECT id, organization_id, branch_id, household_name, household_slug,
-           tone, status, created_at, last_activity_at,
+           need, summary, tone, status, created_at, last_activity_at,
            next_contact_due, follow_up_rhythm, follow_up_goal,
-           follow_up_template, last_contact_outcome,
+           follow_up_template, last_contact_outcome, discipleship_stage,
            follow_up_owner_name, assigned_volunteer_json
     FROM requests
     WHERE ${base}
@@ -1995,6 +2073,57 @@ export function getFollowUpBoard(organizationId, branchId) {
 
   return { overdue, dueToday, dueThisWeek, noContact, later };
 }
+
+export const getWorkspaceSearchIndex = cache(function getWorkspaceSearchIndex(
+  viewer = null,
+  preferredBranchId = ""
+) {
+  const store = readStore(viewer, preferredBranchId);
+  const households = [...store.households]
+    .sort((left, right) => {
+      const leftTime = Date.parse(left.nextTouchpoint || left.createdAt || "");
+      const rightTime = Date.parse(right.nextTouchpoint || right.createdAt || "");
+      return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime);
+    })
+    .slice(0, 36)
+    .map((household) => ({
+      id: household.slug,
+      slug: household.slug,
+      name: household.name,
+      stage: household.stage,
+      risk: household.risk,
+      owner: household.owner,
+      nextTouchpoint: household.nextTouchpoint || "",
+      organizationId: household.organizationId,
+      branchId: household.branchId,
+      tags: household.tags || [],
+    }));
+
+  const requests = [...store.requests]
+    .sort((left, right) => {
+      const leftTime = Date.parse(left.nextContactDue || left.createdAt || "");
+      const rightTime = Date.parse(right.nextContactDue || right.createdAt || "");
+      return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime);
+    })
+    .slice(0, 42)
+    .map((request) => ({
+      id: request.id,
+      trackingCode: request.trackingCode,
+      householdSlug: request.householdSlug,
+      householdName: request.householdName,
+      need: request.need,
+      owner: request.owner,
+      status: request.status,
+      tone: request.tone,
+      nextContactDue: request.nextContactDue || "",
+      followUpGoal: request.followUpGoal || "",
+      followUpTemplate: request.followUpTemplate || "",
+      organizationId: request.organizationId,
+      branchId: request.branchId,
+    }));
+
+  return { households, requests };
+});
 
 export function saveFollowUpDetails(requestId, input) {
   const db = getDatabase();
@@ -2029,6 +2158,89 @@ export function recordFollowUpOutcome(requestId, outcome) {
   db.prepare(`
     UPDATE requests SET last_contact_outcome = ?, last_activity_at = ? WHERE id = ?
   `).run(outcome, now, requestId);
+}
+
+export async function applyFollowUpPlaybookEntry(
+  requestId,
+  input,
+  actor = null,
+  preferredBranchId = ""
+) {
+  const requestRecord = getRequestRecord(requestId);
+  if (!requestRecord) {
+    throw new Error("Request not found.");
+  }
+
+  const request = mapRequestRecord(requestRecord);
+  assertRecordAccess(request, actor, preferredBranchId);
+
+  saveFollowUpDetails(requestId, {
+    nextContactDue: input.nextContactDue || request.nextContactDue || request.dueAt || null,
+    followUpRhythm: input.followUpRhythm || request.followUpRhythm || null,
+    followUpGoal: input.followUpGoal || request.followUpGoal || null,
+    followUpTemplate: input.followUpTemplate || request.followUpTemplate || null,
+    discipleshipStage: input.discipleshipStage || request.discipleshipStage || null,
+    followUpOwnerId: input.followUpOwnerId || null,
+    followUpOwnerName:
+      input.followUpOwnerName || request.followUpOwnerName || request.owner || null,
+  });
+
+  if (input.outcome) {
+    recordFollowUpOutcome(requestId, input.outcome);
+  }
+
+  if (input.nextTouchpoint || input.note) {
+    await saveFollowUpPlanEntry(
+      request.householdSlug,
+      {
+        nextTouchpoint: input.nextTouchpoint || input.nextContactDue || request.nextContactDue,
+        owner: input.followUpOwnerName || request.followUpOwnerName || request.owner,
+        author: input.author || actor?.name || "Care follow-up",
+        noteKind: input.noteKind || "Follow-up",
+        note: input.note,
+      },
+      actor,
+      preferredBranchId
+    );
+  }
+
+  return mapRequestRecord(getRequestRecord(requestId));
+}
+
+export async function logFollowUpTouchpointEntry(
+  requestId,
+  input,
+  actor = null,
+  preferredBranchId = ""
+) {
+  const requestRecord = getRequestRecord(requestId);
+  if (!requestRecord) {
+    throw new Error("Request not found.");
+  }
+
+  const request = mapRequestRecord(requestRecord);
+  assertRecordAccess(request, actor, preferredBranchId);
+
+  if (input.outcome) {
+    recordFollowUpOutcome(requestId, input.outcome);
+  }
+
+  await saveFollowUpPlanEntry(
+    request.householdSlug,
+    {
+      nextTouchpoint: input.nextTouchpoint || request.nextContactDue || request.dueAt,
+      owner: input.owner || request.followUpOwnerName || request.owner,
+      author: input.author || actor?.name || "Care follow-up",
+      noteKind: input.noteKind || "Touchpoint",
+      note:
+        input.note ||
+        `Logged ${input.outcome || "follow-up"} touchpoint for ${request.householdName}.`,
+    },
+    actor,
+    preferredBranchId
+  );
+
+  return mapRequestRecord(getRequestRecord(requestId));
 }
 
 export function getOperationsSnapshot(viewer = null, preferredBranchId = "") {

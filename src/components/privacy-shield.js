@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 function buildWatermarkRows(value) {
   return Array.from({ length: 5 }, (_, index) => `${value} · ${index + 1}`);
@@ -21,6 +21,22 @@ export function PrivacyShield({
 }) {
   const [hidden, setHidden] = useState(defaultHidden);
   const watermarkRows = useMemo(() => buildWatermarkRows(watermark), [watermark]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+
+    if (document.documentElement.dataset.privacyMode === "guarded") {
+      const frame = window.requestAnimationFrame(() => {
+        setHidden(true);
+      });
+
+      return () => window.cancelAnimationFrame(frame);
+    }
+
+    return undefined;
+  }, []);
 
   return (
     <section

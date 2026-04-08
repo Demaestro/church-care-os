@@ -1,6 +1,7 @@
 export const LANGUAGE_COOKIE = "cco-language";
 export const DISPLAY_MODE_COOKIE = "cco-display-mode";
 export const THEME_COOKIE = "cco-theme";
+export const PRIVACY_MODE_COOKIE = "cco-privacy-mode";
 
 export const languageOptions = [
   { value: "en", label: "English" },
@@ -20,6 +21,11 @@ export const displayModeOptions = [
 export const themeOptions = [
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
+];
+
+export const privacyModeOptions = [
+  { value: "open", label: "Open" },
+  { value: "guarded", label: "Guarded" },
 ];
 
 const localeMap = {
@@ -43,6 +49,12 @@ export function normalizeDisplayMode(value) {
 
 export function normalizeTheme(value) {
   return themeOptions.some((option) => option.value === value) ? value : "light";
+}
+
+export function normalizePrivacyMode(value) {
+  return privacyModeOptions.some((option) => option.value === value)
+    ? value
+    : "open";
 }
 
 export function getLocaleTag(language) {
