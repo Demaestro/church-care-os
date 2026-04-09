@@ -1,5 +1,5 @@
 import { requireCurrentUser } from "@/lib/auth";
-import { listFunds, listLedgerAccounts, listLedgerTransactions } from "@/lib/finance-store";
+import { listFunds, listLedgerAccounts, listLedgerTransactions, recordLedgerTransaction } from "@/lib/finance-store";
 import { createFund, createLedgerAccount } from "@/app/actions";
 
 export const metadata = { title: "Finance" };
@@ -132,7 +132,59 @@ export default async function FinancePage() {
           </ul>
         )}
       </div>
+
+      <form
+        action={async (formData) => {
+          "use server";
+          const memo = String(formData.get("memo") || "").trim();
+          const accountId = String(formData.get("accountId") || "");
+          const amount = Number(formData.get("amount") || 0);
+          if (!memo || !accountId || amount <= 0) {
+            return;
+          }
+          recordLedgerTransaction({
+            organizationId: user.organizationId,
+            fundId: null,
+            memo,
+            lines: [
+              { accountId, debit: amount, credit: 0 },
+              { accountId, debit: 0, credit: amount },
+            ],
+          });
+        }}
+        className="mt-10 rounded-[1.5rem] border border-line bg-paper p-6"
+      >
+        <p className="text-sm font-semibold text-foreground">Quick ledger entry (demo)</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <input
+            name="memo"
+            placeholder="Offering entry"
+            className="w-full rounded-[1rem] border border-line bg-canvas px-4 py-3 text-sm text-foreground outline-none focus:border-moss"
+          />
+          <input
+            name="amount"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Amount"
+            className="w-full rounded-[1rem] border border-line bg-canvas px-4 py-3 text-sm text-foreground outline-none focus:border-moss"
+          />
+          <select
+            name="accountId"
+            className="w-full rounded-[1rem] border border-line bg-canvas px-4 py-3 text-sm text-foreground outline-none focus:border-moss"
+          >
+            <option value="">Select account</option>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="mt-3 text-xs text-muted">
+          Demo entry posts a balanced transaction to a single account for now.
+        </p>
+      </form>
     </div>
   );
 }
-

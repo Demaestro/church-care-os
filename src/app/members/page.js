@@ -57,7 +57,9 @@ export default async function MembersPage() {
               {members.map((member) => (
                 <tr key={member.id}>
                   <td className="px-6 py-4 font-semibold text-foreground">
-                    {member.full_name || member.fullName}
+                    <Link href={`/members/${member.id}`} className="hover:underline">
+                      {member.full_name || member.fullName}
+                    </Link>
                   </td>
                   <td className="px-6 py-4 text-muted">
                     {member.email || member.phone || "—"}
@@ -77,4 +79,3 @@ export default async function MembersPage() {
     </div>
   );
 }
-

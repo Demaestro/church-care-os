@@ -1,11 +1,13 @@
 import { requireCurrentUser } from "@/lib/auth";
 import { listRecentServices } from "@/lib/attendance-store";
+import { listMembers } from "@/lib/member-store";
 import { createService } from "@/app/actions";
 
 export const metadata = { title: "Attendance" };
 
 export default async function AttendancePage() {
   const user = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const members = listMembers({ organizationId: user.organizationId, branchId: user.branchId, limit: 200 });
   const services = listRecentServices({
     organizationId: user.organizationId,
     branchId: user.branchId,
@@ -52,6 +54,31 @@ export default async function AttendancePage() {
         </div>
       </form>
 
+      <form action="/attendance" className="mb-8 rounded-[1.5rem] border border-line bg-paper p-6">
+        <p className="text-sm font-semibold text-foreground">Quick check-in (demo)</p>
+        <p className="mt-2 text-sm text-muted">
+          Select a member and then record attendance from the member profile. This page keeps the services list ready.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <select className="w-full rounded-[1rem] border border-line bg-canvas px-4 py-3 text-sm text-foreground">
+            <option value="">Select member</option>
+            {members.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.full_name || member.fullName}
+              </option>
+            ))}
+          </select>
+          <select className="w-full rounded-[1rem] border border-line bg-canvas px-4 py-3 text-sm text-foreground">
+            <option value="">Select service</option>
+            {services.map((service) => (
+              <option key={service.id} value={service.id}>
+                {service.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </form>
+
       {services.length === 0 ? (
         <div className="rounded-[1.5rem] border border-line bg-canvas px-8 py-12 text-center text-muted">
           No services recorded yet. Add a service to start tracking attendance.
@@ -87,4 +114,3 @@ export default async function AttendancePage() {
     </div>
   );
 }
-

@@ -68,6 +68,54 @@ export function listMembers({ organizationId, branchId, limit = 200 } = {}) {
   return rows || [];
 }
 
+export function getMemberById(memberId) {
+  if (!memberId) {
+    return null;
+  }
+
+  const db = getDatabase();
+  const row = db.prepare(`
+    SELECT id, organization_id, branch_id, household_id, full_name, email, phone,
+           gender, birthdate, marital_status, member_type, created_at
+    FROM members
+    WHERE id = ?
+    LIMIT 1
+  `).get(memberId);
+
+  return row || null;
+}
+
+export function listMemberEvents(memberId, limit = 200) {
+  const db = getDatabase();
+  const rows = db.prepare(`
+    SELECT id, member_id, event_type, event_payload, created_at
+    FROM member_events
+    WHERE member_id = ?
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(memberId, limit);
+
+  return (rows || []).map((row) => ({
+    ...row,
+    event_payload: row.event_payload ? JSON.parse(row.event_payload) : {},
+  }));
+}
+
+export function listMemberAttendance(memberId, limit = 50) {
+  const db = getDatabase();
+  const rows = db.prepare(`
+    SELECT a.id, a.service_id, a.member_id, a.mode, a.recorded_at,
+           s.name as service_name, s.service_date
+    FROM attendance_events a
+    LEFT JOIN services s ON s.id = a.service_id
+    WHERE a.member_id = ?
+    ORDER BY a.recorded_at DESC
+    LIMIT ?
+  `).all(memberId, limit);
+
+  return rows || [];
+}
+
 export function createMemberEntry(input) {
   const db = getDatabase();
   const memberId = randomUUID();
@@ -108,4 +156,3 @@ export function addMemberEvent(memberId, eventType, payload = {}) {
   );
   return eventId;
 }
-

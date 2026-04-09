@@ -53,3 +53,15 @@ export function recordAttendance(serviceId, memberId, mode = "physical") {
   return attendanceId;
 }
 
+export function listAttendanceByService(serviceId) {
+  const db = getDatabase();
+  const rows = db.prepare(`
+    SELECT a.id, a.member_id, a.mode, a.recorded_at, m.full_name, m.email, m.phone
+    FROM attendance_events a
+    LEFT JOIN members m ON m.id = a.member_id
+    WHERE a.service_id = ?
+    ORDER BY a.recorded_at DESC
+  `).all(serviceId);
+
+  return rows || [];
+}

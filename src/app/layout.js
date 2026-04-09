@@ -599,6 +599,10 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
       label: "Finance",
     });
     oversightItems.push({
+      href: "/analytics",
+      label: "Analytics",
+    });
+    oversightItems.push({
       href: "/new-members",
       label: "New Members",
     });
