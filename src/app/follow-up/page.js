@@ -46,7 +46,7 @@ export default async function FollowUpBoardPage({ searchParams }) {
   const branchId = workspace.activeBranch?.id || user.branchId || "";
   const orgId = user.organizationId;
   const settings = getEffectiveChurchSettings(orgId, branchId);
-  const board = getFollowUpBoard(orgId, branchId);
+  const board = await getFollowUpBoard(orgId, branchId);
   const params = await searchParams;
   const filters = {
     query: typeof params?.q === "string" ? params.q.trim() : "",
@@ -597,7 +597,8 @@ function normalizeFollowUpView(value) {
 }
 
 function filterFollowUpItems(items, filters) {
-  return items.filter((item) => {
+  const safeItems = Array.isArray(items) ? items : [];
+  return safeItems.filter((item) => {
     const matchesQuery = matchesSearchQuery(
       [
         item.household_name,
