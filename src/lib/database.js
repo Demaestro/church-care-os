@@ -666,6 +666,129 @@ function createSchema(db) {
       completed_at TEXT
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS members (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      branch_id TEXT REFERENCES branches(id) ON DELETE SET NULL,
+      household_id TEXT REFERENCES households(id) ON DELETE SET NULL,
+      full_name TEXT NOT NULL,
+      email TEXT,
+      phone TEXT,
+      gender TEXT,
+      birthdate TEXT,
+      marital_status TEXT,
+      member_type TEXT NOT NULL DEFAULT 'member',
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS member_profiles (
+      id TEXT PRIMARY KEY,
+      member_id TEXT NOT NULL UNIQUE REFERENCES members(id) ON DELETE CASCADE,
+      salvation_date TEXT,
+      baptism_date TEXT,
+      small_group TEXT,
+      last_contact_at TEXT,
+      notes_summary TEXT
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS member_events (
+      id TEXT PRIMARY KEY,
+      member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+      event_type TEXT NOT NULL,
+      event_payload TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS tags (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      kind TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS member_tags (
+      member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+      tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      PRIMARY KEY (member_id, tag_id)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS groups (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      branch_id TEXT REFERENCES branches(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      group_type TEXT NOT NULL,
+      leader_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS group_memberships (
+      group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+      member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+      role TEXT NOT NULL DEFAULT 'member',
+      joined_at TEXT NOT NULL,
+      PRIMARY KEY (group_id, member_id)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS services (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      branch_id TEXT REFERENCES branches(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      service_date TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS attendance_events (
+      id TEXT PRIMARY KEY,
+      service_id TEXT NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+      member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+      mode TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS funds (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      code TEXT NOT NULL UNIQUE
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS ledger_accounts (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      code TEXT NOT NULL UNIQUE
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS ledger_transactions (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      fund_id TEXT REFERENCES funds(id) ON DELETE SET NULL,
+      memo TEXT,
+      posted_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS ledger_lines (
+      id TEXT PRIMARY KEY,
+      transaction_id TEXT NOT NULL REFERENCES ledger_transactions(id) ON DELETE CASCADE,
+      account_id TEXT NOT NULL REFERENCES ledger_accounts(id) ON DELETE CASCADE,
+      debit REAL NOT NULL DEFAULT 0,
+      credit REAL NOT NULL DEFAULT 0
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS pledges (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      member_id TEXT REFERENCES members(id) ON DELETE SET NULL,
+      fund_id TEXT REFERENCES funds(id) ON DELETE SET NULL,
+      amount REAL NOT NULL,
+      start_date TEXT,
+      end_date TEXT,
+      status TEXT NOT NULL DEFAULT 'active'
+    ) STRICT;
+
     CREATE INDEX IF NOT EXISTS idx_message_outbox_status_created
       ON message_outbox (status, created_at DESC);
 
@@ -698,6 +821,14 @@ function createSchema(db) {
       ON households (organization_id, branch_id, next_touchpoint);
     CREATE INDEX IF NOT EXISTS idx_users_org_role_active
       ON users (organization_id, role, active);
+    CREATE INDEX IF NOT EXISTS idx_members_scope
+      ON members (organization_id, branch_id);
+    CREATE INDEX IF NOT EXISTS idx_member_events_member
+      ON member_events (member_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_attendance_service_member
+      ON attendance_events (service_id, member_id);
+    CREATE INDEX IF NOT EXISTS idx_ledger_lines_tx
+      ON ledger_lines (transaction_id);
   `);
 }
 
@@ -1149,6 +1280,140 @@ function ensureSchemaMigrations(db) {
 
     CREATE INDEX IF NOT EXISTS idx_volunteer_applications_user
       ON volunteer_applications (user_id, status);
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS members (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      branch_id TEXT,
+      household_id TEXT,
+      full_name TEXT NOT NULL,
+      email TEXT,
+      phone TEXT,
+      gender TEXT,
+      birthdate TEXT,
+      marital_status TEXT,
+      member_type TEXT NOT NULL DEFAULT 'member',
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS member_profiles (
+      id TEXT PRIMARY KEY,
+      member_id TEXT NOT NULL UNIQUE,
+      salvation_date TEXT,
+      baptism_date TEXT,
+      small_group TEXT,
+      last_contact_at TEXT,
+      notes_summary TEXT
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS member_events (
+      id TEXT PRIMARY KEY,
+      member_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      event_payload TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS tags (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      kind TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS member_tags (
+      member_id TEXT NOT NULL,
+      tag_id TEXT NOT NULL,
+      PRIMARY KEY (member_id, tag_id)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS groups (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      branch_id TEXT,
+      name TEXT NOT NULL,
+      group_type TEXT NOT NULL,
+      leader_user_id TEXT,
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS group_memberships (
+      group_id TEXT NOT NULL,
+      member_id TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member',
+      joined_at TEXT NOT NULL,
+      PRIMARY KEY (group_id, member_id)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS services (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      branch_id TEXT,
+      name TEXT NOT NULL,
+      service_date TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS attendance_events (
+      id TEXT PRIMARY KEY,
+      service_id TEXT NOT NULL,
+      member_id TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS funds (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      code TEXT NOT NULL UNIQUE
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS ledger_accounts (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      code TEXT NOT NULL UNIQUE
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS ledger_transactions (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      fund_id TEXT,
+      memo TEXT,
+      posted_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS ledger_lines (
+      id TEXT PRIMARY KEY,
+      transaction_id TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      debit REAL NOT NULL DEFAULT 0,
+      credit REAL NOT NULL DEFAULT 0
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS pledges (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      member_id TEXT,
+      fund_id TEXT,
+      amount REAL NOT NULL,
+      start_date TEXT,
+      end_date TEXT,
+      status TEXT NOT NULL DEFAULT 'active'
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_members_scope
+      ON members (organization_id, branch_id);
+    CREATE INDEX IF NOT EXISTS idx_member_events_member
+      ON member_events (member_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_attendance_service_member
+      ON attendance_events (service_id, member_id);
+    CREATE INDEX IF NOT EXISTS idx_ledger_lines_tx
+      ON ledger_lines (transaction_id);
   `);
 
   db.exec(`

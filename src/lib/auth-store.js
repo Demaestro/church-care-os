@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { getDatabase } from "@/lib/database";
 import { hashPassword } from "@/lib/auth-crypto";
 import { normalizeInternalRole } from "@/lib/policies";
+import { ensureMemberFromUser } from "@/lib/member-store";
 
 export function findUserByEmail(email) {
   if (!email) {
@@ -119,6 +120,21 @@ export function createUserEntry(input) {
     input.gender || "unspecified",
     input.memberType || "member"
   );
+
+  if (normalizedRole === "member") {
+    ensureMemberFromUser({
+      id: userId,
+      name: input.name,
+      email: input.email,
+      phone: input.phone || null,
+      role: normalizedRole,
+      organizationId: input.organizationId || null,
+      branchId: input.branchId || null,
+      birthday: input.birthday || null,
+      gender: input.gender || "unspecified",
+      memberType: input.memberType || "member",
+    });
+  }
 
   return userId;
 }

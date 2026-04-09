@@ -128,6 +128,9 @@ import {
 } from "@/lib/member-transfer-store";
 import { saveHouseholdAttachment } from "@/lib/attachment-store";
 import { saveChurchLogo } from "@/lib/church-branding";
+import { createGroupEntry } from "@/lib/group-store";
+import { createServiceEntry } from "@/lib/attendance-store";
+import { createFundEntry, createLedgerAccountEntry } from "@/lib/finance-store";
 import {
   createVolunteerApplication as createVolunteerApplicationEntry,
   hasPendingApplication,
@@ -4194,6 +4197,119 @@ export async function saveServiceSchedule(formData) {
   });
   recordAuditLog({ ...buildActorLog(user), action: "settings.service_schedule_updated", targetType: "settings", targetId: organizationId, summary: `${user.name} updated the service schedule.` });
   redirect("/settings/service?notice=Service+schedule+saved");
+}
+
+export async function createGroup(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const name = getBoundedString(formData, "name", maxAuthFieldLengths.name);
+  const groupType = getBoundedString(formData, "groupType", maxAuthFieldLengths.name) || "Small Group";
+
+  if (!name) {
+    redirectWithError("/groups", "Group name is required.");
+  }
+
+  createGroupEntry({
+    organizationId: scope.organizationId,
+    branchId: scope.preferredBranchId,
+    name,
+    groupType,
+    leaderUserId: actor.id,
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "groups.created",
+    targetType: "group",
+    targetId: name,
+    summary: `${actor.name} created the ${name} group.`,
+  });
+
+  redirectWithNotice("/groups", "Group created.");
+}
+
+export async function createService(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const name = getBoundedString(formData, "name", maxAuthFieldLengths.name) || "Sunday Service";
+  const serviceDate = getString(formData, "serviceDate");
+
+  if (!serviceDate) {
+    redirectWithError("/attendance", "Service date is required.");
+  }
+
+  createServiceEntry({
+    organizationId: scope.organizationId,
+    branchId: scope.preferredBranchId,
+    name,
+    serviceDate,
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "attendance.service_created",
+    targetType: "service",
+    targetId: name,
+    summary: `${actor.name} added ${name} to the attendance calendar.`,
+  });
+
+  redirectWithNotice("/attendance", "Service added.");
+}
+
+export async function createFund(formData) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const name = getBoundedString(formData, "name", maxAuthFieldLengths.name);
+  const code = getBoundedString(formData, "code", 16);
+
+  if (!name || !code) {
+    redirectWithError("/finance", "Fund name and code are required.");
+  }
+
+  createFundEntry({
+    organizationId: scope.organizationId,
+    name,
+    code,
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "finance.fund_created",
+    targetType: "fund",
+    targetId: code,
+    summary: `${actor.name} created the ${name} fund.`,
+  });
+
+  redirectWithNotice("/finance", "Fund created.");
+}
+
+export async function createLedgerAccount(formData) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const name = getBoundedString(formData, "name", maxAuthFieldLengths.name);
+  const code = getBoundedString(formData, "code", 16);
+  const type = getString(formData, "type");
+
+  if (!name || !code || !type) {
+    redirectWithError("/finance", "Account name, code, and type are required.");
+  }
+
+  createLedgerAccountEntry({
+    organizationId: scope.organizationId,
+    name,
+    code,
+    type,
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "finance.account_created",
+    targetType: "ledger_account",
+    targetId: code,
+    summary: `${actor.name} created the ${name} ledger account.`,
+  });
+
+  redirectWithNotice("/finance", "Ledger account created.");
 }
 
 // -- Self-registration (public - no auth required) -----------------------------

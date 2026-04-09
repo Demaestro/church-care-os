@@ -583,6 +583,22 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
       label: copy.layout.nav.people,
     });
     oversightItems.push({
+      href: "/members",
+      label: "Members",
+    });
+    oversightItems.push({
+      href: "/groups",
+      label: "Groups",
+    });
+    oversightItems.push({
+      href: "/attendance",
+      label: "Attendance",
+    });
+    oversightItems.push({
+      href: "/finance",
+      label: "Finance",
+    });
+    oversightItems.push({
       href: "/new-members",
       label: "New Members",
     });
