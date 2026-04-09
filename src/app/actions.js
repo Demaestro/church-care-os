@@ -140,7 +140,13 @@ import {
   createPledgeEntry,
   recordLedgerTransaction,
 } from "@/lib/finance-store";
-import { addMemberEvent } from "@/lib/member-store";
+import {
+  addMemberEvent,
+  createMemberEntry,
+  getMemberById,
+  updateMemberEntry,
+} from "@/lib/member-store";
+import { addMemberToGroup as addMemberToGroupEntry } from "@/lib/group-store";
 import {
   createVolunteerApplication as createVolunteerApplicationEntry,
   hasPendingApplication,
@@ -4469,6 +4475,8 @@ export async function recordJournalEntry(formData) {
       memo,
       postedAt: postedAt || new Date().toISOString(),
       lines,
+      postedByUserId: actor.id,
+      postedByName: actor.name,
     });
 
     recordAuditLog({
@@ -4713,4 +4721,113 @@ export async function reviewVolunteerApplicationAction(prevState, formData) {
   revalidatePath("/volunteer/applications");
   return { success: true, status };
 }
+
+// -- Member management --------------------------------------------------------
+
+export async function createMemberAction(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const fullName = getBoundedString(formData, "fullName", 120);
+  const email = getBoundedString(formData, "email", 200);
+  const phone = getBoundedString(formData, "phone", 40);
+  const gender = getString(formData, "gender");
+  const memberType = getString(formData, "memberType") || "member";
+  const birthdate = getString(formData, "birthdate");
+
+  if (!fullName) {
+    redirectWithError("/members?add=1", "Full name is required.");
+  }
+
+  const memberId = createMemberEntry({
+    organizationId: scope.organizationId,
+    branchId: scope.branchId,
+    fullName,
+    email: email || null,
+    phone: phone || null,
+    gender: gender || null,
+    memberType,
+    birthdate: birthdate || null,
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "member.created",
+    targetType: "member",
+    targetId: memberId,
+    summary: `${actor.name} added ${fullName} to the member directory.`,
+  });
+
+  revalidatePath("/members");
+  redirectWithNotice("/members", `${fullName} added to the directory.`);
+}
+
+export async function updateMember(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const memberId = getString(formData, "memberId");
+  const fullName = getBoundedString(formData, "fullName", 120);
+  const email = getBoundedString(formData, "email", 200);
+  const phone = getBoundedString(formData, "phone", 40);
+  const gender = getString(formData, "gender");
+  const maritalStatus = getString(formData, "maritalStatus");
+  const memberType = getString(formData, "memberType") || "member";
+  const birthdate = getString(formData, "birthdate");
+
+  if (!memberId || !fullName) {
+    redirectWithError(`/members/${memberId}`, "Name is required.");
+  }
+
+  const existing = getMemberById(memberId);
+  if (!existing || existing.organization_id !== scope.organizationId) {
+    redirectWithError("/members", "Member not found.");
+  }
+
+  updateMemberEntry(memberId, {
+    fullName,
+    email: email || null,
+    phone: phone || null,
+    gender: gender || null,
+    maritalStatus: maritalStatus || null,
+    memberType,
+    birthdate: birthdate || null,
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "member.updated",
+    targetType: "member",
+    targetId: memberId,
+    summary: `${actor.name} updated ${fullName}'s profile.`,
+  });
+
+  revalidatePath(`/members/${memberId}`);
+  revalidatePath("/members");
+  redirectWithNotice(`/members/${memberId}`, "Profile updated.");
+}
+
+export async function addMemberToGroup(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const memberId = getString(formData, "memberId");
+  const groupId = getString(formData, "groupId");
+
+  if (!memberId || !groupId) {
+    redirectWithError(`/members/${memberId}?tab=groups`, "Member and group are required.");
+  }
+
+  addMemberToGroupEntry(groupId, memberId, "member");
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "member.group_assigned",
+    targetType: "member",
+    targetId: memberId,
+    summary: `${actor.name} added a member to a group.`,
+    metadata: { groupId },
+  });
+
+  revalidatePath(`/members/${memberId}`);
+  redirectWithNotice(`/members/${memberId}?tab=groups`, "Added to group.");
+}
+
 

@@ -190,14 +190,16 @@ export function recordLedgerTransaction(input) {
 
   const transactionId = randomUUID();
   db.prepare(`
-    INSERT INTO ledger_transactions (id, organization_id, fund_id, memo, posted_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO ledger_transactions (id, organization_id, fund_id, memo, posted_at, posted_by_user_id, posted_by_name)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
     transactionId,
     input.organizationId || null,
     input.fundId || null,
     input.memo || null,
-    input.postedAt || new Date().toISOString()
+    input.postedAt || new Date().toISOString(),
+    input.postedByUserId || null,
+    input.postedByName || null
   );
 
   for (const line of input.lines) {
@@ -214,4 +216,161 @@ export function recordLedgerTransaction(input) {
   }
 
   return transactionId;
+}
+
+// -- Audit & Reconciliation queries -------------------------------------------
+
+export function getTrialBalanceForPeriod({ organizationId, fromDate, toDate } = {}) {
+  const db = getDatabase();
+  const rows = db.prepare(`
+    SELECT
+      a.id,
+      a.name,
+      a.code,
+      a.type,
+      COALESCE(SUM(l.debit), 0)  AS total_debit,
+      COALESCE(SUM(l.credit), 0) AS total_credit
+    FROM ledger_accounts a
+    LEFT JOIN ledger_lines l ON l.account_id = a.id
+    LEFT JOIN ledger_transactions t ON t.id = l.transaction_id
+    WHERE (? IS NULL OR a.organization_id = ?)
+      AND (t.id IS NULL OR (
+        (? IS NULL OR t.posted_at >= ?) AND
+        (? IS NULL OR t.posted_at <= ?)
+      ))
+    GROUP BY a.id
+    ORDER BY a.code
+  `).all(
+    organizationId || null, organizationId || null,
+    fromDate || null, fromDate ? fromDate + "T00:00:00" : null,
+    toDate || null, toDate ? toDate + "T23:59:59" : null
+  );
+
+  const accounts = (rows || []).map((row) => ({
+    ...row,
+    total_debit: Number(row.total_debit || 0),
+    total_credit: Number(row.total_credit || 0),
+    balance: Number(row.total_debit || 0) - Number(row.total_credit || 0),
+  }));
+
+  const totals = accounts.reduce(
+    (sum, a) => ({ totalDebit: sum.totalDebit + a.total_debit, totalCredit: sum.totalCredit + a.total_credit }),
+    { totalDebit: 0, totalCredit: 0 }
+  );
+
+  return {
+    accounts,
+    totalDebit: totals.totalDebit,
+    totalCredit: totals.totalCredit,
+    balanced: Number(totals.totalDebit.toFixed(2)) === Number(totals.totalCredit.toFixed(2)),
+    fromDate: fromDate || null,
+    toDate: toDate || null,
+  };
+}
+
+export function getLedgerTransactionsForPeriod({ organizationId, fromDate, toDate, limit = 60 } = {}) {
+  const db = getDatabase();
+  const rows = db.prepare(`
+    SELECT
+      t.id,
+      t.memo,
+      t.posted_at,
+      COALESCE(t.posted_by_name, 'Unknown') AS posted_by_name,
+      t.voided_at,
+      f.name AS fund_name,
+      COALESCE(SUM(l.debit), 0)  AS total_debit,
+      COALESCE(SUM(l.credit), 0) AS total_credit
+    FROM ledger_transactions t
+    LEFT JOIN funds f ON f.id = t.fund_id
+    LEFT JOIN ledger_lines l ON l.transaction_id = t.id
+    WHERE (? IS NULL OR t.organization_id = ?)
+      AND (? IS NULL OR t.posted_at >= ?)
+      AND (? IS NULL OR t.posted_at <= ?)
+    GROUP BY t.id
+    ORDER BY t.posted_at DESC
+    LIMIT ?
+  `).all(
+    organizationId || null, organizationId || null,
+    fromDate || null, fromDate ? fromDate + "T00:00:00" : null,
+    toDate || null, toDate ? toDate + "T23:59:59" : null,
+    limit
+  );
+
+  return (rows || []).map((row) => ({
+    ...row,
+    total_debit: Number(row.total_debit || 0),
+    total_credit: Number(row.total_credit || 0),
+    isVoided: !!row.voided_at,
+    postedLabel: String(row.posted_at || "").replace("T", " ").slice(0, 16),
+  }));
+}
+
+export function getFinanceAuditEntries({ organizationId, limit = 40 } = {}) {
+  const db = getDatabase();
+  const rows = db.prepare(`
+    SELECT id, created_at, actor_name, actor_role, action, target_type, target_id, summary
+    FROM audit_logs
+    WHERE (? IS NULL OR organization_id = ?)
+      AND action LIKE 'finance.%'
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(organizationId || null, organizationId || null, limit);
+
+  return (rows || []).map((row) => ({
+    ...row,
+    createdLabel: String(row.created_at || "").replace("T", " ").slice(0, 16),
+  }));
+}
+
+export function detectFinancialAnomalies({ organizationId } = {}) {
+  const db = getDatabase();
+
+  // Entries with no memo — cannot be explained in a formal audit
+  const noMemo = db.prepare(`
+    SELECT
+      t.id,
+      t.posted_at,
+      COALESCE(t.posted_by_name, 'Unknown') AS posted_by_name,
+      COALESCE(SUM(l.debit), 0) AS total_amount
+    FROM ledger_transactions t
+    LEFT JOIN ledger_lines l ON l.transaction_id = t.id
+    WHERE (? IS NULL OR t.organization_id = ?)
+      AND (t.memo IS NULL OR t.memo = '')
+      AND t.voided_at IS NULL
+    GROUP BY t.id
+    ORDER BY t.posted_at DESC
+    LIMIT 10
+  `).all(organizationId || null, organizationId || null);
+
+  // Top 5 largest transactions by debit volume — high-value items warrant review
+  const largeTransactions = db.prepare(`
+    SELECT
+      t.id,
+      t.memo,
+      t.posted_at,
+      COALESCE(t.posted_by_name, 'Unknown') AS posted_by_name,
+      f.name AS fund_name,
+      COALESCE(SUM(l.debit), 0) AS total_amount
+    FROM ledger_transactions t
+    LEFT JOIN ledger_lines l ON l.transaction_id = t.id
+    LEFT JOIN funds f ON f.id = t.fund_id
+    WHERE (? IS NULL OR t.organization_id = ?)
+      AND t.voided_at IS NULL
+    GROUP BY t.id
+    ORDER BY total_amount DESC
+    LIMIT 5
+  `).all(organizationId || null, organizationId || null);
+
+  return {
+    noMemoTransactions: (noMemo || []).map((r) => ({
+      ...r,
+      total_amount: Number(r.total_amount || 0),
+      postedLabel: String(r.posted_at || "").replace("T", " ").slice(0, 16),
+    })),
+    largeTransactions: (largeTransactions || []).map((r) => ({
+      ...r,
+      total_amount: Number(r.total_amount || 0),
+      postedLabel: String(r.posted_at || "").replace("T", " ").slice(0, 16),
+    })),
+  };
 }

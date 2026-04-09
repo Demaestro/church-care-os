@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { assignRequestVolunteer, escalateRequestToPastor } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
+import AiChatPanel from "@/components/AiChatPanel";
 import { requireCurrentUser } from "@/lib/auth";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import { getDashboardData } from "@/lib/care-store";
@@ -477,6 +478,7 @@ export default async function LeaderPage() {
           </PanelCard>
         </div>
       </section>
+      <AiChatPanel agentType="care" />
     </div>
   );
 }

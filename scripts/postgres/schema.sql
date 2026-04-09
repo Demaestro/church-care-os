@@ -563,7 +563,11 @@ CREATE TABLE IF NOT EXISTS ledger_transactions (
   organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   fund_id text REFERENCES funds(id) ON DELETE SET NULL,
   memo text,
-  posted_at timestamptz NOT NULL DEFAULT now()
+  posted_at timestamptz NOT NULL DEFAULT now(),
+  posted_by_user_id text REFERENCES users(id) ON DELETE SET NULL,
+  posted_by_name text,
+  voided_at timestamptz,
+  void_reason text
 );
 
 CREATE TABLE IF NOT EXISTS ledger_lines (
@@ -583,6 +587,47 @@ CREATE TABLE IF NOT EXISTS pledges (
   start_date date,
   end_date date,
   status text NOT NULL DEFAULT 'active'
+);
+
+CREATE TABLE IF NOT EXISTS discipleship_records (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id text REFERENCES branches(id) ON DELETE SET NULL,
+  household_id text REFERENCES households(id) ON DELETE CASCADE,
+  household_slug text NOT NULL REFERENCES households(slug) ON DELETE CASCADE,
+  household_name text NOT NULL,
+  stage text NOT NULL DEFAULT 'new_believer',
+  pathway text NOT NULL DEFAULT 'standard',
+  assigned_leader_id text REFERENCES users(id) ON DELETE SET NULL,
+  assigned_leader_name text,
+  small_group_connected boolean NOT NULL DEFAULT false,
+  attending_regularly boolean NOT NULL DEFAULT false,
+  serving boolean NOT NULL DEFAULT false,
+  baptized boolean NOT NULL DEFAULT false,
+  foundation_class boolean NOT NULL DEFAULT false,
+  mentoring_others boolean NOT NULL DEFAULT false,
+  next_step text,
+  notes text,
+  last_updated_by text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS volunteer_applications (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id text REFERENCES branches(id) ON DELETE SET NULL,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_name text NOT NULL,
+  user_email text NOT NULL,
+  areas jsonb NOT NULL DEFAULT '[]'::jsonb,
+  availability text,
+  note text,
+  status text NOT NULL DEFAULT 'pending',
+  reviewed_by text REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_by_name text,
+  reviewed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_household_notes_household_slug
@@ -641,12 +686,24 @@ CREATE INDEX IF NOT EXISTS idx_jobs_status_run_after
   ON jobs (status, run_after, queue);
 CREATE INDEX IF NOT EXISTS idx_members_scope
   ON members (organization_id, branch_id);
+CREATE INDEX IF NOT EXISTS idx_discipleship_org_branch
+  ON discipleship_records (organization_id, branch_id, stage);
+CREATE INDEX IF NOT EXISTS idx_volunteer_apps_scope
+  ON volunteer_applications (organization_id, branch_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_member_events_member
   ON member_events (member_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_attendance_service_member
   ON attendance_events (service_id, member_id);
 CREATE INDEX IF NOT EXISTS idx_ledger_lines_tx
   ON ledger_lines (transaction_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_tx_org_posted_at
+  ON ledger_transactions (organization_id, posted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_org_action
+  ON audit_logs (organization_id, action, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_org_code
+  ON funds (organization_id, code);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_accounts_org_code
+  ON ledger_accounts (organization_id, code);
 CREATE INDEX IF NOT EXISTS idx_organizations_active_slug
   ON organizations (active, slug);
 CREATE INDEX IF NOT EXISTS idx_branches_org_active_name
