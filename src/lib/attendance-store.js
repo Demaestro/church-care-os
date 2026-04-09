@@ -53,6 +53,18 @@ export function recordAttendance(serviceId, memberId, mode = "physical") {
   return attendanceId;
 }
 
+export function hasAttendanceRecord(serviceId, memberId) {
+  const db = getDatabase();
+  const row = db.prepare(`
+    SELECT id
+    FROM attendance_events
+    WHERE service_id = ? AND member_id = ?
+    LIMIT 1
+  `).get(serviceId, memberId);
+
+  return Boolean(row?.id);
+}
+
 export function listAttendanceByService(serviceId) {
   const db = getDatabase();
   const rows = db.prepare(`

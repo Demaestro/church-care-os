@@ -129,8 +129,18 @@ import {
 import { saveHouseholdAttachment } from "@/lib/attachment-store";
 import { saveChurchLogo } from "@/lib/church-branding";
 import { createGroupEntry } from "@/lib/group-store";
-import { createServiceEntry } from "@/lib/attendance-store";
-import { createFundEntry, createLedgerAccountEntry } from "@/lib/finance-store";
+import {
+  createServiceEntry,
+  hasAttendanceRecord,
+  recordAttendance,
+} from "@/lib/attendance-store";
+import {
+  createFundEntry,
+  createLedgerAccountEntry,
+  createPledgeEntry,
+  recordLedgerTransaction,
+} from "@/lib/finance-store";
+import { addMemberEvent } from "@/lib/member-store";
 import {
   createVolunteerApplication as createVolunteerApplicationEntry,
   hasPendingApplication,
@@ -241,6 +251,15 @@ function getBoundedString(formData, key, maxLength) {
 function getBoundedPassword(formData, key, maxLength = maxAuthFieldLengths.password) {
   const value = formData.get(key);
   return typeof value === "string" ? value.slice(0, maxLength) : "";
+}
+
+function getMoneyAmount(formData, key) {
+  const raw = getString(formData, key).replace(/,/g, "");
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Number(value.toFixed(2));
 }
 
 function getGenericRegistrationResponse() {
@@ -4310,6 +4329,167 @@ export async function createLedgerAccount(formData) {
   });
 
   redirectWithNotice("/finance", "Ledger account created.");
+}
+
+export async function recordAttendanceCheckIn(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const serviceId = getString(formData, "serviceId");
+  const memberId = getString(formData, "memberId");
+  const mode = getString(formData, "mode") || "physical";
+
+  if (!serviceId || !memberId) {
+    redirectWithError("/attendance", "Choose both a service and a member.");
+  }
+
+  if (hasAttendanceRecord(serviceId, memberId)) {
+    redirectWithError("/attendance", "Attendance has already been recorded for this member.");
+  }
+
+  recordAttendance(serviceId, memberId, mode);
+  addMemberEvent(memberId, "service_attendance", {
+    mode,
+    serviceId,
+    recordedBy: actor.name,
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "attendance.recorded",
+    targetType: "attendance",
+    targetId: `${serviceId}:${memberId}`,
+    summary: `${actor.name} recorded ${mode} attendance.`,
+    metadata: {
+      serviceId,
+      memberId,
+      mode,
+    },
+  });
+
+  redirectWithNotice(`/attendance?service=${serviceId}`, "Attendance recorded.");
+}
+
+export async function addMemberTimelineEvent(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const memberId = getString(formData, "memberId");
+  const eventType = getString(formData, "eventType");
+  const note = getBoundedString(formData, "note", 500);
+  const eventDate = getString(formData, "eventDate");
+
+  if (!memberId || !eventType) {
+    redirectWithError("/members", "Choose an event type before saving.");
+  }
+
+  addMemberEvent(memberId, eventType, {
+    note,
+    eventDate: eventDate || null,
+    recordedBy: actor.name,
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "member.timeline_event_added",
+    targetType: "member",
+    targetId: memberId,
+    summary: `${actor.name} added a ${eventType} timeline event.`,
+    metadata: {
+      eventType,
+    },
+  });
+
+  redirectWithNotice(`/members/${memberId}`, "Timeline event added.");
+}
+
+export async function createPledge(formData) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const memberId = getString(formData, "memberId");
+  const fundId = getString(formData, "fundId");
+  const amount = getMoneyAmount(formData, "amount");
+  const startDate = getString(formData, "startDate");
+  const endDate = getString(formData, "endDate");
+
+  if (!memberId || !fundId || amount <= 0) {
+    redirectWithError("/finance", "Member, fund, and pledge amount are required.");
+  }
+
+  const pledgeId = createPledgeEntry({
+    organizationId: scope.organizationId,
+    memberId,
+    fundId,
+    amount,
+    startDate: startDate || null,
+    endDate: endDate || null,
+    status: "active",
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "finance.pledge_created",
+    targetType: "pledge",
+    targetId: pledgeId,
+    summary: `${actor.name} created a new pledge.`,
+    metadata: {
+      memberId,
+      fundId,
+      amount,
+    },
+  });
+
+  redirectWithNotice("/finance", "Pledge created.");
+}
+
+export async function recordJournalEntry(formData) {
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const memo = getBoundedString(formData, "memo", 180);
+  const postedAt = getString(formData, "postedAt");
+  const fundId = getString(formData, "fundId");
+  const lines = [1, 2, 3, 4]
+    .map((index) => ({
+      accountId: getString(formData, `accountId_${index}`),
+      debit: getMoneyAmount(formData, `debit_${index}`),
+      credit: getMoneyAmount(formData, `credit_${index}`),
+    }))
+    .filter((line) => line.accountId && (line.debit > 0 || line.credit > 0));
+
+  if (!memo) {
+    redirectWithError("/finance", "Journal memo is required.");
+  }
+
+  if (lines.length < 2) {
+    redirectWithError("/finance", "At least two journal lines are required.");
+  }
+
+  try {
+    const transactionId = recordLedgerTransaction({
+      organizationId: scope.organizationId,
+      fundId: fundId || null,
+      memo,
+      postedAt: postedAt || new Date().toISOString(),
+      lines,
+    });
+
+    recordAuditLog({
+      ...buildActorLog(actor, scope),
+      action: "finance.journal_recorded",
+      targetType: "ledger_transaction",
+      targetId: transactionId,
+      summary: `${actor.name} recorded a balanced journal entry.`,
+      metadata: {
+        fundId: fundId || null,
+        lineCount: lines.length,
+      },
+    });
+  } catch (error) {
+    redirectWithError(
+      "/finance",
+      getActionErrorMessage(error, "We could not record that journal entry.")
+    );
+  }
+
+  redirectWithNotice("/finance", "Journal entry posted.");
 }
 
 // -- Self-registration (public - no auth required) -----------------------------
