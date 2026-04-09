@@ -39,20 +39,20 @@ const inter = Inter({
 
 export const metadata = {
   title: {
-    default: "Church Care OS",
-    template: "%s | Church Care OS",
+    default: "FirstLove Assembly",
+    template: "%s | FirstLove Assembly",
   },
   description:
-    "Care coordination for pastors, deacons, and volunteers with one shared rhythm for requests, assignments, and follow-up.",
-  applicationName: "Church Care OS",
+    "Ministry ecosystem for FirstLove Assembly — members, attendance, discipleship, finance, care, and pastoral oversight in one platform.",
+  applicationName: "FirstLove Assembly",
   appleWebApp: {
-    title: "Church Care OS",
+    title: "FirstLove Assembly",
     statusBarStyle: "default",
   },
   openGraph: {
-    title: "Church Care OS",
+    title: "FirstLove Assembly",
     description:
-      "A warm operating system for care requests, volunteer coordination, and pastoral follow-up.",
+      "The complete ministry platform for FirstLove Assembly — from member onboarding to financial stewardship.",
     type: "website",
   },
 };
@@ -60,8 +60,8 @@ export const metadata = {
 export const viewport = {
   colorScheme: "light dark",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#2563eb" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
+    { media: "(prefers-color-scheme: light)", color: "#9f1239" },
+    { media: "(prefers-color-scheme: dark)", color: "#180a0a" },
   ],
 };
 
@@ -244,8 +244,8 @@ export default async function RootLayout({ children }) {
                       quickActions={quickActions}
                       placeholder={
                         user
-                          ? "Jump to a person, request, household, or workflow"
-                          : "Jump to request care, track a request, or open the member portal"
+                          ? "Jump to a member, section, or workflow…"
+                          : "Request support, track a request, or open the member portal…"
                       }
                     />
                   </div>
@@ -290,8 +290,8 @@ function BrandMark({ logoHref = "", initials = "CC" }) {
     <span
       className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold tracking-wide text-white transition-all duration-200 group-hover:scale-105"
       style={{
-        background: "linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)",
-        boxShadow: "0 3px 12px rgba(37,99,235,0.38)",
+        background: "linear-gradient(135deg, #9f1239 0%, #be123c 100%)",
+        boxShadow: "0 3px 12px rgba(159,18,57,0.40)",
       }}
     >
       {initials}
@@ -311,80 +311,29 @@ function flattenNavItems(sections = []) {
 function buildQuickActions(user, copy) {
   if (!user) {
     return [
-      {
-        id: "action:request-care",
-        href: "/requests/new",
-        label: copy.layout.nav.requestCare,
-        description: "Start a new care request",
-        section: "Quick actions",
-        type: "action",
-      },
-      {
-        id: "action:track-request",
-        href: "/requests/status",
-        label: copy.layout.nav.trackRequest,
-        description: "Check the current status of one request",
-        section: "Quick actions",
-        type: "follow-up",
-      },
-      {
-        id: "action:member-portal",
-        href: "/member",
-        label: copy.layout.nav.memberPortal,
-        description: "Open request history and update your contact details",
-        section: "Quick actions",
-        type: "member",
-      },
-      {
-        id: "action:register",
-        href: "/register",
-        label: "Create account",
-        description: "Start a secure self-service member account",
-        section: "Quick actions",
-        type: "action",
-      },
+      { id: "action:request-care", href: "/requests/new",    label: "Request support",  description: "Submit a pastoral support request",              section: "Quick actions", type: "action"    },
+      { id: "action:track-request", href: "/requests/status", label: "Track request",    description: "Check the current status of a support request",  section: "Quick actions", type: "follow-up" },
+      { id: "action:member-portal", href: "/member",          label: "Member portal",    description: "Open your profile and request history",          section: "Quick actions", type: "member"    },
+      { id: "action:register",      href: "/register",        label: "Create account",   description: "Create a secure member account",                 section: "Quick actions", type: "action"    },
     ];
   }
 
-  const items = [
-    {
-      id: "action:follow-up",
-      href: "/follow-up",
-      label: "Log follow-up",
-      description: "Open the follow-up board and record the next touchpoint",
-      section: "Quick actions",
-      type: "follow-up",
-    },
-    {
-      id: "action:households",
-      href: "/households",
-      label: "Open households",
-      description: "Review care journeys, notes, and attachments",
-      section: "Quick actions",
-      type: "household",
-    },
-    {
-      id: "action:member-tools",
-      href: "/member",
-      label: "Preview member tools",
-      description: "See the member-facing request and follow-up experience",
-      section: "Quick actions",
-      type: "member",
-    },
-  ];
-
   const normalizedRole = normalizeInternalRole(user.role);
+  const items = [];
 
   if (["leader", "pastor", "owner"].includes(normalizedRole)) {
-    items.unshift({
-      id: "action:new-request",
-      href: "/requests/new",
-      label: "New request",
-      description: "Capture a fresh care need without leaving the workspace",
-      section: "Quick actions",
-      type: "action",
-    });
+    items.push({ id: "action:members",    href: "/members",    label: "Members",          description: "View and manage the member directory",           section: "Quick actions", type: "member"    });
+    items.push({ id: "action:attendance", href: "/attendance", label: "Attendance",       description: "Record and view service attendance",             section: "Quick actions", type: "action"    });
+    items.push({ id: "action:finance",    href: "/finance",    label: "Finance",          description: "View ledger, pledges, and fund activity",        section: "Quick actions", type: "follow-up" });
+    items.push({ id: "action:follow-up",  href: "/follow-up",  label: "Follow-up board",  description: "Log follow-ups and care touchpoints",            section: "Quick actions", type: "follow-up" });
+    items.push({ id: "action:new-member", href: "/new-members", label: "New members",     description: "Manage the new member welcome journey",          section: "Quick actions", type: "member"    });
+    items.push({ id: "action:analytics",  href: "/analytics",  label: "Analytics",        description: "View ministry insights and trends",              section: "Quick actions", type: "action"    });
+  } else {
+    items.push({ id: "action:follow-up",  href: "/follow-up",  label: "Log follow-up",    description: "Record a pastoral care touchpoint",              section: "Quick actions", type: "follow-up" });
+    items.push({ id: "action:households", href: "/households",  label: "Households",       description: "Review care journeys and case notes",            section: "Quick actions", type: "household" });
   }
+
+  items.push({ id: "action:member-tools", href: "/member", label: "My profile", description: "View member-facing profile and tools", section: "Quick actions", type: "member" });
 
   return items;
 }
@@ -440,41 +389,38 @@ function buildRouteLabels(sections, quickActions) {
 function buildBottomNav(user, unreadNotificationCount = 0) {
   if (!user) {
     return [
-      { href: "/requests/new", label: "Request", type: "action" },
-      { href: "/requests/status", label: "Track", type: "follow-up" },
-      { href: "/member", label: "Portal", type: "member" },
-      { href: "/login", label: "Sign in", type: "member" },
+      { href: "/requests/new",   label: "Support", type: "action" },
+      { href: "/requests/status", label: "Track",   type: "follow-up" },
+      { href: "/member",         label: "Portal",   type: "member" },
+      { href: "/login",          label: "Sign in",  type: "member" },
     ];
   }
 
   if (user.role === "member") {
     return [
-      { href: "/", label: "Home", type: "action" },
-      { href: "/requests/new", label: "Request care", type: "action" },
-      { href: "/member", label: "My profile", type: "member" },
+      { href: "/",              label: "Home",    type: "action" },
+      { href: "/requests/new",  label: "Support", type: "action" },
+      { href: "/member",        label: "Profile", type: "member" },
       { href: "/volunteer/apply", label: "Serve", type: "follow-up" },
     ];
   }
 
   if (user.role === "volunteer") {
     return [
-      { href: "/volunteer", label: "Tasks", type: "follow-up" },
-      {
-        href: "/notifications",
-        label: unreadNotificationCount > 0 ? `Inbox ${unreadNotificationCount}` : "Inbox",
-        type: "inbox",
-      },
-      { href: "/member", label: "Profile", type: "member" },
-      { href: "/security", label: "Security", type: "action" },
+      { href: "/volunteer",     label: "Tasks",   type: "follow-up" },
+      { href: "/notifications", label: unreadNotificationCount > 0 ? `Inbox ${unreadNotificationCount}` : "Inbox", type: "inbox" },
+      { href: "/member",        label: "Profile", type: "member" },
+      { href: "/security",      label: "Security", type: "action" },
     ];
   }
 
+  // Staff / leader / pastor / owner — ecosystem bottom nav
   return [
-    { href: "/", label: "Home", type: "action" },
-    { href: "/follow-up", label: "Follow-up", type: "follow-up" },
-    { href: "/households", label: "Households", type: "household" },
-    { href: "/inbox", label: "Inbox", type: "inbox" },
-    { href: "/member", label: "Member", type: "member" },
+    { href: "/",          label: "Home",      type: "action" },
+    { href: "/members",   label: "People",    type: "member" },
+    { href: "/attendance", label: "Worship",  type: "action" },
+    { href: "/finance",   label: "Finance",   type: "follow-up" },
+    { href: "/inbox",     label: "Inbox",     type: "inbox" },
   ];
 }
 
@@ -487,170 +433,127 @@ function titleCase(value = "") {
 }
 
 function buildNavSections(user, unreadNotificationCount = 0, copy) {
-  const publicItems = [
-    {
-      href: "/requests/new",
-      label: copy.layout.nav.requestCare,
-    },
-    {
-      href: "/requests/status",
-      label: copy.layout.nav.trackRequest,
-    },
-    {
-      href: "/member",
-      label: copy.layout.nav.memberPortal,
-    },
-  ];
-
+  // ── Unauthenticated public nav ──────────────────────────────────────────────
   if (!user) {
-    publicItems.push({
-      href: "/login",
-      label: copy.layout.nav.signIn,
-    });
-
     return [
       {
-        label: copy.layout.navGroups.public,
-        items: publicItems,
+        label: "Connect",
+        items: [
+          { href: "/requests/new",   label: "Request support" },
+          { href: "/requests/status", label: "Track my request" },
+          { href: "/member",         label: "Member portal" },
+          { href: "/register",       label: "Create account" },
+          { href: "/login",          label: copy.layout.nav.signIn },
+        ],
       },
     ];
   }
 
-  const operationItems = [];
-  const oversightItems = [];
   const normalizedRole = normalizeInternalRole(user.role);
 
-  // -- Member-specific nav --
+  // ── Member ─────────────────────────────────────────────────────────────────
   if (normalizedRole === "member") {
-    operationItems.push({ href: "/", label: "My home" });
-    operationItems.push({ href: "/requests/new", label: copy.layout.nav.requestCare });
-    operationItems.push({ href: "/member", label: "My profile & requests" });
-    operationItems.push({ href: "/volunteer/apply", label: "Serve as a volunteer" });
-    operationItems.push({
-      href: "/notifications",
-      label: unreadNotificationCount > 0
-        ? `Notifications (${unreadNotificationCount})`
-        : "Notifications",
-    });
+    return [
+      {
+        label: "My Hub",
+        items: [
+          { href: "/",              label: "Home" },
+          { href: "/member",        label: "My profile" },
+          { href: "/requests/new",  label: "Request support" },
+          { href: "/notifications", label: unreadNotificationCount > 0 ? `Notifications (${unreadNotificationCount})` : "Notifications" },
+        ],
+      },
+      {
+        label: "Get involved",
+        items: [
+          { href: "/volunteer/apply", label: "Serve as a volunteer" },
+          { href: "/requests/status", label: "Track my request" },
+        ],
+      },
+    ];
   }
 
+  // ── Volunteer ──────────────────────────────────────────────────────────────
+  if (normalizedRole === "volunteer") {
+    return [
+      {
+        label: "My work",
+        items: [
+          { href: "/volunteer", label: "My tasks" },
+          { href: "/notifications", label: unreadNotificationCount > 0 ? `Inbox (${unreadNotificationCount})` : "Inbox" },
+          { href: "/member",    label: "My profile" },
+          { href: "/security",  label: "Security" },
+        ],
+      },
+    ];
+  }
+
+  // ── Leader / Pastor / Owner (ecosystem nav) ────────────────────────────────
+  const sections = [];
+
+  // People
+  sections.push({
+    label: "People",
+    items: [
+      { href: "/members",        label: "Members" },
+      { href: "/groups",         label: "Groups" },
+      { href: "/households",     label: "Households" },
+      { href: "/new-members",    label: "New Members" },
+      { href: "/transfers",      label: "Transfers" },
+      { href: "/admin/users",    label: "Staff & Users" },
+    ],
+  });
+
+  // Ministry
+  sections.push({
+    label: "Ministry",
+    items: [
+      { href: "/discipleship",           label: "Discipleship" },
+      { href: "/leader",                 label: "Care board" },
+      { href: "/follow-up",              label: "Follow-up" },
+      { href: "/volunteer",              label: "Volunteers" },
+      { href: "/volunteer/applications", label: "Volunteer applications" },
+      { href: "/teams",                  label: "Teams" },
+    ],
+  });
+
+  // Worship & Scheduling
+  sections.push({
+    label: "Worship",
+    items: [
+      { href: "/attendance", label: "Attendance" },
+      { href: "/schedule",   label: "Schedule" },
+      { href: "/households", label: "Households" },
+    ],
+  });
+
+  // Finance
   if (["pastor", "owner"].includes(normalizedRole)) {
-    operationItems.push({
-      href: "/",
-      label: copy.layout.nav.dashboard,
-    });
-    operationItems.push({ href: "/follow-up", label: "Follow-up" });
-    operationItems.push({ href: "/inbox", label: "Inbox" });
-    operationItems.push({ href: "/discipleship", label: "Discipleship" });
-  }
-
-  if (["leader", "pastor", "owner"].includes(normalizedRole)) {
-    operationItems.push({
-      href: "/leader",
-      label: copy.layout.nav.leaderView,
-    });
-    operationItems.push({
-      href: "/schedule",
-      label: copy.layout.nav.schedule,
-    });
-    operationItems.push({
-      href: "/households",
-      label: copy.layout.nav.households,
-    });
-  }
-
-  if (["volunteer", "leader", "pastor", "owner"].includes(normalizedRole)) {
-    operationItems.push({
-      href: "/volunteer",
-      label: copy.layout.nav.volunteerView,
-    });
-    operationItems.push({
-      href: "/notifications",
-      label:
-        unreadNotificationCount > 0
-          ? `${copy.layout.nav.notifications} (${unreadNotificationCount})`
-          : copy.layout.nav.notifications,
-    });
-  }
-
-  if (["pastor", "owner"].includes(normalizedRole)) {
-    oversightItems.push({
-      href: "/teams",
-      label: copy.layout.nav.teams,
-    });
-    oversightItems.push({
-      href: "/admin/users",
-      label: copy.layout.nav.people,
-    });
-    oversightItems.push({
-      href: "/members",
-      label: "Members",
-    });
-    oversightItems.push({
-      href: "/groups",
-      label: "Groups",
-    });
-    oversightItems.push({
-      href: "/attendance",
-      label: "Attendance",
-    });
-    oversightItems.push({
-      href: "/finance",
+    sections.push({
       label: "Finance",
-    });
-    oversightItems.push({
-      href: "/analytics",
-      label: "Analytics",
-    });
-    oversightItems.push({
-      href: "/new-members",
-      label: "New Members",
-    });
-    oversightItems.push({
-      href: "/volunteer/applications",
-      label: "Volunteer Applications",
-    });
-    oversightItems.push({
-      href: "/reports",
-      label: copy.layout.nav.reports,
-    });
-    oversightItems.push({
-      href: "/audit",
-      label: copy.layout.nav.audit,
+      items: [
+        { href: "/finance",   label: "Ledger & Funds" },
+        { href: "/analytics", label: "Analytics" },
+        { href: "/reports",   label: "Reports" },
+      ],
     });
   }
 
-  if (["pastor", "owner"].includes(normalizedRole)) {
-    oversightItems.push({
-      href: "/settings",
-      label: copy.layout.nav.settings,
-    });
-  }
-
-  if (user) {
-    oversightItems.push({
-      href: "/security",
-      label: copy.layout.nav.security || "Security",
-    });
-  }
-
-  return [
-    {
-      label: copy.layout.navGroups.public,
-      items: publicItems,
-    },
-    {
-      label: copy.layout.navGroups.operations,
-      items: operationItems,
-    },
-    ...(oversightItems.length > 0
-      ? [
-          {
-            label: copy.layout.navGroups.oversight,
-            items: oversightItems,
-          },
-        ]
-      : []),
+  // Comms & Admin
+  const adminItems = [
+    { href: "/",              label: "Dashboard" },
+    { href: "/inbox",         label: "Inbox" },
+    { href: "/notifications", label: unreadNotificationCount > 0 ? `Notifications (${unreadNotificationCount})` : "Notifications" },
   ];
+  if (["pastor", "owner"].includes(normalizedRole)) {
+    adminItems.push({ href: "/audit",    label: "Audit log" });
+    adminItems.push({ href: "/settings", label: "Settings" });
+    adminItems.push({ href: "/regions",  label: "Regions & Branches" });
+  }
+  adminItems.push({ href: "/security", label: "Security" });
+
+  sections.push({ label: "Admin", items: adminItems });
+
+  return sections;
 }
 

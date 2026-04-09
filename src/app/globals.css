@@ -1,92 +1,92 @@
 @import "tailwindcss";
 
 /* ─────────────────────────────────────────────────────────────
-   CHURCH CARE OS — Design System v2 (Premium Blue/White)
+   FIRSTLOVE ASSEMBLY — Design System v3 (Crimson & Warmth)
    ───────────────────────────────────────────────────────────── */
 
 :root {
   color-scheme: light;
 
   /* ── Surfaces ── */
-  --canvas:  #f4f6fb;          /* Soft blue-grey page background   */
+  --canvas:  #fdf8f4;          /* Warm ivory page background       */
   --paper:   #ffffff;          /* Pure white card/panel surface    */
 
   /* ── Typography ── */
-  --ink:     #111827;          /* Near-black — primary text        */
-  --muted:   #6b7280;          /* Warm grey — secondary text       */
+  --ink:     #1c1917;          /* Warm stone — primary text        */
+  --muted:   #78716c;          /* Warm grey — secondary text       */
 
   /* ── Dividers / Borders ── */
-  --line:    rgba(17, 24, 39, 0.10);
+  --line:    rgba(28, 25, 23, 0.10);
 
-  /* ── Brand / Primary accent (rich navy-blue with warmth) ── */
-  --moss:    #2563eb;          /* Vibrant blue — primary brand     */
+  /* ── Brand / Primary accent — FirstLove Crimson ── */
+  --moss:    #9f1239;          /* Deep crimson — primary brand     */
 
   /* ── Semantic status colours ── */
-  --clay:    #e11d48;          /* Rose-red — crisis / destructive  */
-  --gold:    #d97706;          /* Amber — warning / urgent         */
+  --clay:    #c2410c;          /* Burnt orange — error/destructive */
+  --gold:    #b45309;          /* Amber — warning / urgent         */
 
   /* ── Info ── */
-  --info:       #2563eb;
-  --info-strong:#1d4ed8;
+  --info:       #1d4ed8;
+  --info-strong:#1e40af;
 
   /* ── Risk watch ── */
-  --risk-watch: #64748b;
+  --risk-watch: #57534e;
 
   /* ── Elevation / shadows ── */
-  --shadow:        0 1px 3px rgba(0,0,0,0.06),
-                   0 8px 24px rgba(17,24,39,0.08);
-  --shadow-lg:     0 4px 8px rgba(0,0,0,0.06),
-                   0 20px 48px rgba(17,24,39,0.12);
-  --shadow-xl:     0 8px 16px rgba(0,0,0,0.08),
-                   0 36px 72px rgba(17,24,39,0.16);
+  --shadow:        0 1px 3px rgba(0,0,0,0.05),
+                   0 8px 24px rgba(28,25,23,0.07);
+  --shadow-lg:     0 4px 8px rgba(0,0,0,0.05),
+                   0 20px 48px rgba(28,25,23,0.10);
+  --shadow-xl:     0 8px 16px rgba(0,0,0,0.07),
+                   0 36px 72px rgba(28,25,23,0.14);
 
   /* ── Header chrome ── */
-  --header-bg:     rgba(255,255,255,0.88);
-  --header-shadow: 0 1px 0 rgba(17,24,39,0.08),
-                   0 4px 20px rgba(17,24,39,0.06);
+  --header-bg:     rgba(253,248,244,0.92);
+  --header-shadow: 0 1px 0 rgba(28,25,23,0.08),
+                   0 4px 20px rgba(28,25,23,0.06);
 
   /* ── Brand tile (logo bg) ── */
-  --brand-tile:    #eff6ff;
+  --brand-tile:    #fff0f3;
 
   /* ── Soft tint fills (for active nav, badges, hover) ── */
-  --soft-fill:          rgba(37,99,235,0.07);
-  --soft-fill-strong:   rgba(37,99,235,0.13);
-  --soft-accent-border: rgba(37,99,235,0.22);
+  --soft-fill:          rgba(159,18,57,0.07);
+  --soft-fill-strong:   rgba(159,18,57,0.13);
+  --soft-accent-border: rgba(159,18,57,0.22);
 
   /* ── Pill / floating button bg ── */
-  --header-pill-bg: rgba(244,246,251,0.80);
+  --header-pill-bg: rgba(253,248,244,0.80);
 
   /* ── Hover surfaces ── */
-  --surface-hover:        #eff2f9;
-  --surface-hover-strong: #dde6f9;
+  --surface-hover:        #fdf0f2;
+  --surface-hover-strong: #fde4e9;
 
   /* ── Dropdown / menu shadow ── */
   --menu-shadow: 0 2px 8px rgba(0,0,0,0.06),
-                 0 16px 48px rgba(17,24,39,0.14);
+                 0 16px 48px rgba(28,25,23,0.14);
 
   /* ── Ambient hero glow ── */
   --hero-glow: radial-gradient(
     ellipse at center,
-    rgba(37,99,235,0.14),
-    rgba(29,78,216,0.07) 48%,
+    rgba(159,18,57,0.12),
+    rgba(159,18,57,0.06) 48%,
     transparent 72%
   );
 
   /* ── Page backgrounds ── */
   --body-background:
-    radial-gradient(ellipse at 60% -10%, rgba(37,99,235,0.10), transparent 42%),
-    radial-gradient(ellipse at 0% 40%,   rgba(99,102,241,0.06), transparent 36%),
-    linear-gradient(180deg, #ffffff 0%, #f4f6fb 48%, #edf0f8 100%);
+    radial-gradient(ellipse at 65% -8%, rgba(159,18,57,0.08), transparent 42%),
+    radial-gradient(ellipse at 0% 45%,  rgba(180,83,9,0.05),  transparent 36%),
+    linear-gradient(180deg, #ffffff 0%, #fdf8f4 48%, #faf3ef 100%);
 
   --clarity-background:
-    radial-gradient(ellipse at 60% -10%, rgba(37,99,235,0.08), transparent 38%),
-    linear-gradient(180deg, #ffffff 0%, #f4f6fb 55%, #edf0f8 100%);
+    radial-gradient(ellipse at 65% -8%, rgba(159,18,57,0.06), transparent 38%),
+    linear-gradient(180deg, #ffffff 0%, #fdf8f4 55%, #faf3ef 100%);
 
   /* ── Case / priority badge tints ── */
-  --case-crisis-bg:  rgba(225,29,72,0.08);
-  --case-urgent-bg:  rgba(217,119,6,0.10);
-  --case-new-bg:     rgba(37,99,235,0.08);
-  --case-routine-bg: rgba(17,24,39,0.05);
+  --case-crisis-bg:  rgba(194,65,12,0.08);
+  --case-urgent-bg:  rgba(180,83,9,0.10);
+  --case-new-bg:     rgba(159,18,57,0.08);
+  --case-routine-bg: rgba(28,25,23,0.04);
 
   /* ── Semantic aliases ── */
   --background: var(--canvas);
@@ -116,68 +116,68 @@
 html[data-theme="dark"] {
   color-scheme: dark;
 
-  --canvas:  #0f172a;          /* Deep blue-grey — page bg         */
-  --paper:   #1e293b;          /* Slate dark — card surface        */
+  --canvas:  #180a0a;          /* Deep warm dark — page bg         */
+  --paper:   #260e0e;          /* Dark rose — card surface         */
 
-  --ink:     #f1f5f9;          /* Slate white — primary text       */
-  --muted:   #94a3b8;          /* Slate muted                      */
-  --line:    rgba(241,245,249,0.08);
+  --ink:     #fef2f2;          /* Very light warm — primary text   */
+  --muted:   #a8a29e;          /* Stone muted                      */
+  --line:    rgba(254,242,242,0.08);
 
-  --moss:    #60a5fa;          /* Sky blue — primary in dark mode  */
+  --moss:    #fb7185;          /* Rose-400 — primary in dark mode  */
 
-  --clay:    #fb7185;          /* Rose — crisis / error            */
-  --gold:    #fbbf24;          /* Amber — warning                  */
+  --clay:    #fb923c;          /* Orange-400 — error in dark       */
+  --gold:    #fbbf24;          /* Amber-400 — warning              */
 
   --info:       #93c5fd;
   --info-strong:#bfdbfe;
 
-  --risk-watch: #94a3b8;
+  --risk-watch: #a8a29e;
 
-  --shadow:        0 2px 8px rgba(0,0,0,0.32),
-                   0 12px 32px rgba(0,0,0,0.28);
-  --shadow-lg:     0 6px 16px rgba(0,0,0,0.40),
-                   0 24px 56px rgba(0,0,0,0.36);
-  --shadow-xl:     0 16px 40px rgba(0,0,0,0.48),
-                   0 40px 80px rgba(0,0,0,0.42);
+  --shadow:        0 2px 8px rgba(0,0,0,0.40),
+                   0 12px 32px rgba(0,0,0,0.32);
+  --shadow-lg:     0 6px 16px rgba(0,0,0,0.48),
+                   0 24px 56px rgba(0,0,0,0.40);
+  --shadow-xl:     0 16px 40px rgba(0,0,0,0.56),
+                   0 40px 80px rgba(0,0,0,0.48);
 
-  --header-bg:     rgba(15,23,42,0.92);
-  --header-shadow: 0 1px 0 rgba(241,245,249,0.06),
-                   0 4px 20px rgba(0,0,0,0.28);
+  --header-bg:     rgba(24,10,10,0.94);
+  --header-shadow: 0 1px 0 rgba(254,242,242,0.06),
+                   0 4px 20px rgba(0,0,0,0.32);
 
-  --brand-tile:    rgba(96,165,250,0.14);
+  --brand-tile:    rgba(251,113,133,0.14);
 
-  --soft-fill:          rgba(96,165,250,0.10);
-  --soft-fill-strong:   rgba(96,165,250,0.18);
-  --soft-accent-border: rgba(96,165,250,0.24);
+  --soft-fill:          rgba(251,113,133,0.10);
+  --soft-fill-strong:   rgba(251,113,133,0.18);
+  --soft-accent-border: rgba(251,113,133,0.24);
 
-  --header-pill-bg: rgba(241,245,249,0.05);
+  --header-pill-bg: rgba(254,242,242,0.05);
 
-  --surface-hover:        rgba(96,165,250,0.07);
-  --surface-hover-strong: rgba(96,165,250,0.14);
+  --surface-hover:        rgba(251,113,133,0.07);
+  --surface-hover-strong: rgba(251,113,133,0.14);
 
-  --menu-shadow: 0 4px 12px rgba(0,0,0,0.30),
-                 0 20px 60px rgba(0,0,0,0.48);
+  --menu-shadow: 0 4px 12px rgba(0,0,0,0.36),
+                 0 20px 60px rgba(0,0,0,0.52);
 
   --hero-glow: radial-gradient(
     ellipse at center,
-    rgba(96,165,250,0.12),
-    rgba(59,130,246,0.06) 48%,
+    rgba(251,113,133,0.12),
+    rgba(251,113,133,0.06) 48%,
     transparent 72%
   );
 
   --body-background:
-    radial-gradient(ellipse at 60% -10%, rgba(96,165,250,0.10), transparent 40%),
-    radial-gradient(ellipse at 0%  40%,  rgba(99,102,241,0.06), transparent 32%),
-    linear-gradient(180deg, #1e293b 0%, #0f172a 44%, #0a1122 100%);
+    radial-gradient(ellipse at 65% -8%, rgba(251,113,133,0.10), transparent 40%),
+    radial-gradient(ellipse at 0%  45%, rgba(251,191,36,0.05),  transparent 32%),
+    linear-gradient(180deg, #260e0e 0%, #180a0a 44%, #100505 100%);
 
   --clarity-background:
-    radial-gradient(ellipse at 60% -10%, rgba(96,165,250,0.08), transparent 36%),
-    linear-gradient(180deg, #1e293b 0%, #0f172a 50%, #0a1122 100%);
+    radial-gradient(ellipse at 65% -8%, rgba(251,113,133,0.08), transparent 36%),
+    linear-gradient(180deg, #260e0e 0%, #180a0a 50%, #100505 100%);
 
-  --case-crisis-bg:  rgba(251,113,133,0.12);
+  --case-crisis-bg:  rgba(251,146,60,0.12);
   --case-urgent-bg:  rgba(251,191,36,0.12);
-  --case-new-bg:     rgba(147,197,253,0.10);
-  --case-routine-bg: rgba(241,245,249,0.06);
+  --case-new-bg:     rgba(251,113,133,0.10);
+  --case-routine-bg: rgba(254,242,242,0.05);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -229,11 +229,11 @@ a {
 
 /* ── Selection ── */
 ::selection {
-  background: rgba(29,78,216,0.18);
+  background: rgba(159,18,57,0.16);
   color: var(--ink);
 }
 html[data-theme="dark"] ::selection {
-  background: rgba(96,165,250,0.26);
+  background: rgba(251,113,133,0.26);
   color: var(--ink);
 }
 
@@ -310,10 +310,10 @@ html[data-theme="dark"] .surface-card:hover {
 /* ── Elevated variant ── */
 .surface-card-elevated {
   box-shadow: var(--shadow-lg);
-  border-color: rgba(29,78,216,0.12);
+  border-color: rgba(159,18,57,0.12);
 }
 html[data-theme="dark"] .surface-card-elevated {
-  border-color: rgba(96,165,250,0.14);
+  border-color: rgba(251,113,133,0.14);
 }
 
 /* ── Glass variant (for header, floating panels) ── */
@@ -336,7 +336,7 @@ html[data-theme="dark"] .surface-card-elevated {
   padding: 0 1.25rem;
   border-radius: 9999px;
   border: 1px solid transparent;
-  background: var(--moss);
+  background: linear-gradient(135deg, #9f1239 0%, #be123c 100%);
   color: #fff;
   font-size: 0.875rem;
   font-weight: 600;
@@ -346,14 +346,13 @@ html[data-theme="dark"] .surface-card-elevated {
     opacity      var(--transition-fast),
     box-shadow   var(--transition-base),
     transform    var(--transition-fast);
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
-  box-shadow: 0 1px 2px rgba(37,99,235,0.14),
-              0 4px 14px rgba(37,99,235,0.24);
+  box-shadow: 0 1px 2px rgba(159,18,57,0.14),
+              0 4px 14px rgba(159,18,57,0.24);
 }
 .btn-primary:hover {
   opacity: 0.92;
-  box-shadow: 0 2px 6px rgba(37,99,235,0.20),
-              0 8px 24px rgba(37,99,235,0.32);
+  box-shadow: 0 2px 6px rgba(159,18,57,0.20),
+              0 8px 24px rgba(159,18,57,0.32);
   transform: translateY(-1px);
 }
 .btn-primary:active {
@@ -434,7 +433,7 @@ html[data-theme="dark"] .surface-card-elevated {
   box-shadow: 0 0 0 3px var(--soft-fill);
 }
 .input-field:hover:not(:focus) {
-  border-color: rgba(29,78,216,0.28);
+  border-color: rgba(159,18,57,0.28);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -454,17 +453,17 @@ html[data-theme="dark"] .surface-card-elevated {
 .badge-crisis {
   background: var(--case-crisis-bg);
   color: var(--clay);
-  border: 1px solid rgba(220,38,38,0.18);
+  border: 1px solid rgba(194,65,12,0.18);
 }
 .badge-urgent {
   background: var(--case-urgent-bg);
   color: var(--gold);
-  border: 1px solid rgba(217,119,6,0.20);
+  border: 1px solid rgba(180,83,9,0.20);
 }
 .badge-new {
   background: var(--case-new-bg);
-  color: var(--info);
-  border: 1px solid rgba(37,99,235,0.18);
+  color: var(--moss);
+  border: 1px solid rgba(159,18,57,0.18);
 }
 .badge-routine {
   background: var(--case-routine-bg);
@@ -510,7 +509,7 @@ html[data-theme="dark"] .surface-card-elevated {
   }
 }
 .stat-card-accent {
-  background: linear-gradient(135deg, var(--moss), #1e40af);
+  background: linear-gradient(135deg, #9f1239 0%, #7f1d1d 100%);
   border-color: transparent;
   color: #fff;
 }
@@ -580,7 +579,7 @@ html[data-theme="dark"] .surface-card-elevated {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 9999px;
-  background: var(--clay);
+  background: var(--moss);
   flex-shrink: 0;
 }
 
@@ -753,7 +752,7 @@ html[data-theme="dark"] .surface-card-elevated {
   display: grid;
   place-items: start center;
   padding: 5rem 1rem 1rem;
-  background: rgba(15, 23, 42, 0.36);
+  background: rgba(28, 9, 9, 0.40);
   backdrop-filter: blur(14px);
 }
 
