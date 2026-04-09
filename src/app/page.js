@@ -47,13 +47,13 @@ export default async function HomePage() {
 
   if (["pastor", "leader"].includes(role)) {
     const { getFollowUpBoard } = await import("@/lib/care-store");
-    const board = getFollowUpBoard(user.organizationId, user.branchId);
+    const board = await getFollowUpBoard(user.organizationId, user.branchId);
     return <PastorHome user={user} board={board} />;
   }
 
   if (role === "owner") {
     const { getFollowUpBoard } = await import("@/lib/care-store");
-    const board = getFollowUpBoard(user.organizationId, user.branchId);
+    const board = await getFollowUpBoard(user.organizationId, user.branchId);
     return <PastorHome user={user} board={board} />;
   }
 
@@ -211,10 +211,17 @@ function VolunteerTaskRow({ task }) {
 }
 
 function PastorHome({ user, board }) {
-  const urgentItems = [...board.overdue, ...board.dueToday].slice(0, 8);
-  const weekItems = board.dueThisWeek.slice(0, 6);
-  const noContactItems = board.noContact.slice(0, 5);
-  const urgentCount = board.overdue.length + board.dueToday.length;
+  const safeBoard = board || {
+    overdue: [],
+    dueToday: [],
+    dueThisWeek: [],
+    noContact: [],
+    later: [],
+  };
+  const urgentItems = [...safeBoard.overdue, ...safeBoard.dueToday].slice(0, 8);
+  const weekItems = safeBoard.dueThisWeek.slice(0, 6);
+  const noContactItems = safeBoard.noContact.slice(0, 5);
+  const urgentCount = safeBoard.overdue.length + safeBoard.dueToday.length;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-12">
