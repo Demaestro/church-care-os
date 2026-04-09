@@ -19,11 +19,6 @@ export default async function SecurityPage({ searchParams }) {
   const mfaRequired = params?.mfa_required === "1";
   const user = await requireCurrentUser([
     "owner",
-    "overseer",
-    "general_overseer",
-    "hq_care_admin",
-    "regional_overseer",
-    "branch_admin",
     "pastor",
     "leader",
     "volunteer",

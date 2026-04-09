@@ -17,7 +17,7 @@ export const metadata = {
 };
 
 export default async function RegionsPage({ searchParams }) {
-  const user = await requireCurrentUser(["overseer", "owner"]);
+  const user = await requireCurrentUser(["pastor", "owner"]);
   const preferredBranchId = (await cookies()).get(WORKSPACE_BRANCH_COOKIE)?.value || "";
   const workspace = getWorkspaceContext(user, preferredBranchId);
   const params = await searchParams;
@@ -79,7 +79,7 @@ export default async function RegionsPage({ searchParams }) {
           <SectionHeading
             eyebrow="Add a region"
             title="Create a regional oversight lane"
-            body="Regional groupings help the General Overseer or HQ care office compare multiple branches without giving branch pastors visibility into one another’s cases."
+            body="Regional groupings help larger churches organise campuses without overloading the main care view."
           />
 
           <form action={createRegion} className="mt-6 space-y-4">

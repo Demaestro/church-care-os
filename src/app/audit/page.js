@@ -15,7 +15,7 @@ export const metadata = {
 export default async function AuditPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
-  const user = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const user = await requireCurrentUser(["pastor", "owner"]);
   const cookieStore = await cookies();
   const preferredBranchId = cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || "";
   const workspace = getWorkspaceContext(user, preferredBranchId);
@@ -90,10 +90,6 @@ export default async function AuditPage({ searchParams }) {
               options={[
                 { value: "all", label: copy.common.allRoles },
                 { value: "owner", label: translateRoleLabel("owner", preferences.language) },
-                {
-                  value: "overseer",
-                  label: translateRoleLabel("overseer", preferences.language),
-                },
                 { value: "pastor", label: translateRoleLabel("pastor", preferences.language) },
                 { value: "leader", label: translateRoleLabel("leader", preferences.language) },
                 {

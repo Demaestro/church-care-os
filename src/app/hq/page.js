@@ -12,17 +12,11 @@ import {
 import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 export const metadata = {
-  title: "HQ Command Centre",
-  description: "Organisation-wide care health dashboard for headquarters oversight.",
+  title: "Care Command Centre",
+  description: "Church-wide care health dashboard for senior leadership.",
 };
 
-const HQ_ROLES = [
-  "general_overseer",
-  "hq_care_admin",
-  "regional_overseer",
-  "overseer",
-  "owner",
-];
+const HQ_ROLES = ["owner", "pastor"];
 
 export default async function HQPage() {
   const [user, cookieStore] = await Promise.all([

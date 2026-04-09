@@ -36,13 +36,8 @@ export default async function FollowUpBoardPage({ searchParams }) {
     getAppPreferences(),
     requireCurrentUser([
       "pastor",
-      "overseer",
       "owner",
-      "branch_admin",
       "leader",
-      "general_overseer",
-      "hq_care_admin",
-      "regional_overseer",
     ]),
     cookies(),
   ]);

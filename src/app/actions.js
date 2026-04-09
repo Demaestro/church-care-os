@@ -1065,7 +1065,6 @@ export async function quickDemoLogin(formData) {
 export async function logout() {
   const user = await requireCurrentUser([
     "owner",
-    "overseer",
     "pastor",
     "leader",
     "volunteer",
@@ -1089,7 +1088,6 @@ export async function logout() {
 export async function startMfaEnrollment() {
   const user = await requireCurrentUser([
     "owner",
-    "overseer",
     "pastor",
     "leader",
     "volunteer",
@@ -1121,7 +1119,6 @@ export async function completeMfaEnrollment(prevState, formData) {
   void prevState;
   const user = await requireCurrentUser([
     "owner",
-    "overseer",
     "pastor",
     "leader",
     "volunteer",
@@ -1164,7 +1161,6 @@ export async function completeMfaEnrollment(prevState, formData) {
 export async function disableMfaEnrollment() {
   const user = await requireCurrentUser([
     "owner",
-    "overseer",
     "pastor",
     "leader",
     "volunteer",
@@ -2274,7 +2270,7 @@ export async function togglePrivacyModePreference(formData) {
 }
 
 export async function switchWorkspaceBranch(formData) {
-  const user = await requireCurrentUser(["leader", "pastor", "overseer", "owner"]);
+  const user = await requireCurrentUser(["leader", "pastor", "owner"]);
   const cookieStore = await cookies();
   const requestedBranchId = getString(formData, "branchId");
   const redirectTo = sanitizeInternalRedirect(
@@ -2501,7 +2497,7 @@ export async function registerChurchWorkspace(formData) {
       email,
       phone: phone || null,
       role: "pastor",
-      title: "Lead pastor",
+      title: "Pastor",
       password,
       active: true,
       organizationId,
@@ -2546,7 +2542,7 @@ export async function registerChurchWorkspace(formData) {
 }
 
 export async function createUserAccount(formData) {
-  const actor = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const actor = await requireCurrentUser(["pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
   const name = getString(formData, "name");
   const email = normalizeEmail(getString(formData, "email"));
@@ -2678,7 +2674,7 @@ export async function createUserAccount(formData) {
 }
 
 export async function updateUserAccess(userId, formData) {
-  const actor = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const actor = await requireCurrentUser(["pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
   const targetUser = findUserById(userId);
   const redirectPath = getScopedPath("/admin/users", scope.preferredBranchId);
@@ -2760,7 +2756,7 @@ export async function updateUserAccess(userId, formData) {
 }
 
 export async function resetUserPassword(userId, formData) {
-  const actor = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const actor = await requireCurrentUser(["pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
   const targetUser = findUserById(userId);
   const redirectPath = getScopedPath("/admin/users", scope.preferredBranchId);
@@ -2874,7 +2870,7 @@ export async function resetUserPassword(userId, formData) {
 }
 
 export async function sendAccountInviteLink(userId) {
-  const actor = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const actor = await requireCurrentUser(["pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
   const targetUser = findUserById(userId);
   const redirectPath = getScopedPath("/admin/users", scope.preferredBranchId);
@@ -2970,7 +2966,7 @@ export async function sendAccountInviteLink(userId) {
 }
 
 export async function revokeUserSessions(userId) {
-  const actor = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const actor = await requireCurrentUser(["pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
   const targetUser = findUserById(userId);
   const redirectPath = getScopedPath("/admin/users", scope.preferredBranchId);
@@ -3010,7 +3006,7 @@ export async function revokeUserSessions(userId) {
 }
 
 export async function lockUserAccount(userId) {
-  const actor = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const actor = await requireCurrentUser(["pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
   const targetUser = findUserById(userId);
   const redirectPath = getScopedPath("/admin/users", scope.preferredBranchId);
@@ -3055,7 +3051,7 @@ export async function lockUserAccount(userId) {
 }
 
 export async function unlockUserAccount(userId) {
-  const actor = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const actor = await requireCurrentUser(["pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
   const targetUser = findUserById(userId);
   const redirectPath = getScopedPath("/admin/users", scope.preferredBranchId);
@@ -3095,7 +3091,7 @@ export async function unlockUserAccount(userId) {
 }
 
 export async function markNotificationRead(notificationId, href = "") {
-  const user = await requireCurrentUser(["volunteer", "leader", "pastor", "overseer", "owner"]);
+  const user = await requireCurrentUser(["volunteer", "leader", "pastor", "owner"]);
 
   markNotificationReadEntry(notificationId, user.id);
   revalidateCarePaths();
@@ -3104,7 +3100,7 @@ export async function markNotificationRead(notificationId, href = "") {
 }
 
 export async function markAllNotificationsRead() {
-  const user = await requireCurrentUser(["volunteer", "leader", "pastor", "overseer", "owner"]);
+  const user = await requireCurrentUser(["volunteer", "leader", "pastor", "owner"]);
 
   markAllNotificationsReadEntry(user.id);
   revalidateCarePaths();
@@ -3113,7 +3109,7 @@ export async function markAllNotificationsRead() {
 }
 
 export async function resolveRecoveryRequest(requestId, formData) {
-  const actor = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const actor = await requireCurrentUser(["pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
   const redirectPath = getScopedPath("/admin/users", scope.preferredBranchId);
   const status = getString(formData, "status") || "resolved";
@@ -3158,7 +3154,7 @@ export async function resolveRecoveryRequest(requestId, formData) {
 }
 
 export async function createMinistryTeam(formData) {
-  const actor = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const actor = await requireCurrentUser(["pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
   const name = getString(formData, "name");
   const lane = getString(formData, "lane");
@@ -3215,7 +3211,7 @@ export async function createMinistryTeam(formData) {
 }
 
 export async function updateMinistryTeam(teamId, formData) {
-  const actor = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const actor = await requireCurrentUser(["pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
   const name = getString(formData, "name");
   const lane = getString(formData, "lane");
@@ -3283,7 +3279,7 @@ export async function updateMinistryTeam(teamId, formData) {
 }
 
 export async function createBranch(formData) {
-  const actor = await requireCurrentUser(["overseer", "owner"]);
+  const actor = await requireCurrentUser(["owner"]);
   const scope = await getWorkspaceSelection(actor);
   const name = getString(formData, "name");
   const code = getString(formData, "code");
@@ -3353,7 +3349,7 @@ export async function createBranch(formData) {
 }
 
 export async function updateBranch(branchId, formData) {
-  const actor = await requireCurrentUser(["overseer", "owner"]);
+  const actor = await requireCurrentUser(["owner"]);
   const scope = await getWorkspaceSelection(actor);
   const name = getString(formData, "name");
   const code = getString(formData, "code");
@@ -3842,7 +3838,7 @@ export async function sendTestMessage(formData) {
 }
 
 export async function createRegion(formData) {
-  const actor = await requireCurrentUser(["overseer", "owner"]);
+  const actor = await requireCurrentUser(["owner"]);
   const scope = await getWorkspaceSelection(actor);
   const name = getString(formData, "name");
   const code = getString(formData, "code");
@@ -3894,7 +3890,7 @@ export async function createRegion(formData) {
 }
 
 export async function updateRegion(regionId, formData) {
-  const actor = await requireCurrentUser(["overseer", "owner"]);
+  const actor = await requireCurrentUser(["owner"]);
   const scope = await getWorkspaceSelection(actor);
   const name = getString(formData, "name");
   const code = getString(formData, "code");
@@ -3942,7 +3938,7 @@ export async function updateRegion(regionId, formData) {
 }
 
 export async function saveBranchSettings(branchId, formData) {
-  const actor = await requireCurrentUser(["overseer", "owner"]);
+  const actor = await requireCurrentUser(["owner"]);
   const scope = await getWorkspaceSelection(actor);
   const supportEmail = normalizeEmail(getString(formData, "supportEmail"));
   const emailFromAddress = normalizeEmail(getString(formData, "emailFromAddress"));
@@ -4014,7 +4010,7 @@ export async function saveBranchSettings(branchId, formData) {
 }
 
 export async function requestMemberTransfer(householdSlug, formData) {
-  const actor = await requireCurrentUser(["leader", "pastor", "overseer", "owner"]);
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
   const toBranchId = getString(formData, "toBranchId");
   const reason = getString(formData, "reason");
@@ -4057,7 +4053,7 @@ export async function requestMemberTransfer(householdSlug, formData) {
 }
 
 export async function completeMemberTransfer(transferId, householdSlug) {
-  const actor = await requireCurrentUser(["overseer", "owner"]);
+  const actor = await requireCurrentUser(["owner"]);
   const scope = await getWorkspaceSelection(actor);
   const redirectPath = getScopedPath("/transfers", scope.preferredBranchId);
 
@@ -4083,7 +4079,7 @@ export async function completeMemberTransfer(transferId, householdSlug) {
 }
 
 export async function uploadHouseholdAttachment(householdSlug, formData) {
-  const actor = await requireCurrentUser(["leader", "pastor", "overseer", "owner"]);
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
   const redirectPath = getScopedPath(`/households/${householdSlug}`, scope.preferredBranchId);
   const file = formData.get("file");
@@ -4125,7 +4121,7 @@ export async function uploadHouseholdAttachment(householdSlug, formData) {
 // -- New Member Journey actions ------------------------------------------------
 
 export async function registerNewMember(prevState, formData) {
-  const user = await requireCurrentUser(["pastor","overseer","owner","branch_admin","leader","volunteer","general_overseer"]);
+  const user = await requireCurrentUser(["pastor", "owner", "leader", "volunteer"]);
   const organizationId = getString(formData, "organizationId") || user.organizationId;
   const branchId = getString(formData, "branchId") || user.branchId;
   const memberName  = getString(formData, "memberName");
@@ -4149,7 +4145,7 @@ export async function registerNewMember(prevState, formData) {
 }
 
 export async function logContact(formData) {
-  const user = await requireCurrentUser(["pastor","overseer","owner","branch_admin","leader","volunteer","general_overseer","regional_overseer"]);
+  const user = await requireCurrentUser(["pastor", "owner", "leader", "volunteer"]);
   const journeyId        = getString(formData, "journeyId");
   const contactMethod    = getString(formData, "contactMethod") || "call";
   const outcome          = getString(formData, "outcome") || "reached";
@@ -4164,7 +4160,7 @@ export async function logContact(formData) {
 }
 
 export async function completeNewMemberJourney(formData) {
-  const user = await requireCurrentUser(["pastor","overseer","owner","branch_admin","leader","general_overseer"]);
+  const user = await requireCurrentUser(["pastor", "owner", "leader"]);
   const journeyId = getString(formData, "journeyId");
   if (!journeyId) return;
   completeJourney(journeyId);
@@ -4173,7 +4169,7 @@ export async function completeNewMemberJourney(formData) {
 }
 
 export async function dropNewMemberJourney(formData) {
-  const user = await requireCurrentUser(["pastor","overseer","owner","branch_admin","leader","general_overseer"]);
+  const user = await requireCurrentUser(["pastor", "owner", "leader"]);
   const journeyId = getString(formData, "journeyId");
   if (!journeyId) return;
   dropJourney(journeyId, `Dropped by ${user.name}`);
@@ -4182,7 +4178,7 @@ export async function dropNewMemberJourney(formData) {
 }
 
 export async function saveServiceSchedule(formData) {
-  const user = await requireCurrentUser(["pastor","overseer","owner","branch_admin","general_overseer"]);
+  const user = await requireCurrentUser(["pastor", "owner"]);
   const organizationId = getString(formData, "organizationId") || user.organizationId;
   const branchId       = getString(formData, "branchId") || user.branchId;
   upsertServiceSchedule({
@@ -4304,8 +4300,11 @@ export async function selfRegister(formData) {
 export async function applyForVolunteer(prevState, formData) {
   void prevState;
   const user = await requireCurrentUser([
-    "member", "volunteer", "leader", "pastor", "owner",
-    "general_overseer", "regional_overseer", "branch_admin",
+    "member",
+    "volunteer",
+    "leader",
+    "pastor",
+    "owner",
   ]);
 
   const areas = formData.getAll("areas").map(String).filter(Boolean);

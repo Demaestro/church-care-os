@@ -18,7 +18,7 @@ export const metadata = {
 export default async function VolunteerPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
-  const user = await requireCurrentUser(["volunteer", "leader", "pastor", "overseer", "owner"]);
+  const user = await requireCurrentUser(["volunteer", "leader", "pastor", "owner"]);
   const preferredBranchId = (await cookies()).get(WORKSPACE_BRANCH_COOKIE)?.value || "";
   const workspace = getWorkspaceContext(user, preferredBranchId);
   const activeBranchId = workspace.activeBranch?.id || "";

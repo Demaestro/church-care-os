@@ -80,8 +80,6 @@ export function getRoleLabel(role) {
   switch (normalizeInternalRole(role)) {
     case "owner":
       return "Church admin";
-    case "overseer":
-      return "Church admin";
     case "pastor":
       return "Pastor";
     case "leader":

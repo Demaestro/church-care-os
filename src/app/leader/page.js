@@ -30,7 +30,7 @@ export default async function LeaderPage() {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const pageCopy = copy.leader;
-  const user = await requireCurrentUser(["leader", "pastor", "overseer", "owner"]);
+  const user = await requireCurrentUser(["leader", "pastor", "owner"]);
   const preferredBranchId = (await cookies()).get(WORKSPACE_BRANCH_COOKIE)?.value || "";
   const workspace = getWorkspaceContext(user, preferredBranchId);
   const activeBranchId = workspace.activeBranch?.id || "";
@@ -383,6 +383,34 @@ export default async function LeaderPage() {
         </PanelCard>
 
         <div className="space-y-6">
+          <PanelCard title={pageCopy.panels.escalations}>
+            {escalations.length === 0 ? (
+              <p className="text-sm leading-7 text-muted">{pageCopy.noEscalations}</p>
+            ) : (
+              <div className="space-y-4">
+                {escalations.map((item) => (
+                  <article
+                    key={item.id}
+                    className="rounded-[1.35rem] border border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)] p-4"
+                  >
+                    <h3 className="text-xl text-foreground [font-family:var(--font-display)]">
+                      {item.householdName}
+                    </h3>
+                    <p className="mt-2 text-sm leading-7 text-muted">{item.reason}</p>
+                    <div className="mt-3 rounded-[1rem] bg-paper p-3">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted">
+                        {copy.common.labels.nextStep}
+                      </p>
+                      <p className="mt-2 text-sm leading-7 text-foreground">
+                        {item.nextStep}
+                      </p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </PanelCard>
+
           <PanelCard title={pageCopy.panels.volunteerCapacity}>
             <div className="space-y-4">
               {volunteers.map((volunteer) => (
@@ -431,54 +459,23 @@ export default async function LeaderPage() {
                 </li>
               ))}
             </ul>
+            <div className="mt-5 rounded-[1.5rem] border border-line bg-canvas p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-muted">
+                Routing sequence
+              </p>
+              <ol className="mt-3 space-y-3 text-sm leading-7 text-foreground">
+                {pageCopy.sequenceSteps.map((step, index) => (
+                  <li key={step}>
+                    <span className="mr-2 text-xs uppercase tracking-[0.18em] text-muted">
+                      Step {index + 1}
+                    </span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            </div>
           </PanelCard>
         </div>
-      </section>
-
-      <section className="mt-8 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-        <PanelCard title={pageCopy.panels.escalations}>
-          {escalations.length === 0 ? (
-            <p className="text-sm leading-7 text-muted">{pageCopy.noEscalations}</p>
-          ) : (
-            <div className="space-y-4">
-              {escalations.map((item) => (
-                <article
-                  key={item.id}
-                  className="rounded-[1.5rem] border border-[rgba(184,101,76,0.18)] bg-[rgba(184,101,76,0.08)] p-5"
-                >
-                  <h2 className="text-2xl text-foreground [font-family:var(--font-display)]">
-                    {item.householdName}
-                  </h2>
-                  <p className="mt-3 text-sm leading-7 text-muted">{item.reason}</p>
-                  <div className="mt-4 rounded-[1.25rem] bg-paper p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted">
-                      {copy.common.labels.nextStep}
-                    </p>
-                    <p className="mt-2 text-sm leading-7 text-foreground">
-                      {item.nextStep}
-                    </p>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </PanelCard>
-
-        <PanelCard title={pageCopy.panels.routingSequence}>
-          <ol className="space-y-4">
-            {pageCopy.sequenceSteps.map((step, index) => (
-              <li
-                key={step}
-                className="rounded-[1.5rem] border border-line bg-canvas p-5"
-              >
-                <p className="text-xs uppercase tracking-[0.18em] text-muted">
-                  Step {index + 1}
-                </p>
-                <p className="mt-3 text-sm leading-7 text-foreground">{step}</p>
-              </li>
-            ))}
-          </ol>
-        </PanelCard>
       </section>
     </div>
   );

@@ -22,7 +22,7 @@ export default async function SchedulePage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const pageCopy = copy.schedule;
-  const user = await requireCurrentUser(["leader", "pastor", "overseer", "owner"]);
+  const user = await requireCurrentUser(["leader", "pastor", "owner"]);
   const cookieStore = await cookies();
   const preferredBranchId = cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || "";
   const workspace = getWorkspaceContext(user, preferredBranchId);

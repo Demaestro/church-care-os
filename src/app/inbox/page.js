@@ -28,12 +28,7 @@ export default async function InboxPage({ searchParams }) {
     requireCurrentUser([
       "leader",
       "pastor",
-      "overseer",
       "owner",
-      "branch_admin",
-      "general_overseer",
-      "hq_care_admin",
-      "regional_overseer",
     ]),
     cookies(),
   ]);

@@ -16,7 +16,7 @@ const STAGES = [
 ];
 
 export default async function DiscipleshipPage() {
-  const user = await requireCurrentUser(["pastor","overseer","owner","branch_admin","leader","general_overseer"]);
+  const user = await requireCurrentUser(["pastor", "owner", "leader"]);
   const cookieStore = await cookies();
   const preferredBranchId = cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || "";
   const workspace = getWorkspaceContext(user, preferredBranchId);

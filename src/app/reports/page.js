@@ -27,7 +27,7 @@ export default async function ReportsPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const pageCopy = copy.reports;
-  const user = await requireCurrentUser(["pastor", "overseer", "owner"]);
+  const user = await requireCurrentUser(["pastor", "owner"]);
   const preferredBranchId = (await cookies()).get(WORKSPACE_BRANCH_COOKIE)?.value || "";
   const workspace = getWorkspaceContext(user, preferredBranchId);
   const params = await searchParams;

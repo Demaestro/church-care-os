@@ -24,7 +24,7 @@ const STAGE_TONE = {
 };
 
 export default async function NewMembersPage() {
-  const user = await requireCurrentUser(["pastor","overseer","owner","branch_admin","general_overseer","hq_care_admin","regional_overseer"]);
+  const user = await requireCurrentUser(["pastor", "owner"]);
   const cookieStore = await cookies();
   const preferredBranchId = cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || "";
   const workspace = getWorkspaceContext(user, preferredBranchId);

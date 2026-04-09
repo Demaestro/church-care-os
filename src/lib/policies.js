@@ -18,14 +18,10 @@ export function normalizeInternalRoles(roles = []) {
 
 export const roleLandingPages = {
   owner: "/",
-  overseer: "/",
-  general_overseer: "/",
-  hq_care_admin: "/",
-  regional_overseer: "/",
-  branch_admin: "/admin/branch-users",
   pastor: "/",
   leader: "/leader",
   volunteer: "/volunteer",
+  member: "/",
 };
 
 /**
@@ -38,18 +34,18 @@ export const mfaRequiredRoles = ["owner", "pastor"];
 export const internalRoles = normalizeInternalRoles(Object.keys(roleLandingPages));
 
 export const protectedRouteRoles = {
-  dashboard: ["pastor", "overseer", "owner"],
-  leader: ["leader", "pastor", "overseer", "owner"],
-  schedule: ["leader", "pastor", "overseer", "owner"],
-  volunteer: ["volunteer", "leader", "pastor", "overseer", "owner"],
-  households: ["leader", "pastor", "overseer", "owner"],
-  audit: ["pastor", "overseer", "owner"],
-  notifications: ["volunteer", "leader", "pastor", "overseer", "owner"],
-  reports: ["pastor", "overseer", "owner"],
-  teams: ["pastor", "overseer", "owner"],
-  branches: ["overseer", "owner"],
-  users: ["pastor", "overseer", "owner"],
-  settings: ["owner"],
+  dashboard: ["pastor", "owner"],
+  leader: ["leader", "pastor", "owner"],
+  schedule: ["leader", "pastor", "owner"],
+  volunteer: ["volunteer", "leader", "pastor", "owner"],
+  households: ["leader", "pastor", "owner"],
+  audit: ["pastor", "owner"],
+  notifications: ["volunteer", "leader", "pastor", "owner", "member"],
+  reports: ["pastor", "owner"],
+  teams: ["pastor", "owner"],
+  branches: ["pastor", "owner"],
+  users: ["pastor", "owner"],
+  settings: ["pastor", "owner"],
 };
 
 export const internalRoleOptions = [

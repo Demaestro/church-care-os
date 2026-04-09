@@ -16,6 +16,7 @@ import {
   getLanguageOptionsWithLabels,
   translateRoleLabel,
 } from "@/lib/i18n";
+import { normalizeInternalRole } from "@/lib/policies";
 import { getUnreadNotificationCountForUser } from "@/lib/notifications-store";
 import {
   getPublicWorkspaceCatalog,
@@ -105,15 +106,15 @@ export default async function RootLayout({ children }) {
     publicOrganization?.branches?.[0] ||
     null;
   const workspaceSwitcher = user
-    ? {
-        menuLabel: "Branch",
+      ? {
+        menuLabel: "Campus",
         eyebrow: workspace?.organization?.name || "",
         title: workspace?.activeBranch
           ? workspace.activeBranch.name
-          : "All branches",
+          : "All campuses",
         body: workspace?.canSwitchBranches
-          ? "Change branch focus without leaving your current workspace."
-          : "This account is scoped to one branch. Branch privacy stays enforced here.",
+          ? "Change campus focus without leaving your current workspace."
+          : "This account is scoped to one campus. Campus privacy stays enforced here.",
         canSwitch: Boolean(workspace?.canSwitchBranches),
         redirectTo: workspaceHref,
         activeBranchId: workspace?.activeBranch?.id || "",
@@ -146,7 +147,7 @@ export default async function RootLayout({ children }) {
       }
     : null;
   const searchIndex = user
-    ? getWorkspaceSearchIndex(user, workspace?.activeBranch?.id || "")
+    ? await getWorkspaceSearchIndex(user, workspace?.activeBranch?.id || "")
     : { households: [], requests: [] };
   const quickActions = buildQuickActions(user, copy);
   const commandItems = buildCommandItems({
@@ -157,9 +158,9 @@ export default async function RootLayout({ children }) {
   const routeLabels = buildRouteLabels(navSections, quickActions);
   const bottomNavItems = buildBottomNav(user, unreadNotificationCount);
   const scopeLabel = user
-        ? workspace?.activeBranch
-          ? `Church privacy is enforced inside ${workspace.organization.name}.`
-          : `You are viewing ${workspace?.organization?.name || "this church"} across your allowed branches.`
+    ? workspace?.activeBranch
+      ? `Church privacy is enforced inside ${workspace.organization.name}.`
+      : `You are viewing ${workspace?.organization?.name || "this church"} across your allowed campuses.`
     : publicBranch
       ? `Member tools are currently set to ${publicOrganization?.name || publicBranch.name}.`
       : "Member tools are ready for your selected church workspace.";
@@ -372,11 +373,7 @@ function buildQuickActions(user, copy) {
     },
   ];
 
-  const normalizedRole = ["overseer", "general_overseer", "hq_care_admin", "regional_overseer", "branch_admin"].includes(
-    user.role
-  )
-    ? "owner"
-    : user.role;
+  const normalizedRole = normalizeInternalRole(user.role);
 
   if (["leader", "pastor", "owner"].includes(normalizedRole)) {
     items.unshift({
@@ -521,11 +518,7 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
 
   const operationItems = [];
   const oversightItems = [];
-  const normalizedRole = ["overseer", "general_overseer", "hq_care_admin", "regional_overseer", "branch_admin"].includes(
-    user.role
-  )
-    ? "owner"
-    : user.role;
+  const normalizedRole = normalizeInternalRole(user.role);
 
   // -- Member-specific nav --
   if (normalizedRole === "member") {

@@ -13,6 +13,7 @@ import {
   serializeJson,
   withTransaction,
 } from "@/lib/database";
+import { hashCacheKey, withRuntimeCache } from "@/lib/runtime-cache";
 import {
   defaultPrimaryBranchId,
   defaultPrimaryOrganizationId,
@@ -862,7 +863,16 @@ export const getDashboardData = cache(async function getDashboardData(
   viewer = null,
   preferredBranchId = ""
 ) {
-  return buildDashboardData(readStore(viewer, preferredBranchId));
+  const cacheKey = [
+    "dashboard",
+    viewer?.organizationId || "public",
+    viewer?.branchId || "all",
+    preferredBranchId || "default",
+  ].join(":");
+
+  return withRuntimeCache(cacheKey, 20, async () =>
+    buildDashboardData(readStore(viewer, preferredBranchId))
+  );
 });
 
 export const getHouseholds = cache(async function getHouseholds(
@@ -932,61 +942,68 @@ export async function getMemberPortalData(trackingCode, contactValue) {
     return null;
   }
 
-  const request = mapRequestRecord(getRequestRecordByTrackingCode(normalizedCode));
-  if (!request || !isSameRequesterContact(request, normalizedContact)) {
-    return null;
-  }
+  const cacheKey = `member-portal:${hashCacheKey(
+    `${normalizedCode}:${normalizedContact}`
+  )}`;
 
-  const store = readStore();
-  const householdMap = new Map(
-    store.households.map((household) => [household.slug, household])
-  );
-  const matchingRequests = sortRequests(
-    store.requests.filter(
-      (item) =>
-        item.organizationId === request.organizationId &&
-        isSameRequesterContact(item, normalizedContact)
-    )
-  ).map((item) =>
-    buildMemberSafeRequest(item, buildHouseholdDetail(store, item.householdSlug))
-  );
-  const connectedHouseholds = Array.from(
-    new Map(
-      matchingRequests.map((item) => [
-        item.householdSlug,
-        {
-          slug: item.householdSlug,
-          name: item.householdName,
-          openRequests: matchingRequests.filter(
-            (requestItem) => requestItem.householdSlug === item.householdSlug && requestItem.isOpen
-          ).length,
-          lastUpdate:
-            householdMap.get(item.householdSlug)?.nextTouchpoint ||
-            householdMap.get(item.householdSlug)?.createdAt ||
-            "",
-        },
-      ])
-    ).values()
-  ).map((item) => ({
-    ...item,
-    lastUpdateLabel: formatDateTime(item.lastUpdate),
-  }));
-  const profileSource = request.requester || {};
+  return withRuntimeCache(cacheKey, 15, async () => {
+    const request = mapRequestRecord(getRequestRecordByTrackingCode(normalizedCode));
+    if (!request || !isSameRequesterContact(request, normalizedContact)) {
+      return null;
+    }
 
-  return {
-    trackingCode: request.trackingCode,
-    contactValue: normalizedContact,
-    profile: {
-      submittedBy: profileSource.name || "",
-      email: profileSource.email || "",
-      phone: profileSource.phone || "",
-      preferredContact: profileSource.preferredContact || "",
-    },
-    requests: matchingRequests,
-    openRequests: matchingRequests.filter((item) => item.isOpen),
-    resolvedRequests: matchingRequests.filter((item) => !item.isOpen),
-    connectedHouseholds,
-  };
+    const store = readStore();
+    const householdMap = new Map(
+      store.households.map((household) => [household.slug, household])
+    );
+    const matchingRequests = sortRequests(
+      store.requests.filter(
+        (item) =>
+          item.organizationId === request.organizationId &&
+          isSameRequesterContact(item, normalizedContact)
+      )
+    ).map((item) =>
+      buildMemberSafeRequest(item, buildHouseholdDetail(store, item.householdSlug))
+    );
+    const connectedHouseholds = Array.from(
+      new Map(
+        matchingRequests.map((item) => [
+          item.householdSlug,
+          {
+            slug: item.householdSlug,
+            name: item.householdName,
+            openRequests: matchingRequests.filter(
+              (requestItem) =>
+                requestItem.householdSlug === item.householdSlug && requestItem.isOpen
+            ).length,
+            lastUpdate:
+              householdMap.get(item.householdSlug)?.nextTouchpoint ||
+              householdMap.get(item.householdSlug)?.createdAt ||
+              "",
+          },
+        ])
+      ).values()
+    ).map((item) => ({
+      ...item,
+      lastUpdateLabel: formatDateTime(item.lastUpdate),
+    }));
+    const profileSource = request.requester || {};
+
+    return {
+      trackingCode: request.trackingCode,
+      contactValue: normalizedContact,
+      profile: {
+        submittedBy: profileSource.name || "",
+        email: profileSource.email || "",
+        phone: profileSource.phone || "",
+        preferredContact: profileSource.preferredContact || "",
+      },
+      requests: matchingRequests,
+      openRequests: matchingRequests.filter((item) => item.isOpen),
+      resolvedRequests: matchingRequests.filter((item) => !item.isOpen),
+      connectedHouseholds,
+    };
+  });
 }
 
 export async function getMemberPortalDataByEmail(email, organizationId) {
@@ -2036,93 +2053,114 @@ export async function addVolunteerTaskNoteEntry(
 // ── Follow-up board queries ───────────────────────────────────────────────────
 
 export function getFollowUpBoard(organizationId, branchId) {
-  const db = getDatabase();
-  const now = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const cacheKey = [
+    "followup",
+    organizationId || "org",
+    branchId || "all",
+  ].join(":");
 
-  const base = branchId
-    ? `organization_id = ? AND branch_id = ? AND status NOT IN ('resolved','archived')`
-    : `organization_id = ? AND status NOT IN ('resolved','archived')`;
-  const params = branchId ? [organizationId, branchId] : [organizationId];
+  return withRuntimeCache(cacheKey, 20, async () => {
+    const db = getDatabase();
+    const now = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
-  const all = db.prepare(`
-    SELECT id, organization_id, branch_id, household_name, household_slug,
-           need, summary, tone, status, created_at, last_activity_at,
-           next_contact_due, follow_up_rhythm, follow_up_goal,
-           follow_up_template, last_contact_outcome, discipleship_stage,
-           follow_up_owner_name, assigned_volunteer_json
-    FROM requests
-    WHERE ${base}
-    ORDER BY COALESCE(next_contact_due, created_at) ASC
-    LIMIT 200
-  `).all(...params);
+    const base = branchId
+      ? `organization_id = ? AND branch_id = ? AND status NOT IN ('resolved','archived')`
+      : `organization_id = ? AND status NOT IN ('resolved','archived')`;
+    const params = branchId ? [organizationId, branchId] : [organizationId];
 
-  const overdue = [], dueToday = [], dueThisWeek = [], noContact = [], later = [];
-  const weekFromNow = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-  const fourteenDaysAgo = new Date(Date.now() - 14 * 86400000).toISOString();
+    const all = db.prepare(`
+      SELECT id, organization_id, branch_id, household_name, household_slug,
+             need, summary, tone, status, created_at, last_activity_at,
+             next_contact_due, follow_up_rhythm, follow_up_goal,
+             follow_up_template, last_contact_outcome, discipleship_stage,
+             follow_up_owner_name, assigned_volunteer_json
+      FROM requests
+      WHERE ${base}
+      ORDER BY COALESCE(next_contact_due, created_at) ASC
+      LIMIT 200
+    `).all(...params);
 
-  for (const r of all) {
-    const due = r.next_contact_due ? r.next_contact_due.slice(0, 10) : null;
-    const noRecentContact = !r.last_activity_at || r.last_activity_at < fourteenDaysAgo;
+    const overdue = [], dueToday = [], dueThisWeek = [], noContact = [], later = [];
+    const weekFromNow = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 86400000).toISOString();
 
-    if (due && due < now) { overdue.push(r); }
-    else if (due && due === now) { dueToday.push(r); }
-    else if (due && due <= weekFromNow) { dueThisWeek.push(r); }
-    else if (noRecentContact && !due) { noContact.push(r); }
-    else { later.push(r); }
-  }
+    for (const r of all) {
+      const due = r.next_contact_due ? r.next_contact_due.slice(0, 10) : null;
+      const noRecentContact = !r.last_activity_at || r.last_activity_at < fourteenDaysAgo;
 
-  return { overdue, dueToday, dueThisWeek, noContact, later };
+      if (due && due < now) { overdue.push(r); }
+      else if (due && due === now) { dueToday.push(r); }
+      else if (due && due <= weekFromNow) { dueThisWeek.push(r); }
+      else if (noRecentContact && !due) { noContact.push(r); }
+      else { later.push(r); }
+    }
+
+    return { overdue, dueToday, dueThisWeek, noContact, later };
+  });
 }
 
-export const getWorkspaceSearchIndex = cache(function getWorkspaceSearchIndex(
+export const getWorkspaceSearchIndex = cache(async function getWorkspaceSearchIndex(
   viewer = null,
   preferredBranchId = ""
 ) {
-  const store = readStore(viewer, preferredBranchId);
-  const households = [...store.households]
-    .sort((left, right) => {
-      const leftTime = Date.parse(left.nextTouchpoint || left.createdAt || "");
-      const rightTime = Date.parse(right.nextTouchpoint || right.createdAt || "");
-      return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime);
-    })
-    .slice(0, 36)
-    .map((household) => ({
-      id: household.slug,
-      slug: household.slug,
-      name: household.name,
-      stage: household.stage,
-      risk: household.risk,
-      owner: household.owner,
-      nextTouchpoint: household.nextTouchpoint || "",
-      organizationId: household.organizationId,
-      branchId: household.branchId,
-      tags: household.tags || [],
-    }));
+  const cacheKey = hashCacheKey(
+    [
+      "workspace-search",
+      viewer?.id || "public",
+      viewer?.organizationId || "org",
+      preferredBranchId || viewer?.branchId || "all",
+      viewer?.role || "guest",
+      Array.isArray(viewer?.managedBranchIds) ? viewer.managedBranchIds.join("|") : "",
+    ].join(":")
+  );
 
-  const requests = [...store.requests]
-    .sort((left, right) => {
-      const leftTime = Date.parse(left.nextContactDue || left.createdAt || "");
-      const rightTime = Date.parse(right.nextContactDue || right.createdAt || "");
-      return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime);
-    })
-    .slice(0, 42)
-    .map((request) => ({
-      id: request.id,
-      trackingCode: request.trackingCode,
-      householdSlug: request.householdSlug,
-      householdName: request.householdName,
-      need: request.need,
-      owner: request.owner,
-      status: request.status,
-      tone: request.tone,
-      nextContactDue: request.nextContactDue || "",
-      followUpGoal: request.followUpGoal || "",
-      followUpTemplate: request.followUpTemplate || "",
-      organizationId: request.organizationId,
-      branchId: request.branchId,
-    }));
+  return withRuntimeCache(cacheKey, 15, async () => {
+    const store = readStore(viewer, preferredBranchId);
+    const households = [...store.households]
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.nextTouchpoint || left.createdAt || "");
+        const rightTime = Date.parse(right.nextTouchpoint || right.createdAt || "");
+        return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime);
+      })
+      .slice(0, 36)
+      .map((household) => ({
+        id: household.slug,
+        slug: household.slug,
+        name: household.name,
+        stage: household.stage,
+        risk: household.risk,
+        owner: household.owner,
+        nextTouchpoint: household.nextTouchpoint || "",
+        organizationId: household.organizationId,
+        branchId: household.branchId,
+        tags: household.tags || [],
+      }));
 
-  return { households, requests };
+    const requests = [...store.requests]
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.nextContactDue || left.createdAt || "");
+        const rightTime = Date.parse(right.nextContactDue || right.createdAt || "");
+        return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime);
+      })
+      .slice(0, 42)
+      .map((request) => ({
+        id: request.id,
+        trackingCode: request.trackingCode,
+        householdSlug: request.householdSlug,
+        householdName: request.householdName,
+        need: request.need,
+        owner: request.owner,
+        status: request.status,
+        tone: request.tone,
+        nextContactDue: request.nextContactDue || "",
+        followUpGoal: request.followUpGoal || "",
+        followUpTemplate: request.followUpTemplate || "",
+        organizationId: request.organizationId,
+        branchId: request.branchId,
+      }));
+
+    return { households, requests };
+  });
 });
 
 export function saveFollowUpDetails(requestId, input) {

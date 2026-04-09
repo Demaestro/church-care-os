@@ -142,6 +142,61 @@ export function failJob(jobId, errorMessage) {
   );
 }
 
+export function releaseStuckJobs({
+  maxAgeMinutes = 15,
+  maxRelease = 50,
+} = {}) {
+  const db = getDatabase();
+  const cutoff = new Date(Date.now() - maxAgeMinutes * 60 * 1000).toISOString();
+  const stuckJobs = db
+    .prepare(
+      `
+      SELECT id, attempts, max_attempts
+      FROM jobs
+      WHERE status = 'processing'
+        AND locked_at IS NOT NULL
+        AND locked_at < ?
+      ORDER BY locked_at ASC
+      LIMIT ?
+    `
+    )
+    .all(cutoff, maxRelease);
+
+  if (!stuckJobs.length) {
+    return 0;
+  }
+
+  const now = new Date().toISOString();
+  const update = db.prepare(`
+    UPDATE jobs
+    SET
+      status = ?,
+      attempts = ?,
+      run_after = ?,
+      locked_at = NULL,
+      locked_by = NULL,
+      last_error = ?
+    WHERE id = ?
+  `);
+
+  for (const job of stuckJobs) {
+    const attempts = Number(job.attempts || 0) + 1;
+    const maxAttempts = Number(job.max_attempts || 3);
+    const shouldRetry = attempts < maxAttempts;
+    const retryAt = new Date(Date.now() + attempts * 60 * 1000).toISOString();
+
+    update.run(
+      shouldRetry ? "queued" : "failed",
+      attempts,
+      shouldRetry ? retryAt : now,
+      "Job was requeued after worker timeout.",
+      job.id
+    );
+  }
+
+  return stuckJobs.length;
+}
+
 export function listJobs(limit = 30, organizationId = "") {
   const rows = getDatabase()
     .prepare(`

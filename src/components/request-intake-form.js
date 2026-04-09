@@ -86,9 +86,11 @@ export function RequestIntakeForm({ language = "en", copy, currentUser = null })
 
       <div className="flex flex-wrap gap-2">
         {[
-          intakeCopy.steps.support,
-          currentUser ? "Step 2 · contact from account" : intakeCopy.steps.contact,
-          intakeCopy.steps.privacy,
+          `Step 1 - ${intakeCopy.steps.support}`,
+          currentUser
+            ? "Step 2 - contact from account"
+            : `Step 2 - ${intakeCopy.steps.contact}`,
+          `Step 3 - ${intakeCopy.steps.privacy}`,
         ].map((step) => (
           <span
             key={step}

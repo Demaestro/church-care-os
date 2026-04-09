@@ -38,7 +38,7 @@ export function AppShellNav({
   );
 
   return (
-    <div className="relative flex min-w-0 items-center gap-2">
+    <div className="relative flex w-full min-w-0 items-center gap-2">
       <div className="hidden items-center gap-1 xl:flex">
         {visibleSections.map((section) => (
           <DesktopMenu
@@ -88,7 +88,7 @@ export function AppShellNav({
         ) : null}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-1 items-center justify-end gap-2">
         <PwaInstallControl copy={copy} />
         <PrivacyToggleButton
           currentPrivacyMode={currentPrivacyMode}
@@ -99,15 +99,6 @@ export function AppShellNav({
           redirectTo={redirectTo}
           copy={copy}
         />
-
-        {userSummary?.switchHref ? (
-          <Link
-            href={userSummary.switchHref}
-            className="hidden min-h-11 items-center rounded-full border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] px-4 py-2 text-sm font-semibold text-moss transition hover:bg-[var(--soft-fill-strong)] xl:inline-flex"
-          >
-            {copy.switchAccount || "Switch account"}
-          </Link>
-        ) : null}
 
         {userSummary ? (
           <DesktopMenu
@@ -127,6 +118,15 @@ export function AppShellNav({
             {copy.signIn}
           </Link>
         )}
+
+        {userSummary?.switchHref ? (
+          <Link
+            href={userSummary.switchHref}
+            className="ml-2 hidden min-h-11 items-center rounded-full border border-[var(--soft-accent-border)] bg-[var(--soft-fill)] px-4 py-2 text-sm font-semibold text-moss transition hover:bg-[var(--soft-fill-strong)] xl:inline-flex"
+          >
+            {copy.switchAccount || "Switch account"}
+          </Link>
+        ) : null}
 
         <button
           type="button"
@@ -218,12 +218,26 @@ function ThemeToggleButton({ currentTheme, redirectTo, copy, mobile = false }) {
         type="submit"
         aria-label={copy.themeToggleLabel || "Toggle dark mode"}
         title={copy.themeToggleLabel || "Toggle dark mode"}
-        className={`inline-flex items-center justify-center rounded-full border border-line bg-[var(--header-pill-bg)] text-sm font-semibold text-foreground transition hover:border-[var(--soft-accent-border)] hover:bg-paper ${
-          mobile ? "min-h-11 w-full gap-2 px-4 py-3" : "h-11 w-11"
+        aria-pressed={darkMode}
+        className={`inline-flex items-center rounded-full border border-line bg-[var(--header-pill-bg)] text-sm font-semibold text-foreground transition hover:border-[var(--soft-accent-border)] hover:bg-paper ${
+          mobile ? "min-h-11 w-full gap-3 px-4 py-3" : "h-11 gap-2 px-3"
         }`}
       >
-        {darkMode ? <SunGlyph /> : <MoonGlyph />}
-        {mobile ? <span>{darkMode ? "Light mode" : "Dark mode"}</span> : null}
+        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+          Dark mode
+        </span>
+        <span
+          className={`relative inline-flex h-5 w-10 items-center rounded-full transition ${
+            darkMode ? "bg-foreground" : "bg-line"
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 rounded-full bg-white transition ${
+              darkMode ? "translate-x-5" : "translate-x-1"
+            }`}
+          />
+        </span>
+        <span className="text-xs text-muted">{darkMode ? "On" : "Off"}</span>
       </button>
     </form>
   );

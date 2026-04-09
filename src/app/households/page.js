@@ -23,7 +23,7 @@ export const metadata = {
 export default async function HouseholdsPage({ searchParams }) {
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
-  const user = await requireCurrentUser(["leader", "pastor", "overseer", "owner"]);
+  const user = await requireCurrentUser(["leader", "pastor", "owner"]);
   const cookieStore = await cookies();
   const preferredBranchId = cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || "";
   const workspace = getWorkspaceContext(user, preferredBranchId);
@@ -40,7 +40,7 @@ export default async function HouseholdsPage({ searchParams }) {
   const showClearFilters = hasActiveFilters(filters);
   const scopeLabel = workspace.activeBranch
     ? `${workspace.organization.name} / ${workspace.activeBranch.name}`
-    : `${workspace.organization.name} / all visible branches`;
+    : `${workspace.organization.name} / all visible campuses`;
   const scopedHref = (pathname) =>
     preferredBranchId
       ? `${pathname}?branch=${encodeURIComponent(preferredBranchId)}`
@@ -70,8 +70,8 @@ export default async function HouseholdsPage({ searchParams }) {
               <span className="font-semibold text-foreground">{scopeLabel}</span>
               <span className="ml-3 text-muted">
                 {workspace.activeBranch
-                  ? "Only this branch is visible in the board below."
-                  : "You are in headquarters view across the branches you oversee."}
+                  ? "Only this campus is visible in the board below."
+                  : "You are viewing the campuses assigned to your role."}
               </span>
             </div>
           </div>

@@ -13,12 +13,7 @@ export default async function HomePage() {
       "volunteer",
       "leader",
       "pastor",
-      "overseer",
       "owner",
-      "branch_admin",
-      "general_overseer",
-      "hq_care_admin",
-      "regional_overseer",
     ]);
   } catch {
     redirect("/login");
@@ -56,14 +51,10 @@ export default async function HomePage() {
     return <PastorHome user={user} board={board} />;
   }
 
-  if (["owner", "overseer", "general_overseer", "hq_care_admin", "regional_overseer"].includes(role)) {
+  if (role === "owner") {
     const { getFollowUpBoard } = await import("@/lib/care-store");
     const board = getFollowUpBoard(user.organizationId, user.branchId);
     return <PastorHome user={user} board={board} />;
-  }
-
-  if (role === "branch_admin") {
-    redirect("/admin/branch-users");
   }
 
   redirect("/login");

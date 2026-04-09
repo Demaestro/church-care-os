@@ -6,6 +6,7 @@ import {
   claimNextJob,
   completeJob,
   failJob,
+  releaseStuckJobs,
 } from "@/lib/job-store";
 import { deliverViaTwilio } from "@/lib/message-service";
 import { getEffectiveChurchSettings } from "@/lib/organization-store";
@@ -188,6 +189,7 @@ export async function drainQueuedJobs({
   let processedCount = 0;
   let successCount = 0;
   let failedCount = 0;
+  const releasedCount = releaseStuckJobs({ maxAgeMinutes: 15 });
 
   while (processedCount < limit) {
     const job = claimNextJob(queue, workerName);
@@ -224,6 +226,7 @@ export async function drainQueuedJobs({
     processedCount,
     successCount,
     failedCount,
+    releasedCount,
     jobs,
   };
 }
