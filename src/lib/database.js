@@ -971,7 +971,6 @@ function ensureSchemaMigrations(db) {
   addColumnIfMissing(db, "households", "birthday", "TEXT");
   addColumnIfMissing(db, "households", "gender", "TEXT NOT NULL DEFAULT 'unspecified'");
   addColumnIfMissing(db, "households", "member_type", "TEXT NOT NULL DEFAULT 'member'");
-
   // New member journey tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS new_member_journeys (
@@ -984,12 +983,15 @@ function ensureSchemaMigrations(db) {
       gender            TEXT NOT NULL DEFAULT 'unspecified',
       birthday          TEXT,
       status            TEXT NOT NULL DEFAULT 'active',
+      stage             TEXT NOT NULL DEFAULT 'day_0',
       registered_at     TEXT NOT NULL DEFAULT (datetime('now')),
       last_contact_at   TEXT,
       contact_count     INTEGER NOT NULL DEFAULT 0,
-      touchpoints_sent  TEXT NOT NULL DEFAULT '[]',
+      touchpoints_sent_json  TEXT NOT NULL DEFAULT '[]',
       assigned_volunteer_id   TEXT,
       assigned_volunteer_name TEXT,
+      notes             TEXT,
+      sunday_attendance_count INTEGER NOT NULL DEFAULT 0,
       completed_at      TEXT,
       dropped_at        TEXT,
       drop_reason       TEXT,
@@ -1029,9 +1031,48 @@ function ensureSchemaMigrations(db) {
 
     CREATE INDEX IF NOT EXISTS idx_journeys_scope
       ON new_member_journeys (organization_id, branch_id, status);
+    CREATE INDEX IF NOT EXISTS idx_journeys_scope_stage
+      ON new_member_journeys (organization_id, branch_id, stage);
     CREATE INDEX IF NOT EXISTS idx_journey_contacts_journey
       ON journey_contacts (journey_id);
   `);
+
+  addColumnIfMissing(db, "new_member_journeys", "stage", "TEXT NOT NULL DEFAULT 'day_0'");
+  addColumnIfMissing(
+    db,
+    "new_member_journeys",
+    "touchpoints_sent_json",
+    "TEXT NOT NULL DEFAULT '[]'"
+  );
+  addColumnIfMissing(db, "new_member_journeys", "notes", "TEXT");
+  addColumnIfMissing(
+    db,
+    "new_member_journeys",
+    "sunday_attendance_count",
+    "INTEGER NOT NULL DEFAULT 0"
+  );
+  addColumnIfMissing(db, "new_member_journeys", "assigned_volunteer_id", "TEXT");
+  addColumnIfMissing(db, "new_member_journeys", "assigned_volunteer_name", "TEXT");
+  addColumnIfMissing(db, "new_member_journeys", "contact_count", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "new_member_journeys", "last_contact_at", "TEXT");
+  addColumnIfMissing(db, "new_member_journeys", "registered_at", "TEXT");
+  addColumnIfMissing(db, "new_member_journeys", "completed_at", "TEXT");
+  addColumnIfMissing(db, "new_member_journeys", "dropped_at", "TEXT");
+
+  // Backfill legacy journey column if older databases used touchpoints_sent
+  try {
+    const journeyColumns = db.prepare(`PRAGMA table_info(new_member_journeys)`).all();
+    const hasLegacy = journeyColumns.some((column) => column.name === "touchpoints_sent");
+    const hasJson = journeyColumns.some((column) => column.name === "touchpoints_sent_json");
+    if (hasLegacy && hasJson) {
+      db.prepare(`
+        UPDATE new_member_journeys
+        SET touchpoints_sent_json = COALESCE(touchpoints_sent_json, touchpoints_sent, '[]')
+      `).run();
+    }
+  } catch {
+    // Ignore if table is not yet present in fresh databases.
+  }
 
   // Follow-up engine columns
   addColumnIfMissing(db, "requests", "next_contact_due", "TEXT");

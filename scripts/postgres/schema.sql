@@ -388,6 +388,62 @@ CREATE TABLE IF NOT EXISTS member_transfers (
   completed_at timestamptz
 );
 
+CREATE TABLE IF NOT EXISTS new_member_journeys (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id text NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  member_name text NOT NULL,
+  member_email text,
+  member_phone text,
+  gender text NOT NULL DEFAULT 'unspecified',
+  birthday text,
+  status text NOT NULL DEFAULT 'active',
+  stage text NOT NULL DEFAULT 'day_0',
+  registered_at timestamptz NOT NULL DEFAULT now(),
+  last_contact_at timestamptz,
+  contact_count integer NOT NULL DEFAULT 0,
+  touchpoints_sent_json jsonb NOT NULL DEFAULT '[]'::jsonb,
+  assigned_volunteer_id text,
+  assigned_volunteer_name text,
+  notes text,
+  sunday_attendance_count integer NOT NULL DEFAULT 0,
+  completed_at timestamptz,
+  dropped_at timestamptz,
+  drop_reason text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS journey_contacts (
+  id text PRIMARY KEY,
+  journey_id text NOT NULL REFERENCES new_member_journeys(id) ON DELETE CASCADE,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id text NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  contacted_by_user_id text REFERENCES users(id) ON DELETE SET NULL,
+  contacted_by_name text NOT NULL,
+  contact_method text NOT NULL DEFAULT 'call',
+  outcome text NOT NULL DEFAULT 'reached',
+  notes text,
+  contacted_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS service_schedules (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id text NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  service_name text NOT NULL DEFAULT 'Sunday Service',
+  day_of_week integer NOT NULL DEFAULT 0,
+  service_time text NOT NULL DEFAULT '09:00',
+  location text,
+  address text,
+  reminder_thursday boolean NOT NULL DEFAULT true,
+  reminder_saturday boolean NOT NULL DEFAULT true,
+  reminder_sunday_morning boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (organization_id, branch_id)
+);
+
 CREATE TABLE IF NOT EXISTS jobs (
   id text PRIMARY KEY,
   organization_id text REFERENCES organizations(id) ON DELETE SET NULL,
@@ -452,6 +508,12 @@ CREATE INDEX IF NOT EXISTS idx_household_attachments_household
   ON household_attachments (household_slug, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_member_transfers_scope
   ON member_transfers (organization_id, from_branch_id, to_branch_id, status, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_journeys_scope
+  ON new_member_journeys (organization_id, branch_id, status);
+CREATE INDEX IF NOT EXISTS idx_journeys_scope_stage
+  ON new_member_journeys (organization_id, branch_id, stage);
+CREATE INDEX IF NOT EXISTS idx_journey_contacts_journey
+  ON journey_contacts (journey_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_status_run_after
   ON jobs (status, run_after, queue);
 CREATE INDEX IF NOT EXISTS idx_organizations_active_slug
