@@ -1,7 +1,7 @@
 ﻿import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { Inter } from "next/font/google";
+import { Inter, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import { getCurrentUser, getUserLandingPage } from "@/lib/auth";
 import { getWorkspaceSearchIndex } from "@/lib/care-store";
@@ -10,6 +10,8 @@ import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { WorkspaceBreadcrumbs } from "@/components/workspace-breadcrumbs";
 import { WorkspaceCommandBar } from "@/components/workspace-command-bar";
 import { getAppPreferences } from "@/lib/app-preferences-server";
+import LeftNav from "@/components/LeftNav";
+import AiShepherd from "@/components/AiShepherd";
 import {
   getCopy,
   getDisplayModeOptionsWithLabels,
@@ -35,6 +37,15 @@ import {
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",
+  variable: "--font-inter",
+});
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: ["400"],
+  style: ["normal", "italic"],
+  display: "swap",
+  variable: "--font-instrument-serif",
 });
 
 export const metadata = {
@@ -60,8 +71,8 @@ export const metadata = {
 export const viewport = {
   colorScheme: "light dark",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#9f1239" },
-    { media: "(prefers-color-scheme: dark)", color: "#180a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#D4AF37" },
+    { media: "(prefers-color-scheme: dark)", color: "#121212" },
   ],
 };
 
@@ -170,6 +181,20 @@ export default async function RootLayout({ children }) {
     .slice(0, 2)
     .toUpperCase();
 
+  // Stats to pass to AiShepherd (lightweight — all sync)
+  const shepherdStats = user
+    ? {
+        members: undefined,     // fetched server-side in AiShepherd only if needed
+        services: undefined,
+        openCare: undefined,
+        activePledges: undefined,
+      }
+    : null;
+
+  const isStaff = user && ["leader", "pastor", "owner", "volunteer"].includes(
+    normalizeInternalRole(user.role)
+  );
+
   return (
     <html
       lang={preferences.language}
@@ -177,19 +202,30 @@ export default async function RootLayout({ children }) {
       data-theme={preferences.theme}
       data-privacy-mode={preferences.privacyMode}
       suppressHydrationWarning
-      className={`${inter.className} h-full antialiased`}
+      className={`${inter.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
-      <body suppressHydrationWarning className="min-h-full text-foreground">
-        <div className="relative isolate min-h-screen overflow-x-hidden">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-[-8rem] -z-10 h-[28rem] blur-3xl"
-          >
-            <div className="mx-auto h-full max-w-6xl rounded-full bg-[image:var(--hero-glow)]" />
-          </div>
+      <body suppressHydrationWarning className="min-h-full bg-[var(--base)] text-foreground">
+        {/* ── Three-pane shell ──────────────────────────────────────────── */}
 
-          <header className="sticky top-0 z-40 border-b border-line bg-[var(--header-bg)] shadow-[var(--header-shadow)] backdrop-blur-2xl">
-            <div className="mx-auto max-w-7xl px-6 lg:px-10">
+        {/* Left glass nav — desktop only (hidden on <lg) */}
+        {isStaff && (
+          <div className="hidden lg:block">
+            <LeftNav user={user} unreadCount={unreadNotificationCount} />
+          </div>
+        )}
+
+        {/* Right AI Shepherd — desktop only (hidden on <xl) */}
+        {isStaff && (
+          <div className="hidden xl:block">
+            <AiShepherd stats={shepherdStats} />
+          </div>
+        )}
+
+        {/* Center canvas */}
+        <div className={isStaff ? "three-pane-main" : ""}>
+          {/* Mobile / tablet header — visible when LeftNav is hidden */}
+          <header className={`sticky top-0 z-40 border-b border-line bg-[var(--header-bg)] shadow-[var(--header-shadow)] backdrop-blur-2xl ${isStaff ? "lg:hidden" : ""}`}>
+            <div className="mx-auto max-w-7xl px-6">
               <div className="flex h-14 items-center justify-between gap-2 sm:h-16 sm:gap-4">
                 <Link href="/" className="group flex flex-shrink-0 items-center gap-3">
                   <BrandMark logoHref={brandLogoHref} initials={brandInitials} />
@@ -220,8 +256,8 @@ export default async function RootLayout({ children }) {
               </div>
             </div>
 
-            <div className="border-t border-line/70 bg-[color:color-mix(in_srgb,var(--header-bg)_78%,var(--paper))]">
-              <div className="mx-auto max-w-7xl px-6 py-3 lg:px-10">
+            <div className="border-t border-line/70">
+              <div className="mx-auto max-w-7xl px-6 py-2.5">
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                   <WorkspaceBreadcrumbs
                     routeLabels={routeLabels}
@@ -237,7 +273,6 @@ export default async function RootLayout({ children }) {
                     }
                     scopeLabel={scopeLabel}
                   />
-
                   <div className="w-full xl:max-w-2xl">
                     <WorkspaceCommandBar
                       items={commandItems}
@@ -254,17 +289,42 @@ export default async function RootLayout({ children }) {
             </div>
           </header>
 
-          <main className="pb-24 lg:pb-0">{children}</main>
-
-          <footer className="border-t border-line">
-            <div className="mx-auto flex max-w-7xl flex-col gap-3 px-6 py-8 text-sm text-muted lg:flex-row lg:items-center lg:justify-between lg:px-10">
-              <p>{copy.layout.footerPrimary}</p>
-              <p>{copy.layout.footerSecondary}</p>
+          {/* Desktop command bar strip — shown inside canvas when LeftNav is visible */}
+          {isStaff && (
+            <div className="hidden lg:block sticky top-0 z-30 border-b border-line bg-[var(--header-bg)] shadow-[var(--header-shadow)] backdrop-blur-2xl">
+              <div className="px-6 py-3">
+                <div className="flex items-center gap-4">
+                  <WorkspaceBreadcrumbs
+                    routeLabels={routeLabels}
+                    organizationName={workspace?.organization?.name || ""}
+                    branchName={workspace?.activeBranch?.name || workspace?.activeScopeLabel || ""}
+                    scopeLabel={scopeLabel}
+                  />
+                  <div className="flex-1 max-w-xl ml-auto">
+                    <WorkspaceCommandBar
+                      items={commandItems}
+                      quickActions={quickActions}
+                      placeholder="Jump to a member, section, or workflow…"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
-          </footer>
+          )}
 
-          <MobileBottomNav items={bottomNavItems} />
+          <main className="pb-24 lg:pb-8">{children}</main>
+
+          {!isStaff && (
+            <footer className="border-t border-line">
+              <div className="mx-auto flex max-w-7xl flex-col gap-3 px-6 py-8 text-sm text-muted lg:flex-row lg:items-center lg:justify-between lg:px-10">
+                <p>{copy.layout.footerPrimary}</p>
+                <p>{copy.layout.footerSecondary}</p>
+              </div>
+            </footer>
+          )}
         </div>
+
+        <MobileBottomNav items={bottomNavItems} />
       </body>
     </html>
   );
@@ -290,8 +350,8 @@ function BrandMark({ logoHref = "", initials = "CC" }) {
     <span
       className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold tracking-wide text-white transition-all duration-200 group-hover:scale-105"
       style={{
-        background: "linear-gradient(135deg, #9f1239 0%, #be123c 100%)",
-        boxShadow: "0 3px 12px rgba(159,18,57,0.40)",
+        background: "linear-gradient(135deg, #D4AF37 0%, #B8962E 100%)",
+        boxShadow: "0 3px 12px rgba(212,175,55,0.40)",
       }}
     >
       {initials}
