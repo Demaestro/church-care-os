@@ -4897,3 +4897,187 @@ export async function deleteMinistryEvent(eventId) {
   return { ok: true };
 }
 
+// ── Asset Register ────────────────────────────────────────────────────────────
+
+export async function saveAsset(prevState, formData) {
+  "use server";
+  const user = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const db = getDatabase();
+
+  const name = getString(formData, "name");
+  if (!name) return { error: "Asset name is required." };
+
+  const id = getString(formData, "id") || randomUUID();
+  const isUpdate = Boolean(getString(formData, "id"));
+  const organizationId = user.organizationId;
+  const branchId = getString(formData, "branchId") || user.branchId || null;
+  const category = getString(formData, "category") || "equipment";
+  const serialNumber = getString(formData, "serialNumber") || null;
+  const location = getString(formData, "location") || null;
+  const description = getString(formData, "description") || null;
+  const acquisitionDate = getString(formData, "acquisitionDate") || null;
+  const rawCost = getString(formData, "acquisitionCost");
+  const acquisitionCost = rawCost ? Number(rawCost) : null;
+  const now = new Date().toISOString();
+
+  if (isUpdate) {
+    db.prepare(`
+      UPDATE church_assets
+      SET name=?, category=?, serial_number=?, location=?, description=?,
+          acquisition_date=?, acquisition_cost=?, updated_at=?
+      WHERE id=? AND organization_id=?
+    `).run(name, category, serialNumber, location, description,
+           acquisitionDate, acquisitionCost, now, id, organizationId);
+  } else {
+    db.prepare(`
+      INSERT INTO church_assets
+        (id, organization_id, branch_id, name, category, serial_number,
+         location, description, status, condition,
+         acquisition_date, acquisition_cost, created_by, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,'available','good',?,?,?,?,?)
+    `).run(randomUUID(), organizationId, branchId, name, category,
+           serialNumber, location, description,
+           acquisitionDate, acquisitionCost, user.id, now, now);
+  }
+
+  recordAuditLog({
+    organizationId,
+    branchId: branchId || user.branchId,
+    actorUserId: user.id,
+    actorName: user.name,
+    actorRole: user.role,
+    action: isUpdate ? "asset.update" : "asset.create",
+    targetType: "church_asset",
+    targetId: id,
+    summary: `${isUpdate ? "Updated" : "Registered"} asset: ${name}`,
+  });
+
+  revalidatePath("/assets");
+  return { success: true };
+}
+
+// ── Utility Log ───────────────────────────────────────────────────────────────
+
+export async function logUtility(prevState, formData) {
+  "use server";
+  const user = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const db = getDatabase();
+
+  const utilityType = getString(formData, "utilityType") || "generator";
+  const rawValue = getString(formData, "value");
+  if (!rawValue) return { error: "Amount is required." };
+
+  const value = Number(rawValue);
+  const rawCost = getString(formData, "cost");
+  const cost = rawCost ? Number(rawCost) : null;
+  const eventName = getString(formData, "eventName") || null;
+  const note = getString(formData, "note") || null;
+  const loggedAt = getString(formData, "loggedAt") || new Date().toISOString().split("T")[0];
+  const organizationId = user.organizationId;
+  const branchId = user.branchId || null;
+
+  const UNITS = {
+    generator: "hours", diesel: "litres", water: "litres",
+    electricity: "kWh", gas: "kg", other: "units",
+  };
+
+  db.prepare(`
+    INSERT INTO utility_logs
+      (id, organization_id, branch_id, utility_type, value, unit,
+       cost, note, event_name, logged_by, logged_by_name, logged_at, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    randomUUID(), organizationId, branchId,
+    utilityType, value, UNITS[utilityType] || "units",
+    cost, note, eventName,
+    user.id, user.name,
+    loggedAt, new Date().toISOString()
+  );
+
+  revalidatePath("/assets");
+  return { success: true };
+}
+
+// ── Module Permission Management ─────────────────────────────────────────────
+
+/**
+ * Grant or update a module-level access grant for a user.
+ * Only owners / pastors can call this.
+ */
+export async function grantModulePermission(prevState, formData) {
+  "use server";
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const db = getDatabase();
+
+  const userId = getString(formData, "userId");
+  const module = getString(formData, "module");
+  const accessLevel = getString(formData, "accessLevel");
+  const note = getString(formData, "note") || null;
+
+  const VALID_MODULES = ["care", "finance", "membership", "worship", "admin", "discipleship", "assets"];
+  const VALID_LEVELS  = ["none", "read", "worker", "lead", "full"];
+
+  if (!userId || !module || !accessLevel) {
+    return { error: "userId, module, and accessLevel are required." };
+  }
+  if (!VALID_MODULES.includes(module)) {
+    return { error: `Unknown module: ${module}` };
+  }
+  if (!VALID_LEVELS.includes(accessLevel)) {
+    return { error: `Unknown access level: ${accessLevel}` };
+  }
+
+  const organizationId = actor.organizationId;
+
+  // Confirm target user belongs to same org
+  const targetUser = db.prepare(`SELECT id, name FROM users WHERE id=? AND organization_id=?`)
+    .get(userId, organizationId);
+  if (!targetUser) return { error: "User not found in your organisation." };
+
+  if (accessLevel === "none") {
+    db.prepare(`DELETE FROM module_permissions WHERE user_id=? AND organization_id=? AND module=?`)
+      .run(userId, organizationId, module);
+  } else {
+    db.prepare(`
+      INSERT INTO module_permissions (id, user_id, organization_id, module, access_level, granted_by, granted_at, note)
+      VALUES (?,?,?,?,?,?,?,?)
+      ON CONFLICT(user_id, module) DO UPDATE SET
+        access_level=excluded.access_level, granted_by=excluded.granted_by,
+        granted_at=excluded.granted_at, note=excluded.note
+    `).run(randomUUID(), userId, organizationId, module, accessLevel, actor.id, new Date().toISOString(), note);
+  }
+
+  recordAuditLog({
+    organizationId,
+    branchId: actor.branchId,
+    actorUserId: actor.id,
+    actorName: actor.name,
+    actorRole: actor.role,
+    action: "permission.grant",
+    targetType: "user",
+    targetId: userId,
+    summary: `Set ${module} → ${accessLevel} for ${targetUser.name}`,
+    metadata: { module, accessLevel, note },
+  });
+
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+/**
+ * Revoke an explicit module permission grant (user falls back to role default).
+ */
+export async function revokeModulePermission(userId, module) {
+  "use server";
+  const actor = await requireCurrentUser(["pastor", "owner"]);
+  const db = getDatabase();
+
+  db.prepare(`
+    DELETE FROM module_permissions
+    WHERE user_id=? AND organization_id=? AND module=?
+  `).run(userId, actor.organizationId, module);
+
+  revalidatePath("/settings");
+  return { ok: true };
+}
+

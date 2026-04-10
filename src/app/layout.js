@@ -20,6 +20,7 @@ import {
   translateRoleLabel,
 } from "@/lib/i18n";
 import { normalizeInternalRole } from "@/lib/policies";
+import { getUserModulePermissions } from "@/lib/permissions";
 import { getUnreadNotificationCountForUser } from "@/lib/notifications-store";
 import {
   getPublicWorkspaceCatalog,
@@ -196,6 +197,9 @@ export default async function RootLayout({ children }) {
     normalizeInternalRole(user.role)
   );
 
+  // Compute module permissions for the LeftNav filter (server-side, safe)
+  const userPermissions = user ? getUserModulePermissions(user) : {};
+
   return (
     <html
       lang={preferences.language}
@@ -214,7 +218,7 @@ export default async function RootLayout({ children }) {
         {/* Left glass nav — desktop only (hidden on <lg) */}
         {isStaff && (
           <div className="hidden lg:block">
-            <LeftNav user={user} unreadCount={unreadNotificationCount} />
+            <LeftNav user={user} unreadCount={unreadNotificationCount} permissions={userPermissions} />
           </div>
         )}
 

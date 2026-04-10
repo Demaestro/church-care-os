@@ -46,6 +46,10 @@ export const protectedRouteRoles = {
   branches: ["pastor", "owner"],
   users: ["pastor", "owner"],
   settings: ["pastor", "owner"],
+  // ERP additions
+  assets: ["leader", "pastor", "owner"],
+  pulse: ["pastor", "owner"],
+  "access-restricted": ["volunteer", "leader", "pastor", "owner", "member"],
 };
 
 export const internalRoleOptions = [

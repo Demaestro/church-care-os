@@ -1452,6 +1452,89 @@ function ensureSchemaMigrations(db) {
     CREATE INDEX IF NOT EXISTS idx_audit_logs_scope
       ON audit_logs (organization_id, branch_id, created_at DESC);
   `);
+  // ── ERP: Hierarchical RBAC — module-level permission grants ─────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS module_permissions (
+      id               TEXT PRIMARY KEY,
+      user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      organization_id  TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      module           TEXT NOT NULL,
+      access_level     TEXT NOT NULL,
+      granted_by       TEXT REFERENCES users(id) ON DELETE SET NULL,
+      granted_at       TEXT NOT NULL,
+      note             TEXT,
+      UNIQUE(user_id, module)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS idx_module_permissions_user
+      ON module_permissions (user_id, organization_id);
+  `);
+
+  // ── ERP: Church Asset Register ───────────────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS church_assets (
+      id               TEXT PRIMARY KEY,
+      organization_id  TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      branch_id        TEXT REFERENCES branches(id) ON DELETE SET NULL,
+      name             TEXT NOT NULL,
+      category         TEXT NOT NULL DEFAULT 'equipment',
+      serial_number    TEXT,
+      description      TEXT,
+      location         TEXT,
+      status           TEXT NOT NULL DEFAULT 'available',
+      condition        TEXT NOT NULL DEFAULT 'good',
+      acquisition_date TEXT,
+      acquisition_cost REAL,
+      assigned_to      TEXT,
+      notes            TEXT,
+      created_by       TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at       TEXT NOT NULL,
+      updated_at       TEXT NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS idx_church_assets_scope
+      ON church_assets (organization_id, branch_id, status);
+
+    CREATE TABLE IF NOT EXISTS asset_checkouts (
+      id                TEXT PRIMARY KEY,
+      asset_id          TEXT NOT NULL REFERENCES church_assets(id) ON DELETE CASCADE,
+      organization_id   TEXT NOT NULL,
+      checked_out_by    TEXT NOT NULL,
+      checked_out_name  TEXT NOT NULL,
+      purpose           TEXT NOT NULL,
+      event_name        TEXT,
+      checkout_date     TEXT NOT NULL,
+      expected_return   TEXT,
+      returned_date     TEXT,
+      return_condition  TEXT,
+      notes             TEXT,
+      created_at        TEXT NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS idx_asset_checkouts_asset
+      ON asset_checkouts (asset_id, checkout_date DESC);
+  `);
+
+  // ── ERP: Utility / Infrastructure Tracker ───────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS utility_logs (
+      id               TEXT PRIMARY KEY,
+      organization_id  TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      branch_id        TEXT REFERENCES branches(id) ON DELETE SET NULL,
+      utility_type     TEXT NOT NULL DEFAULT 'generator',
+      value            REAL NOT NULL,
+      unit             TEXT NOT NULL DEFAULT 'litres',
+      cost             REAL,
+      note             TEXT,
+      event_name       TEXT,
+      logged_by        TEXT REFERENCES users(id) ON DELETE SET NULL,
+      logged_by_name   TEXT NOT NULL,
+      logged_at        TEXT NOT NULL,
+      created_at       TEXT NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS idx_utility_logs_scope
+      ON utility_logs (organization_id, branch_id, utility_type, logged_at DESC);
+  `);
+
+  addColumnIfMissing(db, "ministry_events", "reminders_sent_json", `TEXT NOT NULL DEFAULT '{}'`);
+
   backfillScopeColumns(db);
   backfillBranchRegions(db);
   backfillRequestTrackingCodes(db);
