@@ -83,25 +83,25 @@ const REMINDER_ROLES = {
 };
 
 const REMINDER_TITLES = {
-  1: "Care request needs assigning",
+  1: "Support request needs assigning",
   3: "Follow-up reminder — Day 3",
-  5: "Care request still open — Day 5",
-  7: "Urgent: care case unresolved — Day 7",
+  5: "Support request still open — Day 5",
+  7: "Urgent: support need unresolved — Day 7",
 };
 
 function buildReminderBody(day, request) {
   const name = request.household_name || "A household";
   switch (day) {
     case 1:
-      return `${name}'s care request has been open for 24 hours and is not yet assigned. Please assign a volunteer.`;
+      return `${name}'s support request has been open for 24 hours and is not yet assigned. Please assign a volunteer.`;
     case 3:
-      return `${name}'s care request is 3 days old and still open. Ensure the assigned volunteer has followed up.`;
+      return `${name}'s support request is 3 days old and still open. Ensure the assigned volunteer has followed up.`;
     case 5:
-      return `${name}'s care request remains unresolved after 5 days. Leadership review recommended.`;
+      return `${name}'s support request remains unresolved after 5 days. Leadership review recommended.`;
     case 7:
-      return `${name}'s care request has been open for 7 days without resolution. Immediate pastoral attention required.`;
+      return `${name}'s support request has been open for 7 days without resolution. Immediate pastoral attention required.`;
     default:
-      return `Reminder for ${name}'s care request.`;
+      return `Reminder for ${name}'s support request.`;
   }
 }
 

@@ -120,12 +120,12 @@ export default async function FollowUpBoardPage({ searchParams }) {
               Follow-up
             </p>
             <h1 className="mt-4 text-5xl leading-none tracking-[-0.04em] text-foreground [font-family:var(--font-display)] sm:text-6xl">
-              Keep every household in a visible care rhythm.
+              Keep every household in a visible pastoral rhythm.
             </h1>
             <p className="mt-5 text-lg leading-8 text-muted">
               The board is organised around the next touchpoint, not around which screen to open.
-              Leaders can log outcomes quickly, apply a playbook when the care situation is clear,
-              and keep the branch from losing momentum.
+              Leaders can log outcomes quickly, apply a playbook when the support need is clear,
+              and keep the branch moving forward.
             </p>
             <div className="mt-5 inline-flex flex-wrap items-center gap-2 rounded-full border border-line bg-canvas px-4 py-2 text-sm text-muted">
               <span className="font-semibold text-foreground">
@@ -170,7 +170,7 @@ export default async function FollowUpBoardPage({ searchParams }) {
             <MetricCard
               label="Quiet households"
               value={board.noContact.length}
-              detail="Open cases with no recent or future follow-up on record"
+              detail="Open requests with no recent or future follow-up on record"
               tone={board.noContact.length > 0 ? "attention" : "calm"}
             />
             <MetricCard
@@ -184,7 +184,7 @@ export default async function FollowUpBoardPage({ searchParams }) {
         <div className="mt-8 grid gap-4 xl:grid-cols-[0.86fr_1.14fr]">
           <article className="rounded-[1.45rem] border border-line bg-canvas p-5">
             <p className="text-xs uppercase tracking-[0.18em] text-muted">
-              Care guidance
+              Ministry guidance
             </p>
             <p className="mt-3 text-sm leading-7 text-foreground">
               {settings.followUpGuidance}
@@ -203,7 +203,7 @@ export default async function FollowUpBoardPage({ searchParams }) {
                   Follow-up playbooks
                 </p>
                 <h2 className="mt-2 text-2xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
-                  Consistent rhythms for common care situations
+                  Consistent rhythms for common ministry situations
                 </h2>
               </div>
               <p className="text-sm text-muted">
@@ -446,7 +446,7 @@ function FollowUpCard({ record, language, redirectTo }) {
             Log the next touchpoint
           </summary>
           <p className="mt-3 text-sm leading-7 text-muted">
-            Record what happened, set the next contact date, and keep the care rhythm visible for the team.
+            Record what happened, set the next contact date, and keep the pastoral rhythm visible for the team.
           </p>
           <form action={touchpointAction} className="mt-4 space-y-4">
             <input type="hidden" name="redirectTo" value={redirectTo} />

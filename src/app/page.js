@@ -197,7 +197,7 @@ function StaffHome({ user, stats, urgentFollowUps }) {
           href="/attendance"
         />
         <StatCard
-          label="Open care cases"
+          label="Open support needs"
           value={stats.openCareRequests || "—"}
           sub={stats.openCareRequests === 0 ? "All caught up" : "Needs attention"}
           href="/leader"
@@ -245,11 +245,11 @@ function StaffHome({ user, stats, urgentFollowUps }) {
         <EcosystemTile href="/finance"        label="Finance"        icon="finance"   detail="Ledger, funds & pledges" />
         <EcosystemTile href="/discipleship"   label="Discipleship"   icon="disciple"  detail="Growth journeys & milestones" />
         <EcosystemTile href="/new-members"    label="New Members"    icon="newmember" detail="Welcome & onboarding" />
-        <EcosystemTile href="/leader"         label="Care board"     icon="care"      detail="Requests & pastoral follow-up" />
+        <EcosystemTile href="/leader"         label="Ministry Board" icon="care"      detail="Support needs & pastoral follow-up" />
         <EcosystemTile href="/volunteer"      label="Volunteers"     icon="volunteer" detail="Tasks, teams & applications" />
         <EcosystemTile href="/analytics"      label="Analytics"      icon="chart"     detail="Insights & ministry trends" />
         <EcosystemTile href="/groups"         label="Groups"         icon="groups"    detail="Small groups & committees" />
-        <EcosystemTile href="/households"     label="Households"     icon="household" detail="Family care & history" />
+        <EcosystemTile href="/households"     label="Households"     icon="household" detail="Family support & history" />
         <EcosystemTile href="/schedule"       label="Schedule"       icon="calendar"  detail="Service & event planning" />
         <EcosystemTile href="/reports"        label="Reports"        icon="report"    detail="Exportable ministry reports" />
       </div>
@@ -285,13 +285,13 @@ function MemberHome({ user }) {
         <MemberTile
           href="/requests/new"
           title="Request pastoral support"
-          detail="Let your pastor know about a personal or family need. All requests are kept private."
+          detail="Let your pastor know about a personal or family need. Everything stays private."
           icon="care"
         />
         <MemberTile
           href="/requests/status"
           title="Track my request"
-          detail="Check the current status of a care or support request you have submitted."
+          detail="Check the current status of a support request you have submitted."
           icon="track"
         />
         <MemberTile
@@ -323,9 +323,9 @@ function VolunteerHome({ user }) {
         </Link>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <QuickLink href="/volunteer"      label="My tasks"          detail="View assigned care and ministry tasks" />
+        <QuickLink href="/volunteer"      label="My tasks"          detail="View assigned ministry tasks" />
         <QuickLink href="/notifications"  label="Inbox"             detail="Check updates and new assignments" />
-        <QuickLink href="/households"     label="Households"        detail="Review case notes for families you serve" />
+        <QuickLink href="/households"     label="Households"        detail="Review notes for families you support" />
         <QuickLink href="/member"         label="My profile"        detail="Manage your account and preferences" />
       </div>
     </div>

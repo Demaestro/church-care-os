@@ -136,9 +136,9 @@ const englishDictionary = {
   },
   requestNew: {
     kicker: "Member intake",
-    title: "Ask for care without navigating church structure first.",
+    title: "Bring any need to your church — your pastoral team handles the rest.",
     description:
-      "A pastor or care lead reviews every request before anything is routed wider. Privacy choices live inside this form so members can decide consent at the point of submission.",
+      "A pastor or ministry lead reviews every request before anything is shared more widely. Privacy choices live inside this form so members can decide consent at the point of submission.",
     trackRequest: "Track a request",
     permissions: "View permission matrix",
     emergencyFallback:
@@ -150,9 +150,9 @@ const englishDictionary = {
       contact: "Step 2 - contact",
       privacy: "Step 3 - privacy",
     },
-    title: "Request care or support",
+    title: "Request ministry support",
     intro:
-      "This is a private space. Share what you are comfortable sharing. Your pastor and care team are here to help, not judge.",
+      "This is a private space. Share what you are comfortable sharing. Your pastor and ministry team are here to help, not judge.",
     supportQuestion: "What kind of support do you need?",
     needError: "Choose the kind of support that would help most right now.",
     summaryLabel: "Tell us a bit more (optional)",
@@ -177,15 +177,15 @@ const englishDictionary = {
       "Visible only to pastor until they decide what should be shared more widely.",
     allowContactTitle: "I consent to being contacted",
     allowContactDetail:
-      "Allow the care team to reach out by phone, text, or visit when follow-up is needed.",
-    submit: "Submit care request",
-    submitting: "Submitting care request...",
+      "Allow the ministry team to reach out by phone, text, or visit when follow-up is needed.",
+    submit: "Submit support request",
+    submitting: "Submitting request...",
     footerHelp:
       "Only the people you consent to share with will see this request inside the app.",
     rateLimited:
       "Please wait a little before sending another request from this connection.",
     successKicker: "Request received",
-    successTitle: "Your care request has been sent.",
+    successTitle: "Your request has been received.",
     trackingCodeLabel: "Tracking code",
     trackingCodeHelp:
       "Use this code any time you want to check the status of this request without signing in.",
@@ -211,18 +211,18 @@ const englishDictionary = {
   },
   requestStatusPage: {
     kicker: "Member self-service",
-    title: "Check where your care request stands.",
+    title: "Check where your support request stands.",
     description:
-      "Use the tracking code from your intake confirmation to see a calm, member-safe progress view without logging in or exposing internal care notes.",
+      "Use the tracking code from your intake confirmation to see a clear progress view without logging in or exposing internal pastoral notes.",
     infoVisibleTitle: "What appears here",
     infoVisibleBody:
-      "You will see the request stage, the current follow-up status, and a privacy-safe timeline of major care handoffs.",
+      "You will see the request stage, the current follow-up status, and a privacy-safe timeline of major pastoral handoffs.",
     infoSupportTitle: "Need help with the code?",
     infoSupportBody: (email, phone) =>
-      `If you cannot find your code, contact ${email || "your church care team"}${
+      `If you cannot find your code, contact ${email || "your ministry team"}${
         phone ? ` or call ${phone}` : ""
       }.`,
-    submitCareRequest: "Submit a care request",
+    submitCareRequest: "Submit a support request",
     accountRecovery: "Account recovery",
   },
   requestStatusLookup: {
@@ -551,19 +551,19 @@ const englishDictionary = {
     },
   },
   memberPortal: {
-    kicker: "Member care hub",
-    title: "Review your care history without learning the internal workflow.",
+    kicker: "Member hub",
+    title: "Review your support history without needing staff access.",
     description:
-      "Use the tracking code and the email or phone number from your request so you can see current and past care follow-up in one calm, privacy-safe place.",
-    requestCare: "Request care",
+      "Use the tracking code and the email or phone number from your request so you can see current and past pastoral follow-up in one clear, privacy-safe place.",
+    requestCare: "Request support",
     trackSingleRequest: "Track one request",
     lookupEyebrow: "Open your portal",
-    lookupTitle: "Use one request to unlock your care history",
+    lookupTitle: "Use one request to unlock your support history",
     lookupBody:
       "Enter a tracking code together with the email or phone number you used on that request. If they match, this page will show the other requests connected to that same contact detail.",
     helpTitle: "Need help?",
     helperBody:
-      "Start with any recent tracking code and the email or phone number you used when you asked for care.",
+      "Start with any recent tracking code and the email or phone number you used when you asked for support.",
     notFound:
       "We could not verify that combination yet. Check the tracking code and the contact detail you used on that request.",
     emptyPortal:
@@ -607,15 +607,15 @@ const englishDictionary = {
     },
     privacyShield: {
       eyebrow: "Private member view",
-      title: "Keep your care history discreet on this screen",
+      title: "Keep your support history discreet on this screen",
       body:
         "This portal adds confidentiality markers and a quick-hide layer so you can cover names, updates, and contact details before someone else looks at your device.",
-      watermark: "Confidential care history",
+      watermark: "Confidential support history",
     },
   },
   leader: {
-    kicker: "Ministry leader routing view",
-    title: "Where pastor triage becomes lane ownership and volunteer handoff.",
+    kicker: "Ministry leader view",
+    title: "Assign support needs to the right ministry leader or volunteer.",
     body:
       "This screen reads from the live request store, so assignments here immediately shape the volunteer, household, and notification views.",
     viewPermissions: "View permissions",
@@ -627,11 +627,11 @@ const englishDictionary = {
       volunteersAvailable: "Volunteers available",
     },
     panels: {
-      routedLane: "Routed into your lane",
+      routedLane: "In your ministry lane",
       volunteerCapacity: "Volunteer capacity in this lane",
       visibility: "Visibility in this lane",
       escalations: "Escalations back to pastor",
-      routingSequence: "The routing sequence for leaders",
+      routingSequence: "How requests move through ministry lanes",
     },
     emptyLane: "No live requests are currently routed into this lane.",
     assignmentHint: "Assignment hint",
@@ -682,15 +682,15 @@ const englishDictionary = {
     pastorOnlyBrief:
       "Pastor-only visibility is set on this request. Do not assign a volunteer yet.",
     sensitiveBrief:
-      "Sensitive details are not shared with volunteers. Give a simple encouragement task and route all questions back to the care lead.",
+      "Sensitive details are not shared with volunteers. Give a simple encouragement task and route all questions back to the ministry lead.",
     defaultBrief:
-      "Follow the leader brief and route questions back to the care lead.",
+      "Follow the leader brief and route questions back to the ministry lead.",
   },
   households: {
     kicker: "Household board",
-    title: "A live map of the people already in your care orbit.",
+    title: "A live map of the families already in your ministry scope.",
     description:
-      "Each card now reads from the shared store, links into a household timeline, and reflects the latest request intake and note activity.",
+      "Each card reads from the shared store, links into a household timeline, and reflects the latest request intake and note activity.",
     backToDashboard: "Back to dashboard",
     logNewRequest: "Log new request",
     summary: {

@@ -22,7 +22,7 @@ import {
 export const metadata = {
   title: "Member Portal",
   description:
-    "A calm self-service hub for checking care progress and keeping your contact details current.",
+    "A simple self-service hub for checking your support request progress and keeping your contact details current.",
 };
 
 export default async function MemberPortalPage({ searchParams }) {
@@ -145,17 +145,17 @@ export default async function MemberPortalPage({ searchParams }) {
             <JourneySignalCard
               label="Next planned touchpoint"
               value={spotlightRequest?.dueLabel || "Being prepared"}
-              body="This is the next visible follow-up window the care team has on record for you."
+              body="This is the next follow-up window the ministry team has on record for you."
             />
             <JourneySignalCard
-              label="Current care state"
+              label="Current status"
               value={spotlightRequest?.statusLabel || "Received"}
-              body={spotlightRequest?.statusDetail || "Your request is safely on the care board."}
+              body={spotlightRequest?.statusDetail || "Your request is with the ministry team."}
             />
             <JourneySignalCard
               label="Privacy promise"
               value={spotlightRequest?.privacyLabel || "Pastor-led privacy"}
-              body="The portal only shows member-safe updates. Internal notes stay inside the care team."
+              body="This portal only shows member-safe updates. Internal notes stay within the ministry team."
             />
           </div>
         ) : null}
@@ -249,7 +249,7 @@ export default async function MemberPortalPage({ searchParams }) {
                   </h3>
                   <p className="mt-3 text-sm leading-7 text-muted">
                     {spotlightRequest?.statusDetail ||
-                      "The care team is reviewing the next safe step for your request."}
+                      "The ministry team is reviewing the next step for your request."}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted">
                     {spotlightRequest?.dueLabel ? (
@@ -506,11 +506,11 @@ function TimelinePreviewCard({ event }) {
     <div className="rounded-[1.35rem] border border-line bg-canvas p-5">
       <p className="text-xs uppercase tracking-[0.18em] text-muted">Latest visible update</p>
       <h3 className="mt-3 text-xl tracking-[-0.03em] text-foreground [font-family:var(--font-display)]">
-        {event?.label || "Your request is on the care board"}
+        {event?.label || "Your request is with the ministry team"}
       </h3>
       <p className="mt-3 text-sm leading-7 text-muted">
         {event?.detail ||
-          "Once the care team records a clear next step, it will appear here in calm member-facing language."}
+          "Once the ministry team records a clear next step, it will appear here in member-safe language."}
       </p>
       {event?.createdLabel ? (
         <p className="mt-3 text-sm font-medium text-foreground">{event.createdLabel}</p>

@@ -1259,7 +1259,7 @@ export async function createCareRequest(prevState, formData) {
   );
   const confirmationMessage =
     settings?.intakeConfirmationText ||
-    "Your request has been received. A pastor or assigned care leader will review it and follow up using the contact method you provided.";
+    "Your request has been received. A pastor or ministry leader will review it and follow up using the contact method you provided.";
 
   const errors = {};
 
@@ -1558,7 +1558,7 @@ export async function assignRequestVolunteer(requestId, householdSlug, formData)
   const need = getString(formData, "need") || "Care follow-up";
   const volunteerBrief =
     getString(formData, "volunteerBrief") ||
-    "Follow the leader brief and route questions back to the care lead.";
+    "Follow the leader brief and route questions back to the ministry lead.";
   const laneOwner =
     getString(formData, "laneOwner") || user.lane || "Mercy & welfare lane";
 
@@ -2510,10 +2510,10 @@ export async function registerChurchWorkspace(formData) {
       supportPhone: resolvedSupportPhone || "",
       timezone: timezone || "Africa/Lagos",
       intakeConfirmationText:
-        "Thank you for reaching out. Your church care team has received your request and will follow up with a clear next step.",
+        "Thank you for reaching out. Your church ministry team has received your request and will follow up with a clear next step.",
       emergencyBanner:
         "If someone is in immediate danger, please contact local emergency services first and then let the church know how to support you safely.",
-      emailFromName: `${churchName} Care Team`,
+      emailFromName: `${churchName} Ministry Team`,
       emailFromAddress: resolvedSupportEmail || "",
       emailReplyTo: resolvedSupportEmail || "",
       emailSubjectPrefix: churchName,

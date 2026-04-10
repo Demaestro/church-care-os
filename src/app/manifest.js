@@ -32,15 +32,15 @@ export default function manifest() {
     ],
     shortcuts: [
       {
-        name: "Request care",
-        short_name: "Request care",
-        description: "Open the private care request form.",
+        name: "Request support",
+        short_name: "Request support",
+        description: "Open the pastoral support request form.",
         url: "/requests/new",
       },
       {
         name: "Track request",
         short_name: "Track",
-        description: "Check the status of an existing care request.",
+        description: "Check the status of an existing support request.",
         url: "/requests/status",
       },
       {

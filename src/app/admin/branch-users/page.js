@@ -32,7 +32,7 @@ export const metadata = {
 /** Roles a branch_admin may assign — no HQ or overseer roles */
 const BRANCH_ASSIGNABLE_ROLES = [
   { value: "volunteer",    label: "Volunteer" },
-  { value: "leader",       label: "Care Leader" },
+  { value: "leader",       label: "Ministry Leader" },
   { value: "pastor",       label: "Pastor" },
   { value: "branch_admin", label: "Branch Admin" },
 ];
@@ -117,7 +117,7 @@ export default async function BranchUsersPage({ searchParams }) {
             Invite new branch staff
           </h2>
           <p className="mt-2 text-sm leading-7 text-muted">
-            Create an account for a new volunteer, care leader, or pastor. They will receive a
+            Create an account for a new volunteer, ministry leader, or pastor. They will receive a
             welcome email with a temporary password.
           </p>
         </div>

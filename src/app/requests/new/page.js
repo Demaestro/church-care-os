@@ -19,9 +19,9 @@ import {
 import { getCurrentUser } from "@/lib/auth";
 
 export const metadata = {
-  title: "Request Care",
+  title: "Request Support",
   description:
-    "A low-friction care request form with visible privacy controls and a calm member experience.",
+    "A simple intake form for requesting pastoral support, with visible privacy controls and a calm member experience.",
 };
 
 export default async function NewRequestPage() {
@@ -107,15 +107,15 @@ export default async function NewRequestPage() {
             <aside className="space-y-4">
               <SupportPromiseCard
                 title="What happens next"
-                body="Your pastor or a care lead reviews every request before it is routed more widely. If you mark this as sensitive, the first review stays pastor-led."
+                body="Your pastor or a ministry lead reviews every request before it is shared more widely. If you mark this as sensitive, the first review stays pastor-led."
               />
               <SupportPromiseCard
-                title="Why this feels calmer"
-                body="You can choose how much to share, whether contact is allowed, and how private the request should remain. The form is designed to ask only for the next useful piece of information."
+                title="You stay in control"
+                body="You choose how much to share, whether contact is allowed, and how private the request should remain. The form asks only what is genuinely needed."
               />
               <SupportPromiseCard
                 title="How to follow up later"
-                body="After you submit, save the tracking code. You can use it in the member portal or the status page without needing an internal staff account."
+                body="After you submit, save the tracking code. You can use it in the member portal or the status page without needing a staff account."
               />
             </aside>
 

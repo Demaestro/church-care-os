@@ -390,7 +390,7 @@ function buildQuickActions(user, copy) {
     items.push({ id: "action:analytics",  href: "/analytics",  label: "Analytics",        description: "View ministry insights and trends",              section: "Quick actions", type: "action"    });
   } else {
     items.push({ id: "action:follow-up",  href: "/follow-up",  label: "Log follow-up",    description: "Record a pastoral care touchpoint",              section: "Quick actions", type: "follow-up" });
-    items.push({ id: "action:households", href: "/households",  label: "Households",       description: "Review care journeys and case notes",            section: "Quick actions", type: "household" });
+    items.push({ id: "action:households", href: "/households",  label: "Households",       description: "Review family support history and notes",        section: "Quick actions", type: "household" });
   }
 
   items.push({ id: "action:member-tools", href: "/member", label: "My profile", description: "View member-facing profile and tools", section: "Quick actions", type: "member" });
@@ -423,7 +423,7 @@ function buildCommandItems({ sections, quickActions, searchIndex }) {
     id: `request:${request.id}`,
     href: request.householdSlug ? `/households/${request.householdSlug}` : "/follow-up",
     label: request.householdName,
-    description: `${request.trackingCode || "Request"} - ${request.need || "Care request"}`,
+    description: `${request.trackingCode || "Request"} - ${request.need || "Support request"}`,
     keywords: [
       request.trackingCode,
       request.need,
@@ -569,7 +569,7 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
     label: "Ministry",
     items: [
       { href: "/discipleship",           label: "Discipleship" },
-      { href: "/leader",                 label: "Care board" },
+      { href: "/leader",                 label: "Ministry Board" },
       { href: "/follow-up",              label: "Follow-up" },
       { href: "/volunteer",              label: "Volunteers" },
       { href: "/volunteer/applications", label: "Volunteer applications" },
