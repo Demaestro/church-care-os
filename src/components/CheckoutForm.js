@@ -28,12 +28,12 @@ export default function CheckoutForm({ organizationId, type = "utility" }) {
     <form action={action} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <input type="hidden" name="organizationId" value={organizationId} />
 
-      {state?.error && (
+      {state?.success === false && (
         <p className="sm:col-span-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
-          {state.error}
+          {state.message || "Something went wrong."}
         </p>
       )}
-      {state?.success && (
+      {state?.success === true && (
         <p className="sm:col-span-2 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
           Utility log recorded.
         </p>

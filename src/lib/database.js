@@ -1535,6 +1535,19 @@ function ensureSchemaMigrations(db) {
 
   addColumnIfMissing(db, "ministry_events", "reminders_sent_json", `TEXT NOT NULL DEFAULT '{}'`);
 
+  // Idempotency key store (ephemeral, process-local)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS idempotency_keys (
+      key         TEXT    PRIMARY KEY,
+      status      TEXT    NOT NULL DEFAULT 'processing',
+      result_json TEXT,
+      created_at  TEXT    NOT NULL,
+      expires_at  TEXT    NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS idx_idempotency_expires
+      ON idempotency_keys (expires_at);
+  `);
+
   backfillScopeColumns(db);
   backfillBranchRegions(db);
   backfillRequestTrackingCodes(db);

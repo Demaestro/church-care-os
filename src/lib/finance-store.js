@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { getDatabase } from "@/lib/database";
+import { getDatabase, withTransaction } from "@/lib/database";
 
 export function listFunds({ organizationId } = {}) {
   const db = getDatabase();
@@ -178,10 +178,9 @@ export function createPledgeEntry(input) {
 }
 
 export function recordLedgerTransaction(input) {
-  const db = getDatabase();
-  const totalDebit = input.lines.reduce((sum, line) => sum + Number(line.debit || 0), 0);
+  const totalDebit  = input.lines.reduce((sum, line) => sum + Number(line.debit  || 0), 0);
   const totalCredit = input.lines.reduce((sum, line) => sum + Number(line.credit || 0), 0);
-  const roundedDebit = Number(totalDebit.toFixed(2));
+  const roundedDebit  = Number(totalDebit.toFixed(2));
   const roundedCredit = Number(totalCredit.toFixed(2));
 
   if (roundedDebit !== roundedCredit) {
@@ -189,31 +188,37 @@ export function recordLedgerTransaction(input) {
   }
 
   const transactionId = randomUUID();
-  db.prepare(`
-    INSERT INTO ledger_transactions (id, organization_id, fund_id, memo, posted_at, posted_by_user_id, posted_by_name)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    transactionId,
-    input.organizationId || null,
-    input.fundId || null,
-    input.memo || null,
-    input.postedAt || new Date().toISOString(),
-    input.postedByUserId || null,
-    input.postedByName || null
-  );
 
-  for (const line of input.lines) {
+  // Wrap the header + all line inserts in a single atomic transaction so a
+  // partial failure cannot leave an unbalanced ledger_transactions row behind.
+  withTransaction((db) => {
     db.prepare(`
-      INSERT INTO ledger_lines (id, transaction_id, account_id, debit, credit)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO ledger_transactions
+        (id, organization_id, fund_id, memo, posted_at, posted_by_user_id, posted_by_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
-      randomUUID(),
       transactionId,
-      line.accountId,
-      Number(line.debit || 0),
-      Number(line.credit || 0)
+      input.organizationId || null,
+      input.fundId || null,
+      input.memo || null,
+      input.postedAt || new Date().toISOString(),
+      input.postedByUserId || null,
+      input.postedByName || null
     );
-  }
+
+    for (const line of input.lines) {
+      db.prepare(`
+        INSERT INTO ledger_lines (id, transaction_id, account_id, debit, credit)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(
+        randomUUID(),
+        transactionId,
+        line.accountId,
+        Number(line.debit  || 0),
+        Number(line.credit || 0)
+      );
+    }
+  });
 
   return transactionId;
 }

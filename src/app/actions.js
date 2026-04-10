@@ -185,6 +185,20 @@ import {
   buildPlaybookTouchpoint,
   getFollowUpPlaybook,
 } from "@/lib/follow-up-playbooks";
+import { ok, err, E } from "@/lib/result";
+import {
+  parseFormData,
+  AssetSchema,
+  AttendanceCheckInSchema,
+  DiscipleshipMilestoneSchema,
+  FundSchema,
+  JournalEntrySchema,
+  LedgerAccountSchema,
+  ModulePermissionSchema,
+  PledgeSchema,
+  UtilityLogSchema,
+} from "@/lib/validation";
+import { claimKey, resolveKey, releaseKey } from "@/lib/idempotency";
 
 const loginRateLimit = {
   maxAttempts: 5,
@@ -4411,15 +4425,18 @@ export async function addMemberTimelineEvent(formData) {
 export async function createPledge(formData) {
   const actor = await requireCurrentUser(["pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
-  const memberId = getString(formData, "memberId");
-  const fundId = getString(formData, "fundId");
-  const amount = getMoneyAmount(formData, "amount");
-  const startDate = getString(formData, "startDate");
-  const endDate = getString(formData, "endDate");
 
-  if (!memberId || !fundId || amount <= 0) {
-    redirectWithError("/finance", "Member, fund, and pledge amount are required.");
+  const parsed = PledgeSchema.safeParse({
+    memberId:  getString(formData, "memberId"),
+    fundId:    getString(formData, "fundId"),
+    amount:    getString(formData, "amount"),
+    startDate: getString(formData, "startDate"),
+    endDate:   getString(formData, "endDate"),
+  });
+  if (!parsed.success) {
+    redirectWithError("/finance", parsed.error.errors[0]?.message ?? "Validation failed.");
   }
+  const { memberId, fundId, amount, startDate, endDate } = parsed.data;
 
   const pledgeId = createPledgeEntry({
     organizationId: scope.organizationId,
@@ -4427,21 +4444,17 @@ export async function createPledge(formData) {
     fundId,
     amount,
     startDate: startDate || null,
-    endDate: endDate || null,
-    status: "active",
+    endDate:   endDate   || null,
+    status:    "active",
   });
 
   recordAuditLog({
     ...buildActorLog(actor, scope),
-    action: "finance.pledge_created",
+    action:     "finance.pledge_created",
     targetType: "pledge",
-    targetId: pledgeId,
-    summary: `${actor.name} created a new pledge.`,
-    metadata: {
-      memberId,
-      fundId,
-      amount,
-    },
+    targetId:   pledgeId,
+    summary:    `${actor.name} created a new pledge.`,
+    metadata:   { memberId, fundId, amount },
   });
 
   redirectWithNotice("/finance", "Pledge created.");
@@ -4450,48 +4463,63 @@ export async function createPledge(formData) {
 export async function recordJournalEntry(formData) {
   const actor = await requireCurrentUser(["pastor", "owner"]);
   const scope = await getWorkspaceSelection(actor);
-  const memo = getBoundedString(formData, "memo", 180);
-  const postedAt = getString(formData, "postedAt");
-  const fundId = getString(formData, "fundId");
-  const lines = [1, 2, 3, 4]
-    .map((index) => ({
-      accountId: getString(formData, `accountId_${index}`),
-      debit: getMoneyAmount(formData, `debit_${index}`),
-      credit: getMoneyAmount(formData, `credit_${index}`),
+
+  // ── Build lines array from indexed fields ──────────────────────────────────
+  const rawLines = [1, 2, 3, 4]
+    .map((i) => ({
+      accountId: getString(formData, `accountId_${i}`),
+      debit:     getString(formData, `debit_${i}`),
+      credit:    getString(formData, `credit_${i}`),
     }))
-    .filter((line) => line.accountId && (line.debit > 0 || line.credit > 0));
+    .filter((l) => l.accountId && (Number(l.debit) > 0 || Number(l.credit) > 0));
 
-  if (!memo) {
-    redirectWithError("/finance", "Journal memo is required.");
+  const rawInput = {
+    memo:            getBoundedString(formData, "memo", 180),
+    fundId:          getString(formData, "fundId"),
+    postedAt:        getString(formData, "postedAt"),
+    idempotencyKey:  getString(formData, "idempotencyKey"),
+    lines:           rawLines,
+  };
+
+  // ── Zod validation ─────────────────────────────────────────────────────────
+  const parsed = JournalEntrySchema.safeParse(rawInput);
+  if (!parsed.success) {
+    redirectWithError("/finance", parsed.error.errors[0]?.message ?? "Validation failed.");
   }
+  const { memo, fundId, postedAt, idempotencyKey, lines } = parsed.data;
 
-  if (lines.length < 2) {
-    redirectWithError("/finance", "At least two journal lines are required.");
+  // ── Idempotency check ──────────────────────────────────────────────────────
+  const idempotencyResult = claimKey(idempotencyKey);
+  if (idempotencyResult.error === E.IDEMPOTENT_REPLAY) {
+    redirectWithNotice("/finance", "Journal entry already posted (duplicate submission).");
+  }
+  if (idempotencyResult.error === E.DUPLICATE_SUBMISSION) {
+    redirectWithError("/finance", "A duplicate submission is already being processed. Please wait.");
   }
 
   try {
     const transactionId = recordLedgerTransaction({
       organizationId: scope.organizationId,
-      fundId: fundId || null,
+      fundId:         fundId || null,
       memo,
-      postedAt: postedAt || new Date().toISOString(),
+      postedAt:       postedAt || new Date().toISOString(),
       lines,
       postedByUserId: actor.id,
-      postedByName: actor.name,
+      postedByName:   actor.name,
     });
 
     recordAuditLog({
       ...buildActorLog(actor, scope),
-      action: "finance.journal_recorded",
+      action:     "finance.journal_recorded",
       targetType: "ledger_transaction",
-      targetId: transactionId,
-      summary: `${actor.name} recorded a balanced journal entry.`,
-      metadata: {
-        fundId: fundId || null,
-        lineCount: lines.length,
-      },
+      targetId:   transactionId,
+      summary:    `${actor.name} recorded a balanced journal entry.`,
+      metadata:   { fundId: fundId || null, lineCount: lines.length },
     });
+
+    resolveKey(idempotencyKey, { transactionId });
   } catch (error) {
+    releaseKey(idempotencyKey);
     redirectWithError(
       "/finance",
       getActionErrorMessage(error, "We could not record that journal entry.")
@@ -4949,20 +4977,34 @@ export async function saveAsset(prevState, formData) {
   const user = await requireCurrentUser(["leader", "pastor", "owner"]);
   const db = getDatabase();
 
-  const name = getString(formData, "name");
-  if (!name) return { error: "Asset name is required." };
+  // Idempotency — prevents duplicate assets from 3G retries
+  const idempotencyKey = getString(formData, "idempotencyKey");
+  const idempotencyResult = claimKey(idempotencyKey);
+  if (idempotencyResult.error === E.IDEMPOTENT_REPLAY) return idempotencyResult.cachedResult ?? ok(null);
+  if (idempotencyResult.error === E.DUPLICATE_SUBMISSION) {
+    return err(E.DUPLICATE_SUBMISSION, "A duplicate submission is already being processed.");
+  }
 
-  const id = getString(formData, "id") || randomUUID();
-  const isUpdate = Boolean(getString(formData, "id"));
+  const parsed = AssetSchema.safeParse({
+    id:              getString(formData, "id"),
+    name:            getString(formData, "name"),
+    category:        getString(formData, "category"),
+    serialNumber:    getString(formData, "serialNumber"),
+    location:        getString(formData, "location"),
+    description:     getString(formData, "description"),
+    acquisitionDate: getString(formData, "acquisitionDate"),
+    acquisitionCost: getString(formData, "acquisitionCost"),
+  });
+  if (!parsed.success) {
+    releaseKey(idempotencyKey);
+    return err(E.VALIDATION_ERROR, parsed.error.errors[0]?.message ?? "Validation failed.");
+  }
+
+  const { id: inputId, name, category, serialNumber, location, description, acquisitionDate, acquisitionCost } = parsed.data;
+  const isUpdate = Boolean(inputId);
+  const id = inputId || randomUUID();
   const organizationId = user.organizationId;
   const branchId = getString(formData, "branchId") || user.branchId || null;
-  const category = getString(formData, "category") || "equipment";
-  const serialNumber = getString(formData, "serialNumber") || null;
-  const location = getString(formData, "location") || null;
-  const description = getString(formData, "description") || null;
-  const acquisitionDate = getString(formData, "acquisitionDate") || null;
-  const rawCost = getString(formData, "acquisitionCost");
-  const acquisitionCost = rawCost ? Number(rawCost) : null;
   const now = new Date().toISOString();
 
   if (isUpdate) {
@@ -4989,16 +5031,18 @@ export async function saveAsset(prevState, formData) {
     organizationId,
     branchId: branchId || user.branchId,
     actorUserId: user.id,
-    actorName: user.name,
-    actorRole: user.role,
-    action: isUpdate ? "asset.update" : "asset.create",
-    targetType: "church_asset",
-    targetId: id,
-    summary: `${isUpdate ? "Updated" : "Registered"} asset: ${name}`,
+    actorName:   user.name,
+    actorRole:   user.role,
+    action:      isUpdate ? "asset.update" : "asset.create",
+    targetType:  "church_asset",
+    targetId:    id,
+    summary:     `${isUpdate ? "Updated" : "Registered"} asset: ${name}`,
   });
 
   revalidatePath("/assets");
-  return { success: true };
+  const result = ok({ id });
+  resolveKey(idempotencyKey, result);
+  return result;
 }
 
 // ── Utility Log ───────────────────────────────────────────────────────────────
@@ -5008,16 +5052,19 @@ export async function logUtility(prevState, formData) {
   const user = await requireCurrentUser(["leader", "pastor", "owner"]);
   const db = getDatabase();
 
-  const utilityType = getString(formData, "utilityType") || "generator";
-  const rawValue = getString(formData, "value");
-  if (!rawValue) return { error: "Amount is required." };
+  const parsed = UtilityLogSchema.safeParse({
+    utilityType: getString(formData, "utilityType"),
+    value:       getString(formData, "value"),
+    cost:        getString(formData, "cost"),
+    eventName:   getString(formData, "eventName"),
+    note:        getString(formData, "note"),
+    loggedAt:    getString(formData, "loggedAt"),
+  });
+  if (!parsed.success) {
+    return err(E.VALIDATION_ERROR, parsed.error.errors[0]?.message ?? "Validation failed.");
+  }
 
-  const value = Number(rawValue);
-  const rawCost = getString(formData, "cost");
-  const cost = rawCost ? Number(rawCost) : null;
-  const eventName = getString(formData, "eventName") || null;
-  const note = getString(formData, "note") || null;
-  const loggedAt = getString(formData, "loggedAt") || new Date().toISOString().split("T")[0];
+  const { utilityType, value, cost, eventName, note, loggedAt } = parsed.data;
   const organizationId = user.organizationId;
   const branchId = user.branchId || null;
 
@@ -5036,11 +5083,12 @@ export async function logUtility(prevState, formData) {
     utilityType, value, UNITS[utilityType] || "units",
     cost, note, eventName,
     user.id, user.name,
-    loggedAt, new Date().toISOString()
+    loggedAt || new Date().toISOString().split("T")[0],
+    new Date().toISOString()
   );
 
   revalidatePath("/assets");
-  return { success: true };
+  return ok(null);
 }
 
 // ── Module Permission Management ─────────────────────────────────────────────
@@ -5054,59 +5102,56 @@ export async function grantModulePermission(prevState, formData) {
   const actor = await requireCurrentUser(["pastor", "owner"]);
   const db = getDatabase();
 
-  const userId = getString(formData, "userId");
-  const module = getString(formData, "module");
-  const accessLevel = getString(formData, "accessLevel");
-  const note = getString(formData, "note") || null;
-
-  const VALID_MODULES = ["care", "finance", "membership", "worship", "admin", "discipleship", "assets"];
-  const VALID_LEVELS  = ["none", "read", "worker", "lead", "full"];
-
-  if (!userId || !module || !accessLevel) {
-    return { error: "userId, module, and accessLevel are required." };
-  }
-  if (!VALID_MODULES.includes(module)) {
-    return { error: `Unknown module: ${module}` };
-  }
-  if (!VALID_LEVELS.includes(accessLevel)) {
-    return { error: `Unknown access level: ${accessLevel}` };
+  const parsed = ModulePermissionSchema.safeParse({
+    userId:      getString(formData, "userId"),
+    module:      getString(formData, "module"),
+    accessLevel: getString(formData, "accessLevel"),
+    note:        getString(formData, "note"),
+  });
+  if (!parsed.success) {
+    return err(E.VALIDATION_ERROR, parsed.error.errors[0]?.message ?? "Validation failed.");
   }
 
+  const { userId, module, accessLevel, note } = parsed.data;
   const organizationId = actor.organizationId;
 
-  // Confirm target user belongs to same org
-  const targetUser = db.prepare(`SELECT id, name FROM users WHERE id=? AND organization_id=?`)
+  const targetUser = db
+    .prepare(`SELECT id, name FROM users WHERE id=? AND organization_id=?`)
     .get(userId, organizationId);
-  if (!targetUser) return { error: "User not found in your organisation." };
+  if (!targetUser) return err(E.NOT_FOUND, "User not found in your organisation.");
 
   if (accessLevel === "none") {
     db.prepare(`DELETE FROM module_permissions WHERE user_id=? AND organization_id=? AND module=?`)
       .run(userId, organizationId, module);
   } else {
     db.prepare(`
-      INSERT INTO module_permissions (id, user_id, organization_id, module, access_level, granted_by, granted_at, note)
+      INSERT INTO module_permissions
+        (id, user_id, organization_id, module, access_level, granted_by, granted_at, note)
       VALUES (?,?,?,?,?,?,?,?)
       ON CONFLICT(user_id, module) DO UPDATE SET
-        access_level=excluded.access_level, granted_by=excluded.granted_by,
-        granted_at=excluded.granted_at, note=excluded.note
-    `).run(randomUUID(), userId, organizationId, module, accessLevel, actor.id, new Date().toISOString(), note);
+        access_level=excluded.access_level,
+        granted_by=excluded.granted_by,
+        granted_at=excluded.granted_at,
+        note=excluded.note
+    `).run(randomUUID(), userId, organizationId, module, accessLevel,
+           actor.id, new Date().toISOString(), note);
   }
 
   recordAuditLog({
     organizationId,
-    branchId: actor.branchId,
+    branchId:    actor.branchId,
     actorUserId: actor.id,
-    actorName: actor.name,
-    actorRole: actor.role,
-    action: "permission.grant",
-    targetType: "user",
-    targetId: userId,
-    summary: `Set ${module} → ${accessLevel} for ${targetUser.name}`,
-    metadata: { module, accessLevel, note },
+    actorName:   actor.name,
+    actorRole:   actor.role,
+    action:      "permission.grant",
+    targetType:  "user",
+    targetId:    userId,
+    summary:     `Set ${module} → ${accessLevel} for ${targetUser.name}`,
+    metadata:    { module, accessLevel, note },
   });
 
   revalidatePath("/settings");
-  return { success: true };
+  return ok({ userId, module, accessLevel });
 }
 
 /**
@@ -5123,6 +5168,6 @@ export async function revokeModulePermission(userId, module) {
   `).run(userId, actor.organizationId, module);
 
   revalidatePath("/settings");
-  return { ok: true };
+  return ok(null);
 }
 
