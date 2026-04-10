@@ -248,7 +248,7 @@ export function getMemberStats(organizationId, branchId) {
     WHERE ${where.replace(/\?/g, (_, i) => `m.organization_id = ?`).replace(/branch_id/g, 'm.branch_id')}
     GROUP BY m.id
     HAVING last_seen IS NULL OR last_seen < ?
-    ORDER BY last_seen ASC NULLS FIRST
+    ORDER BY last_seen ASC
     LIMIT 20
   `).all(...params, cutoff) || [];
 

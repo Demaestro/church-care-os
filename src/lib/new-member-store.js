@@ -123,7 +123,7 @@ export function logJourneyContact(input) {
     input.organizationId || DEFAULT_ORGANIZATION_ID,
     input.branchId || DEFAULT_BRANCH_ID,
     input.journeyId,
-    input.contactedByUserId || null,
+    input.contactedByUserId || "system",
     input.contactedByName || "Staff",
     input.contactMethod || "call",
     input.outcome || "reached",
@@ -159,7 +159,7 @@ export function listJourneyContacts(journeyId) {
 export function getServiceSchedule(organizationId, branchId) {
   return getDatabase().prepare(`
     SELECT * FROM service_schedules
-    WHERE organization_id = ? AND branch_id = ? AND active = 1
+    WHERE organization_id = ? AND branch_id = ?
     ORDER BY created_at ASC LIMIT 1
   `).get(
     organizationId || DEFAULT_ORGANIZATION_ID,
@@ -177,7 +177,7 @@ export function upsertServiceSchedule(input) {
         service_name = ?, day_of_week = ?, service_time = ?,
         location = ?, address = ?,
         reminder_thursday = ?, reminder_saturday = ?, reminder_sunday_morning = ?,
-        active = ?, updated_at = ?
+        updated_at = ?
       WHERE id = ?
     `).run(
       input.serviceName || "Sunday Service",
@@ -188,7 +188,7 @@ export function upsertServiceSchedule(input) {
       input.reminderThursday ? 1 : 0,
       input.reminderSaturday ? 1 : 0,
       input.reminderSundayMorning ? 1 : 0,
-      1, now,
+      now,
       existing.id
     );
     return existing.id;
@@ -199,8 +199,8 @@ export function upsertServiceSchedule(input) {
       id, organization_id, branch_id, service_name, day_of_week,
       service_time, location, address,
       reminder_thursday, reminder_saturday, reminder_sunday_morning,
-      active, created_at, updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      created_at, updated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     id,
     input.organizationId || DEFAULT_ORGANIZATION_ID,
@@ -213,7 +213,7 @@ export function upsertServiceSchedule(input) {
     input.reminderThursday ? 1 : 0,
     input.reminderSaturday ? 1 : 0,
     input.reminderSundayMorning ? 1 : 0,
-    1, now, now
+    now, now
   );
   return id;
 }

@@ -47,7 +47,7 @@ export function LoginForm({ copy }) {
       <button
         type="submit"
         disabled={pending}
-        className="inline-flex w-full items-center justify-center rounded-[1.15rem] bg-[linear-gradient(135deg,#2563eb,#4f46e5)] px-6 py-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex w-full items-center justify-center rounded-2xl bg-[#FF6600] px-6 py-4 text-sm font-bold tracking-wide text-white shadow-sm transition hover:bg-[#e55c00] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {pending ? loginCopy.signingIn : loginCopy.signIn}
       </button>
@@ -68,7 +68,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-base font-medium text-foreground">{label}</span>
+      <span className="text-sm font-semibold text-gray-700">{label}</span>
       <input
         type={type}
         name={name}
@@ -77,7 +77,7 @@ function Field({
         autoComplete={autoComplete || (type === "password" ? "current-password" : "username")}
         autoCapitalize={autoCapitalize}
         spellCheck={spellCheck}
-        className="mt-2 w-full rounded-[1rem] border border-line bg-paper px-4 py-4 text-base text-foreground outline-none transition focus:border-moss"
+        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-base text-gray-900 outline-none transition placeholder:text-gray-300 focus:border-[#020266] focus:ring-2 focus:ring-[#020266]/10"
       />
       {error ? <p className="mt-2 text-sm text-clay">{error}</p> : null}
     </label>

@@ -2,9 +2,9 @@ import "server-only";
 
 import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { DatabaseSync, backup } from "node:sqlite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import Database from "better-sqlite3";
 import { hashPassword } from "@/lib/auth-crypto";
 import {
   defaultBranchSettings,
@@ -86,7 +86,7 @@ export function getDatabase() {
   if (!database) {
     const databasePath = getDatabasePath();
     mkdirSync(path.dirname(databasePath), { recursive: true });
-    database = new DatabaseSync(databasePath);
+    database = new Database(databasePath);
     database.exec("PRAGMA foreign_keys = ON;");
     database.exec("PRAGMA journal_mode = WAL;");
     database.exec("PRAGMA busy_timeout = 5000;");
@@ -175,7 +175,7 @@ export async function backupDatabaseTo(targetPath) {
   }
 
   mkdirSync(path.dirname(targetPath), { recursive: true });
-  await backup(getDatabase(), targetPath);
+  await getDatabase().backup(targetPath);
   return targetPath;
 }
 
@@ -202,7 +202,7 @@ export function runIntegrityCheck(targetPath = getDatabasePath()) {
     return true;
   }
 
-  const db = new DatabaseSync(targetPath, { readonly: true });
+  const db = new Database(targetPath, { readonly: true });
 
   try {
     const result = db.prepare("PRAGMA integrity_check").get();
@@ -847,6 +847,14 @@ function createSchema(db) {
 }
 
 function ensureSchemaMigrations(db) {
+  // Drop any existing audit-log protection triggers FIRST so that backfill
+  // migrations (which UPDATE audit_logs scope columns) can run unimpeded.
+  // They are recreated with the correct WHEN clause at the very end.
+  db.exec(`
+    DROP TRIGGER IF EXISTS audit_logs_no_delete;
+    DROP TRIGGER IF EXISTS audit_logs_no_update;
+  `);
+
   // These organization columns must exist before seedOrganizations runs its
   // INSERT, otherwise older local databases crash during startup when new
   // branding/pastor fields are referenced.
@@ -1578,28 +1586,40 @@ function ensureSchemaMigrations(db) {
       ON finance_approval_requests (organization_id, status, created_at DESC);
   `);
 
-  // ── Immutable audit log — SQLite write-protect triggers ───────────────────
-  // These BEFORE DELETE / BEFORE UPDATE triggers make the audit_logs table
-  // append-only at the database level, not just by application convention.
-  // Even an owner with direct DB access cannot silently erase an audit trail.
-  db.exec(`
-    CREATE TRIGGER IF NOT EXISTS audit_logs_no_delete
-    BEFORE DELETE ON audit_logs
-    BEGIN
-      SELECT RAISE(ABORT, 'Audit logs are immutable and cannot be deleted.');
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS audit_logs_no_update
-    BEFORE UPDATE ON audit_logs
-    BEGIN
-      SELECT RAISE(ABORT, 'Audit logs are immutable and cannot be modified.');
-    END;
-  `);
+  // NOTE: Immutable audit log triggers are installed AFTER all backfills below
+  // so that scope-column migrations (org_id/branch_id) can run unimpeded.
 
   backfillScopeColumns(db);
   backfillBranchRegions(db);
   backfillRequestTrackingCodes(db);
   backfillRequestStatusDetails(db);
+
+  // ── Immutable audit log — installed last so backfills above are unaffected ─
+  // DROP + CREATE on every startup so the trigger definition stays current
+  // as the schema evolves, without requiring a manual migration step.
+  db.exec(`
+    DROP TRIGGER IF EXISTS audit_logs_no_delete;
+    DROP TRIGGER IF EXISTS audit_logs_no_update;
+
+    CREATE TRIGGER audit_logs_no_delete
+    BEFORE DELETE ON audit_logs
+    BEGIN
+      SELECT RAISE(ABORT, 'Audit logs are immutable and cannot be deleted.');
+    END;
+
+    CREATE TRIGGER audit_logs_no_update
+    BEFORE UPDATE ON audit_logs
+    WHEN NEW.action        != OLD.action
+      OR NEW.actor_name    != OLD.actor_name
+      OR NEW.actor_role    != OLD.actor_role
+      OR NEW.summary       != OLD.summary
+      OR NEW.metadata_json != OLD.metadata_json
+      OR NEW.target_type   != OLD.target_type
+      OR NEW.target_id     != OLD.target_id
+    BEGIN
+      SELECT RAISE(ABORT, 'Audit logs are immutable and cannot be modified.');
+    END;
+  `);
 }
 
 function addColumnIfMissing(db, tableName, columnName, columnDefinition) {
@@ -1740,6 +1760,7 @@ function backfillScopeColumns(db) {
     UPDATE audit_logs
     SET organization_id = COALESCE(organization_id, ?),
         branch_id = COALESCE(branch_id, ?)
+    WHERE organization_id IS NULL OR branch_id IS NULL
   `).run(defaultPrimaryOrganizationId, defaultPrimaryBranchId);
 
   db.prepare(`

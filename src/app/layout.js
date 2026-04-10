@@ -1,6 +1,6 @@
 ﻿import Image from "next/image";
 import Link from "next/link";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { Inter, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import { getCurrentUser, getUserLandingPage } from "@/lib/auth";
@@ -79,7 +79,29 @@ export const viewport = {
   ],
 };
 
+const AUTH_ROUTES = ["/login", "/account-recovery", "/reset-password", "/verify-email", "/unlock-account"];
+
 export default async function RootLayout({ children }) {
+  const headerStore = await headers();
+  const pathname = headerStore.get("x-pathname") || "";
+  const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(route + "/"));
+
+  if (isAuthRoute) {
+    const preferences = await getAppPreferences();
+    return (
+      <html
+        lang={preferences.language}
+        data-display-mode={preferences.displayMode}
+        suppressHydrationWarning
+        className={`${inter.variable} h-full antialiased`}
+      >
+        <body suppressHydrationWarning className="min-h-full">
+          {children}
+        </body>
+      </html>
+    );
+  }
+
   const preferences = await getAppPreferences();
   const copy = getCopy(preferences.language);
   const cookieStore = await cookies();

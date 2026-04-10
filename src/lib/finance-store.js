@@ -194,16 +194,14 @@ export function recordLedgerTransaction(input) {
   withTransaction((db) => {
     db.prepare(`
       INSERT INTO ledger_transactions
-        (id, organization_id, fund_id, memo, posted_at, posted_by_user_id, posted_by_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+        (id, organization_id, fund_id, memo, posted_at)
+      VALUES (?, ?, ?, ?, ?)
     `).run(
       transactionId,
       input.organizationId || null,
       input.fundId || null,
       input.memo || null,
-      input.postedAt || new Date().toISOString(),
-      input.postedByUserId || null,
-      input.postedByName || null
+      input.postedAt || new Date().toISOString()
     );
 
     for (const line of input.lines) {
@@ -280,8 +278,6 @@ export function getLedgerTransactionsForPeriod({ organizationId, fromDate, toDat
       t.id,
       t.memo,
       t.posted_at,
-      COALESCE(t.posted_by_name, 'Unknown') AS posted_by_name,
-      t.voided_at,
       f.name AS fund_name,
       COALESCE(SUM(l.debit), 0)  AS total_debit,
       COALESCE(SUM(l.credit), 0) AS total_credit
@@ -305,7 +301,6 @@ export function getLedgerTransactionsForPeriod({ organizationId, fromDate, toDat
     ...row,
     total_debit: Number(row.total_debit || 0),
     total_credit: Number(row.total_credit || 0),
-    isVoided: !!row.voided_at,
     postedLabel: String(row.posted_at || "").replace("T", " ").slice(0, 16),
   }));
 }
@@ -335,13 +330,11 @@ export function detectFinancialAnomalies({ organizationId } = {}) {
     SELECT
       t.id,
       t.posted_at,
-      COALESCE(t.posted_by_name, 'Unknown') AS posted_by_name,
       COALESCE(SUM(l.debit), 0) AS total_amount
     FROM ledger_transactions t
     LEFT JOIN ledger_lines l ON l.transaction_id = t.id
     WHERE (? IS NULL OR t.organization_id = ?)
       AND (t.memo IS NULL OR t.memo = '')
-      AND t.voided_at IS NULL
     GROUP BY t.id
     ORDER BY t.posted_at DESC
     LIMIT 10
@@ -353,14 +346,12 @@ export function detectFinancialAnomalies({ organizationId } = {}) {
       t.id,
       t.memo,
       t.posted_at,
-      COALESCE(t.posted_by_name, 'Unknown') AS posted_by_name,
       f.name AS fund_name,
       COALESCE(SUM(l.debit), 0) AS total_amount
     FROM ledger_transactions t
     LEFT JOIN ledger_lines l ON l.transaction_id = t.id
     LEFT JOIN funds f ON f.id = t.fund_id
     WHERE (? IS NULL OR t.organization_id = ?)
-      AND t.voided_at IS NULL
     GROUP BY t.id
     ORDER BY total_amount DESC
     LIMIT 5

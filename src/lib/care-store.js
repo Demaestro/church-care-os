@@ -1286,12 +1286,14 @@ export function runRetentionSweep() {
   withTransaction((dbTx) => {
     const archiveInsert = dbTx.prepare(`
       INSERT OR IGNORE INTO request_archive (
-        id, request_id, archived_at, request_json
-      ) VALUES (?, ?, ?, ?)
+        id, organization_id, branch_id, request_id, archived_at, request_json
+      ) VALUES (?, ?, ?, ?, ?, ?)
     `);
     const archiveRows = dbTx.prepare(`
       SELECT
         id,
+        organization_id,
+        branch_id,
         household_slug,
         household_name,
         need,
@@ -1313,6 +1315,8 @@ export function runRetentionSweep() {
     for (const row of archiveRows) {
       archiveInsert.run(
         randomUUID(),
+        row.organization_id,
+        row.branch_id,
         row.id,
         new Date().toISOString(),
         serializeJson({
