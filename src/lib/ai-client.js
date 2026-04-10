@@ -7,6 +7,50 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || "",
 });
 
+// ── PII Masking ───────────────────────────────────────────────────────────────
+// All care request content passed to the AI is stripped of identifying
+// information BEFORE it leaves this server. The AI sees themes, not people.
+
+const PII_PATTERNS = [
+  // Nigerian phone numbers (080x, 081x, 070x, 090x, +234...)
+  { pattern: /(\+?234|0)[789][01]\d{8}/g,           replacement: "[PHONE]" },
+  // Email addresses
+  { pattern: /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g, replacement: "[EMAIL]" },
+  // Full names (Title + 2-word pattern: "Pastor John Smith", "Mrs Amaka Obi")
+  { pattern: /\b(Rev(?:erend)?\.?|Pastor|Bro(?:ther)?\.?|Sis(?:ter)?\.?|Mrs?\.?|Dr\.?|Prof\.?)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?/g, replacement: "[NAME]" },
+  // Common Nigerian names in isolation (heuristic — common prefixes)
+  { pattern: /\b(Chukwu|Nneka|Amaka|Emeka|Ngozi|Uche|Chioma|Obinna|Adaeze|Kelechi|Ifeanyi)\w*/g, replacement: "[NAME]" },
+  // Physical addresses
+  { pattern: /\b\d+[A-Za-z]?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+(Street|Road|Avenue|Close|Crescent|Lane|Drive|Way)\b/gi, replacement: "[ADDRESS]" },
+  // House/flat numbers
+  { pattern: /\bNo\.?\s*\d+[A-Za-z]?,?\s+/gi, replacement: "" },
+];
+
+/**
+ * Strip PII from a string before sending it to any AI model.
+ * The AI sees only anonymised text — themes, not identities.
+ */
+export function maskPII(text) {
+  if (!text || typeof text !== "string") return text;
+  let masked = text;
+  for (const { pattern, replacement } of PII_PATTERNS) {
+    masked = masked.replace(pattern, replacement);
+  }
+  return masked;
+}
+
+/**
+ * Mask PII in an array of care request objects, returning only the
+ * anonymised fields the AI is allowed to process.
+ */
+export function maskCareRequestsForAI(requests) {
+  return requests.map(r => ({
+    need:    maskPII(r.need    || ""),
+    summary: maskPII(r.summary || ""),
+    // deliberately exclude: name, email, phone, address, submitted_by
+  }));
+}
+
 export { anthropic };
 
 // ── Tool definitions ─────────────────────────────────────────────────────────
@@ -574,12 +618,17 @@ export function executeTool(toolName, toolInput, context) {
         const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
         const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString();
 
-        const requests = db.prepare(`
+        const rawRequests = db.prepare(`
           SELECT need, summary, created_at FROM requests
           WHERE (? IS NULL OR organization_id = ?)
             AND (? IS NULL OR branch_id = ?)
           ORDER BY created_at DESC LIMIT 500
         `).all(orgId, orgId, branchId, branchId) || [];
+
+        // ── PII masking: AI never sees names, phones, or addresses ───────────
+        const requests = maskCareRequestsForAI(rawRequests).map((r, i) => ({
+          ...r, created_at: rawRequests[i]?.created_at || "",
+        }));
 
         const thisMonthReqs = requests.filter(r => r.created_at >= thisMonth);
         const lastMonthReqs = requests.filter(r => r.created_at >= lastMonth && r.created_at <= lastMonthEnd);

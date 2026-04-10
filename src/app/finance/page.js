@@ -10,14 +10,22 @@ import {
   detectFinancialAnomalies,
   getFinanceAuditEntries,
   getFundActivitySummary,
+  getFundDistribution,
+  getGivingPulse,
   getLedgerTransactionsForPeriod,
   getTrialBalance,
   getTrialBalanceForPeriod,
   listFunds,
   listLedgerAccounts,
+  listPendingApprovals,
   listPledges,
 } from "@/lib/finance-store";
 import { listMembers } from "@/lib/member-store";
+import {
+  FundHealthDonut,
+  GivingPulseHistogram,
+  PendingApprovalsBanner,
+} from "@/components/FinanceCharts";
 
 export const metadata = { title: "Finance" };
 
@@ -39,6 +47,9 @@ export default async function FinancePage({ searchParams }) {
   });
   const trialBalance = getTrialBalance({ organizationId: user.organizationId });
   const fundSummary = getFundActivitySummary({ organizationId: user.organizationId });
+  const givingPulse = getGivingPulse({ organizationId: user.organizationId });
+  const fundDistribution = getFundDistribution({ organizationId: user.organizationId });
+  const pendingApprovals = listPendingApprovals({ organizationId: user.organizationId });
 
   // Audit section data
   const financeAuditEntries = getFinanceAuditEntries({ organizationId: user.organizationId });
@@ -78,6 +89,32 @@ export default async function FinancePage({ searchParams }) {
             {anomalyCount} anomaly flag{anomalyCount === 1 ? "" : "s"} — review audit
           </a>
         ) : null}
+      </div>
+
+      {/* ── Multi-sig pending approvals ───────────────────────────────────── */}
+      <PendingApprovalsBanner approvals={pendingApprovals} currentUserId={user.id} />
+
+      {/* ── Visual Intelligence Dashboard ─────────────────────────────────── */}
+      <div className="mb-8 grid gap-6 lg:grid-cols-3">
+        {/* Fund Health Donut */}
+        <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-5">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+            Fund Health
+          </p>
+          <p className="mb-4 text-sm font-semibold text-foreground">Distribution by Fund</p>
+          <FundHealthDonut funds={fundDistribution} />
+        </div>
+
+        {/* Giving Pulse — spans 2 cols on large screens */}
+        <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-5 lg:col-span-2">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+            Giving Pulse
+          </p>
+          <p className="mb-4 text-sm font-semibold text-foreground">
+            12-Month Income vs Expense
+          </p>
+          <GivingPulseHistogram data={givingPulse} />
+        </div>
       </div>
 
       {/* Metric strip */}

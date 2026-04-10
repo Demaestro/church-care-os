@@ -379,3 +379,91 @@ export function detectFinancialAnomalies({ organizationId } = {}) {
     })),
   };
 }
+
+// ── Finance Chart Data ─────────────────────────────────────────────────────────
+
+/**
+ * 12-month giving pulse — total income credits per calendar month.
+ * Returns array of { month: "Jan 25", income: 450000, expense: 210000 }
+ * covering the last 12 full months, oldest first.
+ */
+export function getGivingPulse({ organizationId } = {}) {
+  const db = getDatabase();
+  const rows = db.prepare(`
+    SELECT
+      strftime('%Y-%m', t.posted_at) AS ym,
+      SUM(CASE WHEN a.type IN ('income') THEN l.credit ELSE 0 END) AS income,
+      SUM(CASE WHEN a.type IN ('expense') THEN l.debit ELSE 0 END) AS expense
+    FROM ledger_transactions t
+    JOIN ledger_lines l ON l.transaction_id = t.id
+    JOIN ledger_accounts a ON a.id = l.account_id
+    WHERE (? IS NULL OR t.organization_id = ?)
+      AND t.posted_at >= date('now', '-12 months')
+    GROUP BY ym
+    ORDER BY ym ASC
+  `).all(organizationId || null, organizationId || null) || [];
+
+  return rows.map(r => ({
+    month:   r.ym,
+    income:  Number(r.income  || 0),
+    expense: Number(r.expense || 0),
+  }));
+}
+
+/**
+ * Fund distribution — total net credit balance per fund (for donut chart).
+ */
+export function getFundDistribution({ organizationId } = {}) {
+  const db = getDatabase();
+  const rows = db.prepare(`
+    SELECT
+      f.id,
+      f.name,
+      f.code,
+      COALESCE(SUM(l.credit - l.debit), 0) AS balance
+    FROM funds f
+    LEFT JOIN ledger_transactions t ON t.fund_id = f.id
+      AND (? IS NULL OR t.organization_id = ?)
+    LEFT JOIN ledger_lines l ON l.transaction_id = t.id
+    WHERE (? IS NULL OR f.organization_id = ?)
+    GROUP BY f.id
+    HAVING balance > 0
+    ORDER BY balance DESC
+    LIMIT 8
+  `).all(organizationId || null, organizationId || null,
+         organizationId || null, organizationId || null) || [];
+
+  const total = rows.reduce((s, r) => s + Number(r.balance), 0);
+  return rows.map(r => ({
+    id:      r.id,
+    name:    r.name,
+    code:    r.code,
+    balance: Number(r.balance),
+    pct:     total > 0 ? Math.round((Number(r.balance) / total) * 100) : 0,
+  }));
+}
+
+/**
+ * List pending multi-sig finance approval requests for this org.
+ */
+export function listPendingApprovals({ organizationId } = {}) {
+  const db = getDatabase();
+  const rows = db.prepare(`
+    SELECT * FROM finance_approval_requests
+    WHERE organization_id = ? AND status = 'pending'
+    ORDER BY created_at DESC
+  `).all(organizationId || null) || [];
+
+  return rows.map(r => ({
+    id:               r.id,
+    amount:           Number(r.amount),
+    memo:             r.memo,
+    fundId:           r.fund_id,
+    requestedBy:      r.requested_by,
+    requestedByName:  r.requested_by_name,
+    createdAt:        r.created_at,
+    approvals:        JSON.parse(r.approvals_json || "[]"),
+    requiredApprovals: Number(r.required_approvals),
+    linesJson:        r.lines_json,
+  }));
+}

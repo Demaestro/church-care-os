@@ -186,6 +186,7 @@ import {
   getFollowUpPlaybook,
 } from "@/lib/follow-up-playbooks";
 import { ok, err, E } from "@/lib/result";
+import { computeDeviceFingerprint, fingerprintMatches } from "@/lib/device-fingerprint";
 import {
   parseFormData,
   AssetSchema,
@@ -994,6 +995,61 @@ export async function login(prevState, formData) {
 
   touchUserLoginEntry(user.id);
   await createSession(user);
+
+  // ── New-device detection & security notification ───────────────────────────
+  // Only alert for Lead/Admin/Pastor/Owner accounts — sensitive roles where
+  // an account takeover has the highest blast radius.
+  const SENSITIVE_ROLES = ["leader", "pastor", "owner", "admin"];
+  if (SENSITIVE_ROLES.includes(user.role) && user.email) {
+    try {
+      const fingerprint = await computeDeviceFingerprint();
+      const db = getDatabase();
+      const stored = db.prepare(`SELECT last_device_fingerprint FROM users WHERE id = ?`).get(user.id);
+      const isNewDevice = !stored?.last_device_fingerprint ||
+        !fingerprintMatches(stored.last_device_fingerprint, fingerprint);
+
+      if (isNewDevice) {
+        // Update stored fingerprint
+        db.prepare(`UPDATE users SET last_device_fingerprint = ? WHERE id = ?`)
+          .run(fingerprint, user.id);
+
+        // Fire-and-forget security alert
+        const headerList = await headers();
+        const ua = headerList.get("user-agent") || "Unknown device";
+        const deviceHint = ua.slice(0, 80);
+        await sendEmailToAddress(
+          user.email,
+          "new-device-login",
+          {
+            email: user.email,
+            role: user.role,
+            loginAt: new Date().toISOString().replace("T", " ").slice(0, 16),
+            deviceHint,
+          },
+          {
+            organizationId: user.organizationId,
+            branchId: user.branchId,
+            recipientName: user.name,
+          }
+        );
+
+        recordAuditLog({
+          ...buildActorLog(user),
+          action: "auth.new_device_login",
+          targetType: "session",
+          targetId: user.id,
+          summary: `${user.name} signed in from an unrecognised device. Security email sent.`,
+          metadata: { deviceHint, role: user.role },
+        });
+      } else {
+        // Update fingerprint on each login to refresh TTL-like staleness
+        db.prepare(`UPDATE users SET last_device_fingerprint = ? WHERE id = ?`)
+          .run(fingerprint, user.id);
+      }
+    } catch {
+      // Never block sign-in because of notification failure
+    }
+  }
 
   // If this role requires MFA but setup is incomplete, send to security page
   if (isMfaSetupRequired(user)) {
@@ -4497,6 +4553,51 @@ export async function recordJournalEntry(formData) {
     redirectWithError("/finance", "A duplicate submission is already being processed. Please wait.");
   }
 
+  // ── Multi-signature threshold check ───────────────────────────────────────
+  // Transactions ≥ ₦100,000 require two lead/pastor approvals before posting.
+  const MULTISIG_THRESHOLD = 100_000;
+  const totalAmount = lines.reduce((s, l) => s + Number(l.debit || 0), 0);
+
+  if (totalAmount >= MULTISIG_THRESHOLD) {
+    try {
+      const db = getDatabase();
+      const approvalId = randomUUID();
+      db.prepare(`
+        INSERT INTO finance_approval_requests
+          (id, organization_id, branch_id, status, amount, memo, fund_id,
+           posted_at, lines_json, required_approvals, approvals_json,
+           requested_by, requested_by_name, created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,2,'[]',?,?,?)
+      `).run(
+        approvalId, scope.organizationId, scope.branchId || null,
+        "pending", totalAmount, memo, fundId || null,
+        postedAt || new Date().toISOString(),
+        JSON.stringify(lines),
+        actor.id, actor.name,
+        new Date().toISOString()
+      );
+
+      recordAuditLog({
+        ...buildActorLog(actor, scope),
+        action:     "finance.approval_requested",
+        targetType: "finance_approval_request",
+        targetId:   approvalId,
+        summary:    `${actor.name} submitted ₦${totalAmount.toLocaleString()} journal for dual approval.`,
+        metadata:   { amount: totalAmount, memo, threshold: MULTISIG_THRESHOLD },
+      });
+
+      releaseKey(idempotencyKey);
+    } catch (error) {
+      releaseKey(idempotencyKey);
+      redirectWithError("/finance", getActionErrorMessage(error, "Could not queue approval request."));
+    }
+
+    redirectWithNotice(
+      "/finance",
+      `₦${totalAmount.toLocaleString()} transaction queued for dual approval — two leads must approve before posting.`
+    );
+  }
+
   try {
     const transactionId = recordLedgerTransaction({
       organizationId: scope.organizationId,
@@ -5171,3 +5272,96 @@ export async function revokeModulePermission(userId, module) {
   return ok(null);
 }
 
+
+// ── Finance Multi-Signature Approvals ─────────────────────────────────────────
+
+/**
+ * Approve a pending finance transaction.
+ * When the required number of unique approvals is reached the transaction
+ * is automatically posted to the ledger.
+ */
+export async function approveFinanceTransaction(prevState, formData) {
+  "use server";
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const db = getDatabase();
+  const approvalId = getString(formData, "approvalId");
+
+  if (!approvalId) return err(E.VALIDATION_ERROR, "Approval ID is required.");
+
+  const row = db.prepare(
+    `SELECT * FROM finance_approval_requests WHERE id = ? AND organization_id = ?`
+  ).get(approvalId, actor.organizationId);
+
+  if (!row) return err(E.NOT_FOUND, "Approval request not found.");
+  if (row.status !== "pending") return err(E.CONFLICT, "This request has already been resolved.");
+
+  const approvals = JSON.parse(row.approvals_json || "[]");
+  if (approvals.some(a => a.userId === actor.id)) {
+    return err(E.CONFLICT, "You have already approved this transaction.");
+  }
+
+  approvals.push({ userId: actor.id, name: actor.name, approvedAt: new Date().toISOString() });
+  const newCount = approvals.length;
+  const required = Number(row.required_approvals);
+
+  if (newCount >= required) {
+    // All signatures collected — post the transaction atomically
+    try {
+      const lines = JSON.parse(row.lines_json || "[]");
+      const transactionId = recordLedgerTransaction({
+        organizationId: row.organization_id,
+        fundId:         row.fund_id || null,
+        memo:           row.memo,
+        postedAt:       row.posted_at || new Date().toISOString(),
+        lines,
+        postedByUserId: row.requested_by,
+        postedByName:   row.requested_by_name,
+      });
+
+      db.prepare(`
+        UPDATE finance_approval_requests
+        SET status = 'approved', approvals_json = ?, resolved_at = ?
+        WHERE id = ?
+      `).run(JSON.stringify(approvals), new Date().toISOString(), approvalId);
+
+      recordAuditLog({
+        organizationId: actor.organizationId,
+        branchId: actor.branchId,
+        actorUserId: actor.id,
+        actorName: actor.name,
+        actorRole: actor.role,
+        action: "finance.multisig_approved",
+        targetType: "ledger_transaction",
+        targetId: transactionId,
+        summary: `${actor.name} provided final approval. ₦${Number(row.amount).toLocaleString()} journal posted.`,
+        metadata: { approvals, approvalRequestId: approvalId },
+      });
+
+      revalidatePath("/finance");
+      return ok({ transactionId, posted: true });
+    } catch (error) {
+      return err(E.INTERNAL_ERROR, getActionErrorMessage(error, "Could not post the transaction."));
+    }
+  }
+
+  // Not enough approvals yet — save progress
+  db.prepare(`
+    UPDATE finance_approval_requests SET approvals_json = ? WHERE id = ?
+  `).run(JSON.stringify(approvals), approvalId);
+
+  recordAuditLog({
+    organizationId: actor.organizationId,
+    branchId: actor.branchId,
+    actorUserId: actor.id,
+    actorName: actor.name,
+    actorRole: actor.role,
+    action: "finance.multisig_partial_approval",
+    targetType: "finance_approval_request",
+    targetId: approvalId,
+    summary: `${actor.name} approved (${newCount}/${required}). Awaiting more signatures.`,
+    metadata: { approvals, amount: row.amount },
+  });
+
+  revalidatePath("/finance");
+  return ok({ posted: false, approvalsCount: newCount, required });
+}

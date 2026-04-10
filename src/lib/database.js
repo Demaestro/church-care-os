@@ -1548,6 +1548,54 @@ function ensureSchemaMigrations(db) {
       ON idempotency_keys (expires_at);
   `);
 
+  // Device fingerprint for session pinning + new-device login notifications
+  addColumnIfMissing(db, "users", "last_device_fingerprint", "TEXT");
+
+  // ── Finance multi-signature approval workflow ─────────────────────────────
+  // Transactions above the configured threshold (default ₦100,000) are placed
+  // into this table as pending approvals. Only after two approvers sign off is
+  // the ledger transaction actually posted.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS finance_approval_requests (
+      id               TEXT    PRIMARY KEY,
+      organization_id  TEXT    NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      branch_id        TEXT,
+      status           TEXT    NOT NULL DEFAULT 'pending',
+      amount           REAL    NOT NULL,
+      memo             TEXT    NOT NULL,
+      fund_id          TEXT,
+      posted_at        TEXT,
+      lines_json       TEXT    NOT NULL DEFAULT '[]',
+      required_approvals INTEGER NOT NULL DEFAULT 2,
+      approvals_json   TEXT    NOT NULL DEFAULT '[]',
+      requested_by     TEXT    NOT NULL,
+      requested_by_name TEXT   NOT NULL,
+      created_at       TEXT    NOT NULL,
+      resolved_at      TEXT,
+      rejection_reason TEXT
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS idx_fin_approvals_scope
+      ON finance_approval_requests (organization_id, status, created_at DESC);
+  `);
+
+  // ── Immutable audit log — SQLite write-protect triggers ───────────────────
+  // These BEFORE DELETE / BEFORE UPDATE triggers make the audit_logs table
+  // append-only at the database level, not just by application convention.
+  // Even an owner with direct DB access cannot silently erase an audit trail.
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS audit_logs_no_delete
+    BEFORE DELETE ON audit_logs
+    BEGIN
+      SELECT RAISE(ABORT, 'Audit logs are immutable and cannot be deleted.');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS audit_logs_no_update
+    BEFORE UPDATE ON audit_logs
+    BEGIN
+      SELECT RAISE(ABORT, 'Audit logs are immutable and cannot be modified.');
+    END;
+  `);
+
   backfillScopeColumns(db);
   backfillBranchRegions(db);
   backfillRequestTrackingCodes(db);

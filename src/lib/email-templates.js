@@ -571,6 +571,31 @@ export function renderEmailTemplate(templateKey, context) {
             : null,
         }),
       };
+    case "new-device-login":
+      return {
+        purpose: "security-alert",
+        ...buildEmailDocument({
+          settings,
+          subject: `${subjectPrefix}New sign-in to your account`,
+          preheader: "A new device just accessed your Church Care OS account.",
+          eyebrow: "Security alert",
+          heading: "New sign-in detected",
+          intro: `Your Church Care OS account was just accessed from a device we haven't seen before. If this was you, no action is needed.`,
+          facts: [
+            { label: "Account",   value: context.email || "" },
+            { label: "Role",      value: context.role  || "" },
+            { label: "Time",      value: context.loginAt || new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC" },
+            { label: "Device hint", value: context.deviceHint || "Unknown device" },
+          ],
+          paragraphs: [
+            "If you did NOT sign in, someone else may have access to your credentials. Change your password immediately and contact your church administrator.",
+          ],
+          cta: signInUrl
+            ? { label: "Review account security", href: `${baseUrl}/security` }
+            : null,
+        }),
+      };
+
     case "test-email":
       return {
         purpose: "system-check",
