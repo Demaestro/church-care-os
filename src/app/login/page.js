@@ -82,12 +82,12 @@ export default async function LoginPage({ searchParams }) {
             <h1 className="mt-4 text-4xl leading-tight tracking-[-0.04em] text-white [font-family:var(--font-display)] sm:text-5xl">
               {mode === "member"
                 ? "Sign in to your member space."
-                : "Sign in to lead care clearly."}
+                : "Sign in to lead your ministry clearly."}
             </h1>
             <p className="mt-5 text-base leading-8 text-blue-100">
               {mode === "member"
-                ? "Members can review request progress, update contact details, and stay in step with the next care touchpoint."
-                : "Pastors, leaders, and volunteers enter the church workspace here for routing, follow-up, and pastoral response."}
+                ? "Members can review support request progress, update contact details, and stay in step with the next touchpoint."
+                : "Pastors, leaders, and volunteers enter the church workspace here for follow-up, assignments, and pastoral oversight."}
             </p>
           </div>
 
@@ -199,7 +199,7 @@ export default async function LoginPage({ searchParams }) {
             </p>
             <div className="mt-3 flex flex-wrap gap-3 text-sm">
               <Link href="/requests/new" className="font-medium text-foreground underline underline-offset-4">
-                Request care
+                Request support
               </Link>
               <Link href="/requests/status" className="font-medium text-foreground underline underline-offset-4">
                 Track a request
