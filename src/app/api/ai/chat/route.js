@@ -69,7 +69,7 @@ export async function POST(request) {
   try {
     const body = await request.json();
     messages = Array.isArray(body.messages) ? body.messages : [];
-    agentType = ["care", "finance", "secretary"].includes(body.agentType)
+    agentType = ["care", "finance", "secretary", "discipleship", "infrastructure"].includes(body.agentType)
       ? body.agentType
       : "secretary";
   } catch {

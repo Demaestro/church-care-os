@@ -3,9 +3,11 @@
 import { useState, useRef, useEffect } from "react";
 
 const AGENT_TABS = [
-  { key: "secretary", label: "Secretary", hint: "Ministry summaries, attendance insights" },
-  { key: "care",      label: "Care",      hint: "Member care, lapsed follow-ups" },
-  { key: "finance",   label: "Finance",   hint: "Ledger queries, pledge status" },
+  { key: "secretary",     label: "Secretary",    hint: "Ministry summaries, attendance insights" },
+  { key: "care",          label: "Care",         hint: "Member care, lapsed follow-ups" },
+  { key: "finance",       label: "Finance",      hint: "Ledger queries, pledge status" },
+  { key: "discipleship",  label: "Growth",       hint: "Pathway progress, stuck members, milestones" },
+  { key: "infrastructure",label: "Ops",          hint: "Diesel forecast, asset availability, utilities" },
 ];
 
 const QUICK_PROMPTS = {
@@ -23,6 +25,16 @@ const QUICK_PROMPTS = {
     "What's our net position?",
     "Show fund activity this month",
     "Active pledges summary",
+  ],
+  discipleship: [
+    "Who is stuck in their pathway?",
+    "What's our discipleship pipeline?",
+    "Who hasn't joined a cell group yet?",
+  ],
+  infrastructure: [
+    "How much diesel do we need this month?",
+    "What assets are checked out?",
+    "Forecast resources for upcoming events",
   ],
 };
 

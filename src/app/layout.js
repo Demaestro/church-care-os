@@ -13,6 +13,7 @@ import { getAppPreferences } from "@/lib/app-preferences-server";
 import LeftNav from "@/components/LeftNav";
 import AiShepherd from "@/components/AiShepherd";
 import EventCountdown from "@/components/EventCountdown";
+import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 import {
   getCopy,
   getDisplayModeOptionsWithLabels,
@@ -210,6 +211,9 @@ export default async function RootLayout({ children }) {
       className={`${inter.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
       <body suppressHydrationWarning className="min-h-full bg-[var(--base)] text-foreground">
+        {/* ── Service worker — offline-first PWA ──────────────────────── */}
+        <ServiceWorkerRegistration />
+
         {/* ── Event countdown banner — shown 2 days before any event ──── */}
         <EventCountdown />
 

@@ -4897,6 +4897,51 @@ export async function deleteMinistryEvent(eventId) {
   return { ok: true };
 }
 
+// ── Discipleship milestone toggle ─────────────────────────────────────────────
+
+export async function toggleDiscipleshipMilestone(prevState, formData) {
+  "use server";
+  const user = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const { upsertDiscipleshipRecord, getDiscipleshipRecord } = await import("@/lib/discipleship-store");
+
+  const recordId = getString(formData, "recordId");
+  const householdSlug = getString(formData, "householdSlug");
+  if (!householdSlug) return { error: "householdSlug required" };
+
+  const existing = getDiscipleshipRecord(householdSlug);
+  if (!existing) return { error: "Record not found" };
+
+  const MILESTONE_FIELDS = [
+    "foundationClass", "baptized", "attendingRegularly",
+    "smallGroupConnected", "serving", "mentoringOthers",
+  ];
+
+  // Checkbox "on" means checked; absent means unchecked
+  const updates = {};
+  for (const field of MILESTONE_FIELDS) {
+    const camelToSnake = field.replace(/([A-Z])/g, (c) => `_${c.toLowerCase()}`);
+    updates[field] = formData.get(field) === "1";
+  }
+
+  // Auto-advance stage based on milestones completed
+  let stage = existing.stage;
+  if (updates.mentoringOthers) stage = "mentoring";
+  else if (updates.serving) stage = "serving";
+  else if (updates.smallGroupConnected) stage = "growing";
+  else if (updates.baptized && updates.attendingRegularly) stage = "foundation";
+  else if (updates.foundationClass) stage = "new_believer";
+
+  upsertDiscipleshipRecord({
+    ...existing,
+    ...updates,
+    stage,
+    lastUpdatedBy: user.name,
+  });
+
+  revalidatePath("/discipleship");
+  return { ok: true };
+}
+
 // ── Asset Register ────────────────────────────────────────────────────────────
 
 export async function saveAsset(prevState, formData) {

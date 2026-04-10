@@ -110,6 +110,54 @@ export const CHURCH_TOOLS = [
       required: ["member_id"],
     },
   },
+  {
+    name: "get_discipleship_report",
+    description:
+      "Get a discipleship pathway report: stage distribution, members stuck at a stage for too long, milestone completion rates, and members who need pastoral attention.",
+    input_schema: {
+      type: "object",
+      properties: {
+        stuck_days_threshold: {
+          type: "number",
+          description: "Days without progress to flag as stuck (default 90)",
+        },
+        stage: {
+          type: "string",
+          description: "Filter to a specific stage: new_believer, foundation, growing, serving, mentoring",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_infrastructure_report",
+    description:
+      "Get a church infrastructure and utility report: recent diesel/generator logs, upcoming events that need resources, and asset checkout status. Useful for predicting resource needs.",
+    input_schema: {
+      type: "object",
+      properties: {
+        utility_type: {
+          type: "string",
+          description: "Filter by utility type: generator, diesel, water, electricity (optional)",
+        },
+        forecast_days: {
+          type: "number",
+          description: "Number of days ahead to check for upcoming events (default 30)",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_congregational_pulse",
+    description:
+      "Get anonymous congregational sentiment analysis: top care request themes, trend vs last month, and suggested sermon or pastoral focus areas. No names or personal data returned.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 // ── Tool execution ────────────────────────────────────────────────────────────
@@ -406,6 +454,170 @@ export function executeTool(toolName, toolInput, context) {
         };
       }
 
+      case "get_discipleship_report": {
+        const stuckThreshold = Number(toolInput.stuck_days_threshold || 90);
+        const stageFilter = String(toolInput.stage || "").trim();
+        const cutoff = new Date(Date.now() - stuckThreshold * 24 * 60 * 60 * 1000).toISOString();
+
+        let sql = `SELECT * FROM discipleship_records WHERE organization_id = ?`;
+        const params = [orgId];
+        if (branchId) { sql += ` AND branch_id = ?`; params.push(branchId); }
+        if (stageFilter) { sql += ` AND stage = ?`; params.push(stageFilter); }
+        sql += ` ORDER BY updated_at ASC LIMIT 200`;
+        const records = db.prepare(sql).all(...params) || [];
+
+        // Stage counts
+        const stageCounts = {};
+        for (const r of records) stageCounts[r.stage] = (stageCounts[r.stage] || 0) + 1;
+
+        // Stuck members
+        const stuck = records
+          .filter((r) => r.updated_at < cutoff && r.stage !== "mentoring")
+          .map((r) => ({
+            name: r.household_name,
+            stage: r.stage,
+            days_since_update: Math.floor((Date.now() - new Date(r.updated_at).getTime()) / 86400000),
+            leader: r.assigned_leader_name || null,
+            next_step: r.next_step || null,
+          }));
+
+        // Milestone rates
+        const total = records.length;
+        const milestoneRates = {
+          foundation_class: total > 0 ? Math.round((records.filter(r => r.foundation_class).length / total) * 100) : 0,
+          baptized: total > 0 ? Math.round((records.filter(r => r.baptized).length / total) * 100) : 0,
+          attending_regularly: total > 0 ? Math.round((records.filter(r => r.attending_regularly).length / total) * 100) : 0,
+          small_group_connected: total > 0 ? Math.round((records.filter(r => r.small_group_connected).length / total) * 100) : 0,
+          serving: total > 0 ? Math.round((records.filter(r => r.serving).length / total) * 100) : 0,
+          mentoring_others: total > 0 ? Math.round((records.filter(r => r.mentoring_others).length / total) * 100) : 0,
+        };
+
+        return {
+          total_on_pathway: total,
+          by_stage: stageCounts,
+          stuck_members: stuck.slice(0, 10),
+          stuck_count: stuck.length,
+          milestone_completion_pct: milestoneRates,
+        };
+      }
+
+      case "get_infrastructure_report": {
+        const utilityType = String(toolInput.utility_type || "").trim();
+        const forecastDays = Number(toolInput.forecast_days || 30);
+        const cutoffDate = new Date(Date.now() + forecastDays * 24 * 60 * 60 * 1000)
+          .toISOString().slice(0, 10);
+        const todayStr = new Date().toISOString().slice(0, 10);
+
+        // Recent utility logs
+        let ulSql = `SELECT * FROM utility_logs WHERE organization_id = ?`;
+        const ulParams = [orgId];
+        if (branchId) { ulSql += ` AND branch_id = ?`; ulParams.push(branchId); }
+        if (utilityType) { ulSql += ` AND utility_type = ?`; ulParams.push(utilityType); }
+        ulSql += ` ORDER BY logged_at DESC LIMIT 20`;
+        const logs = db.prepare(ulSql).all(...ulParams) || [];
+
+        // Upcoming events in forecast window
+        const events = db.prepare(`
+          SELECT title, event_date, event_time, event_type, location
+          FROM ministry_events
+          WHERE organization_id = ?
+            AND event_date >= ? AND event_date <= ?
+          ORDER BY event_date ASC LIMIT 10
+        `).all(orgId, todayStr, cutoffDate) || [];
+
+        // Asset availability
+        const assets = db.prepare(`
+          SELECT category, status, COUNT(*) as cnt
+          FROM church_assets
+          WHERE organization_id = ?
+          GROUP BY category, status
+        `).all(orgId) || [];
+
+        const checkedOut = db.prepare(`
+          SELECT COUNT(*) as cnt FROM asset_checkouts ac
+          JOIN church_assets ca ON ca.id = ac.asset_id
+          WHERE ca.organization_id = ? AND ac.returned_date IS NULL
+        `).get(orgId);
+
+        // Average diesel per event (if logs exist)
+        const dieselLogs = logs.filter(l => l.utility_type === "diesel" || l.utility_type === "generator");
+        const avgDieselPerLog = dieselLogs.length > 0
+          ? Math.round(dieselLogs.reduce((s, l) => s + Number(l.value || 0), 0) / dieselLogs.length)
+          : null;
+
+        return {
+          recent_utility_logs: logs.slice(0, 10).map(l => ({
+            type: l.utility_type,
+            value: l.value,
+            unit: l.unit,
+            cost: l.cost,
+            event: l.event_name,
+            date: l.logged_at,
+          })),
+          avg_diesel_per_session_litres: avgDieselPerLog,
+          upcoming_events: events.map(e => ({
+            title: e.title,
+            date: e.event_date,
+            type: e.event_type,
+          })),
+          projected_diesel_needed: avgDieselPerLog && events.length > 0
+            ? `~${avgDieselPerLog * events.length}L for ${events.length} upcoming events`
+            : null,
+          asset_summary: assets.map(a => ({ category: a.category, status: a.status, count: a.cnt })),
+          currently_checked_out: Number(checkedOut?.cnt || 0),
+        };
+      }
+
+      case "get_congregational_pulse": {
+        const now = new Date();
+        const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+        const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString();
+
+        const requests = db.prepare(`
+          SELECT need, summary, created_at FROM requests
+          WHERE (? IS NULL OR organization_id = ?)
+            AND (? IS NULL OR branch_id = ?)
+          ORDER BY created_at DESC LIMIT 500
+        `).all(orgId, orgId, branchId, branchId) || [];
+
+        const thisMonthReqs = requests.filter(r => r.created_at >= thisMonth);
+        const lastMonthReqs = requests.filter(r => r.created_at >= lastMonth && r.created_at <= lastMonthEnd);
+
+        const THEMES = [
+          { key: "financial",  label: "Financial hardship",       pattern: /financ|money|job|employ|rent|debt|income/i },
+          { key: "health",     label: "Health & wellness",         pattern: /health|sick|hospital|illness|medical|pain/i },
+          { key: "marriage",   label: "Marriage & relationships",  pattern: /marri|divorce|husband|wife|relation|couple/i },
+          { key: "grief",      label: "Grief & loss",              pattern: /grief|bereave|death|loss|mourn|widow/i },
+          { key: "youth",      label: "Youth & children",          pattern: /youth|child|teen|school|student|kid/i },
+          { key: "spiritual",  label: "Spiritual growth",          pattern: /faith|prayer|spirit|doubt|worship|discipleship/i },
+          { key: "counseling", label: "Counseling & mentorship",   pattern: /counsel|mentor|guidance|advice|support/i },
+          { key: "family",     label: "Family conflict",           pattern: /family|conflict|parent|sibling|domestic/i },
+          { key: "employment", label: "Employment",                pattern: /job|work|employ|career|unemploy/i },
+          { key: "housing",    label: "Housing & shelter",         pattern: /hous|shelter|homeless|accommodation/i },
+        ];
+
+        const themes = THEMES.map(t => {
+          const curr = thisMonthReqs.filter(r => t.pattern.test(`${r.need} ${r.summary || ""}`)).length;
+          const prev = lastMonthReqs.filter(r => t.pattern.test(`${r.need} ${r.summary || ""}`)).length;
+          const trend = prev === 0 ? null : Math.round(((curr - prev) / prev) * 100);
+          return { theme: t.label, this_month: curr, last_month: prev, trend_pct: trend };
+        }).filter(t => t.this_month > 0).sort((a, b) => b.this_month - a.this_month);
+
+        const topTheme = themes[0];
+        const risingThemes = themes.filter(t => t.trend_pct !== null && t.trend_pct > 20);
+
+        return {
+          total_requests_this_month: thisMonthReqs.length,
+          total_requests_last_month: lastMonthReqs.length,
+          top_themes: themes.slice(0, 5),
+          rising_concerns: risingThemes.map(t => t.theme),
+          pastoral_suggestion: topTheme
+            ? `The most pressing congregational need this month is "${topTheme.theme}" (${topTheme.this_month} requests). ${risingThemes.length > 0 ? `Rising concerns: ${risingThemes.map(t => t.theme).join(", ")}.` : ""} Consider a sermon series or counseling initiative around these themes.`
+            : "Not enough data yet for analysis.",
+        };
+      }
+
       default:
         return { error: `Unknown tool: ${toolName}` };
     }
@@ -450,6 +662,30 @@ Your role is the **Finance Auditor**. You help church finance officers and pasto
 - Summarise stewardship performance
 
 Be accurate. State numbers clearly. Highlight concerns without alarmism. Always recommend verifying unusual figures against physical records.`;
+
+    case "discipleship":
+      return `${base}
+
+Your role is the **Discipleship Growth Agent**. You help leaders track and accelerate spiritual transformation:
+- Identify members who are "stuck" at a pathway stage for too long (use get_discipleship_report)
+- Suggest personalised next steps for individuals based on their milestone gaps
+- Surface patterns: which milestones are blocking the most people?
+- Recommend outreach to specific members by name when they need a nudge
+
+When you identify a stuck member, suggest a specific action (e.g. "Invite Brother Chidi to the Technical Team briefing" or "Follow up about his cell group").
+Be warm, pastor-like, and action-oriented. The goal is transformation, not just data.`;
+
+    case "infrastructure":
+      return `${base}
+
+Your role is the **Operations & Infrastructure Agent**. You help the admin and estate department:
+- Forecast diesel and utility needs based on upcoming events (use get_infrastructure_report)
+- Track which church assets are currently checked out
+- Predict resource requirements for conferences, conventions, and special services
+- Alert when equipment may be unavailable for a scheduled event
+
+Use Nigerian context: generator diesel is critical, power cuts are common, and large events need advance planning.
+Be practical and give specific numbers (e.g. "Based on your average of 45L per service, the 3-day convention will need ~135L").`;
 
     case "secretary":
     default:
