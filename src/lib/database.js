@@ -747,6 +747,20 @@ function createSchema(db) {
       recorded_at TEXT NOT NULL
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS ministry_events (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      branch_id TEXT REFERENCES branches(id) ON DELETE SET NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      event_type TEXT NOT NULL DEFAULT 'service',
+      event_date TEXT NOT NULL,
+      event_time TEXT,
+      location TEXT,
+      created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS funds (
       id TEXT PRIMARY KEY,
       organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

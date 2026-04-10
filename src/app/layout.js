@@ -12,6 +12,7 @@ import { WorkspaceCommandBar } from "@/components/workspace-command-bar";
 import { getAppPreferences } from "@/lib/app-preferences-server";
 import LeftNav from "@/components/LeftNav";
 import AiShepherd from "@/components/AiShepherd";
+import EventCountdown from "@/components/EventCountdown";
 import {
   getCopy,
   getDisplayModeOptionsWithLabels,
@@ -205,6 +206,9 @@ export default async function RootLayout({ children }) {
       className={`${inter.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
       <body suppressHydrationWarning className="min-h-full bg-[var(--base)] text-foreground">
+        {/* ── Event countdown banner — shown 2 days before any event ──── */}
+        <EventCountdown />
+
         {/* ── Three-pane shell ──────────────────────────────────────────── */}
 
         {/* Left glass nav — desktop only (hidden on <lg) */}
@@ -582,6 +586,7 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
     label: "Worship",
     items: [
       { href: "/attendance", label: "Attendance" },
+      { href: "/calendar",   label: "Ministry Calendar" },
       { href: "/schedule",   label: "Schedule" },
       { href: "/households", label: "Households" },
     ],

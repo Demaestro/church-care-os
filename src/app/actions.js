@@ -108,6 +108,7 @@ import {
   updateRegionEntry,
 } from "@/lib/organization-store";
 import { getCopy } from "@/lib/i18n";
+import { getDatabase } from "@/lib/database";
 import {
   createPasswordResetTokenEntry,
   consumePasswordResetTokenEntry,
@@ -4830,4 +4831,69 @@ export async function addMemberToGroup(formData) {
   redirectWithNotice(`/members/${memberId}?tab=groups`, "Added to group.");
 }
 
+// ── Ministry Calendar ─────────────────────────────────────────────────────────
+
+export async function saveMinistryEvent(formData) {
+  "use server";
+  const user = await requireCurrentUser(["pastor", "owner"]);
+
+  const id = formData.get("id")?.toString().trim() || "";
+  const organizationId = formData.get("organizationId")?.toString().trim() || user.organizationId;
+  const branchId = formData.get("branchId")?.toString().trim() || "";
+  const title = formData.get("title")?.toString().trim();
+  const eventDate = formData.get("eventDate")?.toString().trim();
+  const eventTime = formData.get("eventTime")?.toString().trim() || null;
+  const eventType = formData.get("eventType")?.toString().trim() || "service";
+  const location = formData.get("location")?.toString().trim() || null;
+  const description = formData.get("description")?.toString().trim() || null;
+
+  if (!title) return { error: "Event title is required." };
+  if (!eventDate) return { error: "Event date is required." };
+
+  const db = getDatabase();
+
+  if (id) {
+    // Update existing
+    db.prepare(`
+      UPDATE ministry_events
+      SET title = ?, description = ?, event_type = ?, event_date = ?,
+          event_time = ?, location = ?
+      WHERE id = ? AND organization_id = ?
+    `).run(title, description, eventType, eventDate, eventTime, location, id, organizationId);
+  } else {
+    // Insert new
+    db.prepare(`
+      INSERT INTO ministry_events
+        (id, organization_id, branch_id, title, description, event_type,
+         event_date, event_time, location, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      randomUUID(),
+      organizationId,
+      branchId || null,
+      title,
+      description,
+      eventType,
+      eventDate,
+      eventTime,
+      location,
+      user.id,
+      new Date().toISOString()
+    );
+  }
+
+  revalidatePath("/calendar");
+  return { ok: true };
+}
+
+export async function deleteMinistryEvent(eventId) {
+  "use server";
+  const user = await requireCurrentUser(["pastor", "owner"]);
+  const db = getDatabase();
+  db.prepare(`
+    DELETE FROM ministry_events WHERE id = ? AND organization_id = ?
+  `).run(eventId, user.organizationId);
+  revalidatePath("/calendar");
+  return { ok: true };
+}
 
