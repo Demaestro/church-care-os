@@ -32,13 +32,14 @@ self.addEventListener("install", (event) => {
   );
 });
 
-// ── Activate — prune old caches ────────────────────────────────────────────────
+// ── Activate — prune old caches, notify clients of update ─────────────────────
 self.addEventListener("activate", (event) => {
   const keep = new Set([STATIC_CACHE, PAGES_CACHE]);
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(keys.filter(k => !keep.has(k)).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
+      .then(() => notifyClients({ type: "sw-updated" }))
   );
 });
 

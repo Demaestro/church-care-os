@@ -194,14 +194,16 @@ export function recordLedgerTransaction(input) {
   withTransaction((db) => {
     db.prepare(`
       INSERT INTO ledger_transactions
-        (id, organization_id, fund_id, memo, posted_at)
-      VALUES (?, ?, ?, ?, ?)
+        (id, organization_id, fund_id, memo, posted_at, posted_by_user_id, posted_by_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       transactionId,
       input.organizationId || null,
       input.fundId || null,
       input.memo || null,
-      input.postedAt || new Date().toISOString()
+      input.postedAt || new Date().toISOString(),
+      input.postedByUserId || null,
+      input.postedByName   || null
     );
 
     for (const line of input.lines) {

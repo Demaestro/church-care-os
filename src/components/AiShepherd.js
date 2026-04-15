@@ -44,8 +44,10 @@ export default function AiShepherd({ stats }) {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamText, setStreamText] = useState("");
-  const abortRef = useRef(null);
-  const bottomRef = useRef(null);
+  // Ref mirrors streamText so async callbacks always read the latest value
+  const streamAccRef = useRef("");
+  const abortRef    = useRef(null);
+  const bottomRef   = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -55,9 +57,13 @@ export default function AiShepherd({ stats }) {
     const query = text || input.trim();
     if (!query || streaming) return;
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: query }]);
+
+    // Build full conversation history for the API
+    const history = [...messages, { role: "user", content: query }];
+    setMessages(history);
     setStreaming(true);
     setStreamText("");
+    streamAccRef.current = "";
 
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -66,19 +72,11 @@ export default function AiShepherd({ stats }) {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: query, agentType: activeTab }),
+        body: JSON.stringify({ messages: history, agentType: activeTab }),
         signal: ctrl.signal,
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: err.error || "Service unavailable." },
-        ]);
-        return;
-      }
-
+      // For non-2xx, try to read the SSE error payload
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let buf = "";
@@ -90,40 +88,52 @@ export default function AiShepherd({ stats }) {
         const lines = buf.split("\n");
         buf = lines.pop();
         for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const raw = line.slice(6);
-            if (raw === "[DONE]") continue;
-            try {
-              const { text } = JSON.parse(raw);
-              if (text) setStreamText((p) => p + text);
-            } catch {}
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (!raw || raw === "[DONE]") continue;
+          try {
+            const evt = JSON.parse(raw);
+            if (evt.type === "delta" && evt.text) {
+              streamAccRef.current += evt.text;
+              setStreamText(streamAccRef.current);
+            } else if (evt.type === "error") {
+              streamAccRef.current = `⚠️ ${evt.message || "An error occurred."}`;
+              setStreamText(streamAccRef.current);
+            } else if (evt.type === "done") {
+              // stream finished cleanly
+            }
+          } catch {
+            // malformed chunk — ignore
           }
         }
       }
 
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: streamText || "Done." },
+        { role: "assistant", content: streamAccRef.current || "Done." },
       ]);
     } catch (e) {
       if (e.name !== "AbortError") {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: "Could not reach AI service." },
+          { role: "assistant", content: "Could not reach AI service. Check your connection." },
         ]);
       }
     } finally {
       setStreaming(false);
       setStreamText("");
+      streamAccRef.current = "";
     }
   }
 
   function stop() {
     abortRef.current?.abort();
+    const captured = streamAccRef.current;
     setStreaming(false);
-    if (streamText) {
-      setMessages((prev) => [...prev, { role: "assistant", content: streamText }]);
-      setStreamText("");
+    setStreamText("");
+    streamAccRef.current = "";
+    if (captured) {
+      setMessages((prev) => [...prev, { role: "assistant", content: captured }]);
     }
   }
 

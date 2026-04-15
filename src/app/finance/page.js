@@ -81,14 +81,26 @@ export default async function FinancePage({ searchParams }) {
             reconciliation audits without leaving this workspace.
           </p>
         </div>
-        {anomalyCount > 0 ? (
+        <div className="flex items-center gap-3">
+          {anomalyCount > 0 ? (
+            <a
+              href="/finance?tab=audit"
+              className="inline-flex items-center gap-2 rounded-full border border-[rgba(220,38,38,0.25)] bg-[rgba(220,38,38,0.06)] px-4 py-2 text-xs font-semibold text-clay transition hover:bg-[rgba(220,38,38,0.1)]"
+            >
+              {anomalyCount} anomaly flag{anomalyCount === 1 ? "" : "s"} — review audit
+            </a>
+          ) : null}
           <a
-            href="/finance?tab=audit"
-            className="inline-flex items-center gap-2 rounded-full border border-[rgba(220,38,38,0.25)] bg-[rgba(220,38,38,0.06)] px-4 py-2 text-xs font-semibold text-clay transition hover:bg-[rgba(220,38,38,0.1)]"
+            href="/api/export/finance"
+            download
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--line-strong)] bg-[var(--elevated)] px-4 py-2 text-xs font-semibold text-foreground transition hover:border-[var(--gold-text)] hover:text-[var(--gold-text)]"
           >
-            {anomalyCount} anomaly flag{anomalyCount === 1 ? "" : "s"} — review audit
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            Export CSV
           </a>
-        ) : null}
+        </div>
       </div>
 
       {/* ── Multi-sig pending approvals ───────────────────────────────────── */}

@@ -1589,6 +1589,10 @@ function ensureSchemaMigrations(db) {
   // NOTE: Immutable audit log triggers are installed AFTER all backfills below
   // so that scope-column migrations (org_id/branch_id) can run unimpeded.
 
+  // ── Finance audit trail columns ─────────────────────────────────────────────
+  addColumnIfMissing(db, "ledger_transactions", "posted_by_user_id", "TEXT");
+  addColumnIfMissing(db, "ledger_transactions", "posted_by_name",    "TEXT");
+
   backfillScopeColumns(db);
   backfillBranchRegions(db);
   backfillRequestTrackingCodes(db);
@@ -1907,6 +1911,7 @@ function bootstrapDatabase(db) {
   seedPermanentPastors(db);
 
   seedDemoBranchCoverage(db);
+  seedDemoFinanceData(db);
 }
 
 function seedBranchSettings(db) {
@@ -2273,5 +2278,132 @@ function seedDemoBranchCoverage(db) {
       null,
       null
     );
+  }
+}
+
+// ── Finance seed data ─────────────────────────────────────────────────────────
+function seedDemoFinanceData(db) {
+  const ORG = "org-firstlove";
+
+  // Check if we already have transactions — avoid re-seeding
+  const existing = db.prepare(`SELECT COUNT(*) AS n FROM ledger_transactions WHERE organization_id = ?`).get(ORG);
+  if (existing?.n > 0) return;
+
+  // ── Funds ────────────────────────────────────────────────────────────────────
+  const funds = [
+    { id: "fund-general",  name: "General Fund",  code: "GEN" },
+    { id: "fund-building", name: "Building Fund", code: "BLD" },
+    { id: "fund-welfare",  name: "Welfare Fund",  code: "WEL" },
+  ];
+  const insertFund = db.prepare(`
+    INSERT OR IGNORE INTO funds (id, organization_id, name, code)
+    VALUES (?, ?, ?, ?)
+  `);
+  for (const f of funds) {
+    insertFund.run(f.id, ORG, f.name, f.code);
+  }
+
+  // ── Ledger accounts ───────────────────────────────────────────────────────────
+  const accounts = [
+    { id: "acct-cash",        name: "Cash on Hand",       type: "asset",   code: "1001" },
+    { id: "acct-bank",        name: "Bank Account",       type: "asset",   code: "1002" },
+    { id: "acct-tithe",       name: "Tithe Income",       type: "income",  code: "4001" },
+    { id: "acct-offering",    name: "Offering Income",    type: "income",  code: "4002" },
+    { id: "acct-bld-income",  name: "Building Levy",      type: "income",  code: "4003" },
+    { id: "acct-welfare-exp", name: "Welfare Expense",    type: "expense", code: "5001" },
+    { id: "acct-ops-exp",     name: "Operations Expense", type: "expense", code: "5002" },
+  ];
+  const insertAcct = db.prepare(`
+    INSERT OR IGNORE INTO ledger_accounts (id, organization_id, name, type, code)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  for (const a of accounts) {
+    insertAcct.run(a.id, ORG, a.name, a.type, a.code);
+  }
+
+  // ── Helper: insert a balanced transaction ────────────────────────────────────
+  const insertTx = db.prepare(`
+    INSERT OR IGNORE INTO ledger_transactions (id, organization_id, fund_id, memo, posted_at)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  const insertLine = db.prepare(`
+    INSERT OR IGNORE INTO ledger_lines (id, transaction_id, account_id, debit, credit)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  function seedTx(id, fundId, memo, postedAt, lines) {
+    insertTx.run(id, ORG, fundId, memo, postedAt);
+    for (const l of lines) {
+      insertLine.run(randomUUID(), id, l.accountId, l.debit ?? 0, l.credit ?? 0);
+    }
+  }
+
+  // ── 12 months of Sunday collections ─────────────────────────────────────────
+  const baseYear = new Date().getFullYear();
+  const monthlyData = [
+    { tithe: 180000, offering: 45000, building: 30000, expense:  95000 },
+    { tithe: 195000, offering: 50000, building: 32000, expense: 100000 },
+    { tithe: 210000, offering: 55000, building: 28000, expense: 105000 },
+    { tithe: 175000, offering: 42000, building: 35000, expense:  90000 },
+    { tithe: 225000, offering: 58000, building: 40000, expense: 115000 },
+    { tithe: 240000, offering: 63000, building: 38000, expense: 120000 },
+    { tithe: 215000, offering: 54000, building: 36000, expense: 108000 },
+    { tithe: 230000, offering: 60000, building: 42000, expense: 118000 },
+    { tithe: 260000, offering: 68000, building: 45000, expense: 132000 },
+    { tithe: 245000, offering: 62000, building: 48000, expense: 125000 },
+    { tithe: 270000, offering: 72000, building: 50000, expense: 138000 },
+    { tithe: 310000, offering: 88000, building: 60000, expense: 165000 },
+  ];
+
+  for (let m = 0; m < 12; m++) {
+    const month = String(m + 1).padStart(2, "0");
+    const date  = `${baseYear}-${month}-15T10:00:00.000Z`;
+    const { tithe, offering, building, expense } = monthlyData[m];
+
+    seedTx(`seed-tithe-${m}`,    "fund-general",  `Tithe collection ${baseYear}-${month}`,    date, [
+      { accountId: "acct-bank",     debit: tithe,    credit: 0 },
+      { accountId: "acct-tithe",    debit: 0,        credit: tithe },
+    ]);
+    seedTx(`seed-offering-${m}`, "fund-general",  `Offering ${baseYear}-${month}`,            date, [
+      { accountId: "acct-cash",     debit: offering, credit: 0 },
+      { accountId: "acct-offering", debit: 0,        credit: offering },
+    ]);
+    seedTx(`seed-building-${m}`, "fund-building", `Building levy ${baseYear}-${month}`,       date, [
+      { accountId: "acct-bank",       debit: building, credit: 0 },
+      { accountId: "acct-bld-income", debit: 0,        credit: building },
+    ]);
+    seedTx(`seed-ops-${m}`,      "fund-general",  `Operations expense ${baseYear}-${month}`, date, [
+      { accountId: "acct-ops-exp", debit: expense, credit: 0 },
+      { accountId: "acct-bank",    debit: 0,       credit: expense },
+    ]);
+  }
+
+  // ── Quarterly welfare disbursements ──────────────────────────────────────────
+  const welfareDisbursements = [
+    { id: "seed-welfare-q1", month: "03", amount: 25000 },
+    { id: "seed-welfare-q2", month: "06", amount: 30000 },
+    { id: "seed-welfare-q3", month: "09", amount: 28000 },
+    { id: "seed-welfare-q4", month: "12", amount: 35000 },
+  ];
+  for (const w of welfareDisbursements) {
+    seedTx(w.id, "fund-welfare", `Welfare disbursement ${w.month}/${baseYear}`, `${baseYear}-${w.month}-28T10:00:00.000Z`, [
+      { accountId: "acct-welfare-exp", debit: w.amount, credit: 0 },
+      { accountId: "acct-cash",        debit: 0,        credit: w.amount },
+    ]);
+  }
+
+  // ── Sample pledges ────────────────────────────────────────────────────────────
+  const pledges = [
+    { id: "pledge-001", amount: 120000, fundId: "fund-building", status: "active",    start: `${baseYear}-01-01`, end: `${baseYear}-12-31` },
+    { id: "pledge-002", amount:  60000, fundId: "fund-general",  status: "active",    start: `${baseYear}-01-01`, end: `${baseYear}-12-31` },
+    { id: "pledge-003", amount:  36000, fundId: "fund-welfare",  status: "fulfilled", start: `${baseYear}-01-01`, end: `${baseYear}-06-30` },
+    { id: "pledge-004", amount:  84000, fundId: "fund-building", status: "active",    start: `${baseYear}-03-01`, end: `${baseYear}-12-31` },
+  ];
+  const insertPledge = db.prepare(`
+    INSERT OR IGNORE INTO pledges (id, organization_id, fund_id, amount, start_date, end_date, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const p of pledges) {
+    insertPledge.run(p.id, ORG, p.fundId, p.amount, p.start, p.end, p.status);
   }
 }
