@@ -36,7 +36,7 @@ function getSessionSecret() {
     throw new Error("AUTH_SECRET must be set in production.");
   }
 
-  return "church-care-os-dev-session-secret";
+  return "church-os-dev-session-secret";
 }
 
 function encodeSession(payload) {

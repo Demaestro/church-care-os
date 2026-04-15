@@ -125,7 +125,7 @@ export function verifyTotpCode(secret, code, window = 1, now = Date.now()) {
 export function buildTotpProvisioningUri({
   secret,
   accountName,
-  issuer = "Church Care OS",
+  issuer = "FirstLove Assembly",
 }) {
   const label = encodeURIComponent(`${issuer}:${accountName}`);
   const issuerQuery = encodeURIComponent(issuer);

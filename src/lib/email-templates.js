@@ -33,7 +33,7 @@ function buildEmailDocument({
   cta,
   footerNote,
 }) {
-  const churchName = settings?.churchName || "Church Care OS";
+  const churchName = settings?.churchName || "Church OS";
   const supportLine = [settings?.supportEmail, settings?.supportPhone]
     .filter(Boolean)
     .join(" | ");
@@ -577,10 +577,10 @@ export function renderEmailTemplate(templateKey, context) {
         ...buildEmailDocument({
           settings,
           subject: `${subjectPrefix}New sign-in to your account`,
-          preheader: "A new device just accessed your Church Care OS account.",
+          preheader: "A new device just accessed your Church OS account.",
           eyebrow: "Security alert",
           heading: "New sign-in detected",
-          intro: `Your Church Care OS account was just accessed from a device we haven't seen before. If this was you, no action is needed.`,
+          intro: `Your Church OS account was just accessed from a device we haven't seen before. If this was you, no action is needed.`,
           facts: [
             { label: "Account",   value: context.email || "" },
             { label: "Role",      value: context.role  || "" },
@@ -602,11 +602,11 @@ export function renderEmailTemplate(templateKey, context) {
         ...buildEmailDocument({
           settings,
           subject: `${subjectPrefix}Email delivery test`,
-          preheader: "This is a test message from Church Care OS.",
+          preheader: "This is a test message from Church OS.",
           eyebrow: "Delivery test",
           heading: "Email delivery looks wired up",
           intro:
-            "This test message confirms that Church Care OS can render and queue email from the current configuration.",
+            "This test message confirms that Church OS can render and queue email from the current configuration.",
           facts: [
             {
               label: "Mode",
@@ -634,10 +634,10 @@ export function renderEmailTemplate(templateKey, context) {
         purpose: "system-update",
         ...buildEmailDocument({
           settings,
-          subject: `${subjectPrefix}Church Care OS update`,
-          preheader: "A new Church Care OS update is available for review.",
+          subject: `${subjectPrefix}Church OS update`,
+          preheader: "A new Church OS update is available for review.",
           eyebrow: "System update",
-          heading: "Church Care OS update",
+          heading: "Church OS update",
           intro: "A new internal update was generated.",
         }),
       };

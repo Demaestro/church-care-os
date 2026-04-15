@@ -33,7 +33,7 @@ export default async function SecurityPage({ searchParams }) {
       ? buildTotpProvisioningUri({
           secret: user.mfaSecret,
           accountName: user.email,
-          issuer: "Church Care OS",
+          issuer: "FirstLove Assembly",
         })
       : "";
 

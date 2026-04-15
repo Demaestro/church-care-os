@@ -1140,8 +1140,8 @@ const englishDictionary = {
       whatsappFromNumber: "+14155238886",
       recipientEmail: "you@example.com",
       recipientPhone: "+2348012345678",
-      testNote: "This is a test of the Church Care OS email delivery setup.",
-      testMessageNote: "This is a test of the Church Care OS text and WhatsApp delivery setup.",
+      testNote: "This is a test of the Church OS email delivery setup.",
+      testMessageNote: "This is a test of the Church OS text and WhatsApp delivery setup.",
     },
     buttons: {
       saveSettings: "Save settings",

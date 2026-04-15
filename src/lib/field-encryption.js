@@ -37,7 +37,7 @@ function resolveKey() {
       );
     }
     // Deterministic dev fallback derived from the app name — never use in prod
-    return createHash("sha256").update("church-care-os-dev-key-2026").digest();
+    return createHash("sha256").update("church-os-dev-key-2026").digest();
   }
 
   // Accept 64-char hex or base64-encoded 32-byte key

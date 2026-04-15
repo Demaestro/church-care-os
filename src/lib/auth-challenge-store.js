@@ -18,7 +18,7 @@ function getAuthChallengeSecret() {
     throw new Error("AUTH_SECRET must be set in production.");
   }
 
-  return "church-care-os-dev-auth-challenge-secret";
+  return "church-os-dev-auth-challenge-secret";
 }
 
 function hashChallengeToken(token) {

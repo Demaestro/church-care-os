@@ -57,7 +57,7 @@ export const metadata = {
     template: "%s | FirstLove Assembly",
   },
   description:
-    "Ministry ecosystem for FirstLove Assembly — members, attendance, discipleship, finance, care, and pastoral oversight in one platform.",
+    "The complete church management platform for FirstLove Assembly — members, attendance, discipleship, finance, pastoral care, volunteers, groups, assets, events, and AI intelligence in one workspace.",
   applicationName: "FirstLove Assembly",
   appleWebApp: {
     title: "FirstLove Assembly",

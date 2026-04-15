@@ -37,7 +37,7 @@ function buildSenderAddress(settings) {
   const fromAddress =
     settings?.emailFromAddress || settings?.supportEmail || "care@example.com";
   const fromName =
-    settings?.emailFromName || settings?.churchName || "Church Care OS";
+    settings?.emailFromName || settings?.churchName || "Church OS";
 
   return `${fromName} <${fromAddress}>`;
 }

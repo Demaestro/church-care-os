@@ -24,7 +24,7 @@ export default function OfflinePage() {
           You are offline
         </h1>
         <p className="text-sm text-muted leading-relaxed mb-8">
-          Church Care OS is not reachable right now. Any data you were entering has been
+          Church OS is not reachable right now. Any data you were entering has been
           saved locally and will sync automatically when your connection returns.
         </p>
 

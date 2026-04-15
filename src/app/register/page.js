@@ -6,7 +6,7 @@ import { RegisterForm } from "@/components/register-form";
 
 export const metadata = {
   title: "Create Account",
-  description: "Join your church on Church Care OS.",
+  description: "Join your church on Church OS.",
 };
 
 export default async function RegisterPage({ searchParams }) {
@@ -23,7 +23,7 @@ export default async function RegisterPage({ searchParams }) {
         <div className="mb-8 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted">New member</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-foreground">Create your account</h1>
-          <p className="mt-2 text-sm text-muted">Join your church community on Church Care OS.</p>
+          <p className="mt-2 text-sm text-muted">Join your church community on Church OS.</p>
         </div>
 
         <div className="rounded-[2rem] border border-line bg-paper p-8 shadow-sm">

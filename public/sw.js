@@ -1,5 +1,5 @@
 /**
- * Church Care OS — Service Worker
+ * Church OS — Service Worker
  *
  * Strategy:
  *   Static assets (_next/static, icons, manifest) → cache-first, update in bg
@@ -9,9 +9,9 @@
  *                                                    and replayed on reconnection
  */
 
-const STATIC_CACHE  = "church-care-os-static-v3";
-const PAGES_CACHE   = "church-care-os-pages-v3";
-const OFFLINE_STORE = "church-care-os-offline-queue";
+const STATIC_CACHE  = "church-os-static-v3";
+const PAGES_CACHE   = "church-os-pages-v3";
+const OFFLINE_STORE = "church-os-offline-queue";
 
 const SAFE_STATIC_PATHS = new Set([
   "/manifest.webmanifest",
@@ -100,7 +100,7 @@ self.addEventListener("fetch", (event) => {
           return new Response(
             `<!doctype html><html><body style="font-family:sans-serif;padding:2rem">
               <h2>You are offline</h2>
-              <p>Church Care OS is not reachable right now. Your work will be saved
+              <p>Church OS is not reachable right now. Your work will be saved
               locally and synced when connection is restored.</p>
               <a href="javascript:location.reload()">Retry</a>
             </body></html>`,

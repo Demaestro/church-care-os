@@ -9,7 +9,7 @@ import { supportedTimezones } from "@/lib/organization-defaults";
 export const metadata = {
   title: "Register Your Church",
   description:
-    "Create a church workspace for your pastor team, member care, and follow-up rhythms.",
+    "Create a Church OS workspace for your pastor team — members, attendance, finance, discipleship, care, and more in one platform.",
 };
 
 export default async function RegisterChurchPage({ searchParams }) {
@@ -26,33 +26,37 @@ export default async function RegisterChurchPage({ searchParams }) {
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="grid gap-8 lg:grid-cols-[0.88fr_1.12fr]">
-        <section className="rounded-[2.5rem] bg-[linear-gradient(145deg,#112041_0%,#1d4ed8_45%,#4338ca_100%)] p-8 text-white shadow-xl lg:p-10">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 text-sm font-bold tracking-[0.2em] text-white">
-            CC
+        <section className="rounded-[2.5rem] bg-[linear-gradient(145deg,#020230_0%,#020266_55%,#0a0a80_100%)] p-8 text-white shadow-xl lg:p-10">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 text-sm font-bold tracking-[0.2em] text-white" style={{ background: "rgba(212,175,55,0.25)", border: "1.5px solid rgba(212,175,55,0.45)" }}>
+            🔥
           </div>
           <p className="mt-6 text-xs font-semibold uppercase tracking-[0.24em] text-blue-200">
-            Church workspace
+            Church OS — Full Ecosystem
           </p>
           <h1 className="mt-4 text-4xl leading-tight tracking-[-0.04em] [font-family:var(--font-display)] sm:text-5xl">
-            Set up your church once, then invite your people in.
+            One platform for every part of your ministry.
           </h1>
           <p className="mt-5 text-base leading-8 text-blue-100">
-            This creates the church workspace, the first pastor account, and the member-facing
-            identity your church family will recognise when they sign in.
+            Set up your church workspace once. Everything — members, finance, attendance,
+            discipleship, care, volunteers — is ready from day one.
           </p>
 
           <div className="mt-8 space-y-4">
             <FeatureRow
-              title="Pastor-led from day one"
-              body="Register the church, upload the logo, and land inside the workspace immediately."
+              title="Complete member management"
+              body="Member directory, households, groups, onboarding journeys, and attendance records all in one place."
             />
             <FeatureRow
-              title="Members see familiar branding"
-              body="Your church logo and name flow through the member sign-in, care request, and portal experience."
+              title="Finance & stewardship"
+              body="Double-entry ledger, fund accounting, tithes, offerings, pledges, and multi-signature approvals."
             />
             <FeatureRow
-              title="Built for scale"
-              body="The app stays stateless at the edge, with database-backed state and object storage ready for production growth."
+              title="Discipleship & care"
+              body="Growth pathways, pastoral follow-up, care requests, prayer needs — tracked and resolved together."
+            />
+            <FeatureRow
+              title="AI-powered intelligence"
+              body="AI Shepherd gives your pastors instant answers about attendance trends, giving patterns, and care gaps."
             />
           </div>
         </section>

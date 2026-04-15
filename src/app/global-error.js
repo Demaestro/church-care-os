@@ -14,11 +14,11 @@ export default function GlobalError({ error, unstable_retry }) {
   return (
     <html lang="en">
       <body className="min-h-screen bg-[var(--surface)] text-foreground">
-        <title>Something went wrong | Church Care OS</title>
+        <title>Something went wrong | Church OS</title>
         <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-6 py-16 lg:px-10">
           <section className="w-full rounded-[2rem] border border-line bg-paper px-8 py-12 shadow-[0_32px_100px_rgba(15,23,42,0.12)]">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted">
-              Church Care OS
+              Church OS
             </p>
             <h1 className="mt-4 max-w-3xl text-4xl font-black tracking-tight text-foreground sm:text-5xl">
               We hit a problem loading this workspace.

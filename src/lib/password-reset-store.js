@@ -15,7 +15,7 @@ function getPasswordResetSecret() {
     throw new Error("AUTH_SECRET must be set in production.");
   }
 
-  return "church-care-os-dev-reset-secret";
+  return "church-os-dev-reset-secret";
 }
 
 function normalizeEmail(value) {

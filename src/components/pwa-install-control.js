@@ -86,10 +86,10 @@ export function PwaInstallControl({ copy = {} }) {
   const labels = useMemo(
     () => ({
       button: copy.installApp || "Install app",
-      title: copy.installTitle || "Install Church Care OS",
+      title: copy.installTitle || "Install FirstLove Assembly",
       body:
         copy.installBody ||
-        "Save Church Care OS to your phone home screen for faster access and an app-like experience.",
+        "Add the Church OS app to your home screen for instant access to your ministry workspace.",
       iosSteps:
         copy.installIosSteps ||
         "On iPhone or iPad, open the Share menu in Safari and choose Add to Home Screen.",

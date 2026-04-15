@@ -1,16 +1,16 @@
 export default function manifest() {
   return {
     id: "/",
-    name: "Church Care OS",
-    short_name: "Church Care",
+    name: "FirstLove Assembly",
+    short_name: "Church OS",
     description:
-      "A secure pastoral care workspace for requests, follow-up, branch oversight, and discipleship.",
+      "The complete ministry platform for FirstLove Assembly — members, attendance, discipleship, finance, pastoral care, volunteers, assets, and AI intelligence in one workspace.",
     start_url: "/",
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#f4f6fb",
-    theme_color: "#2563eb",
+    background_color: "#020266",
+    theme_color: "#D4AF37",
     categories: ["productivity", "utilities", "lifestyle"],
     icons: [
       {
@@ -32,16 +32,28 @@ export default function manifest() {
     ],
     shortcuts: [
       {
-        name: "Request support",
-        short_name: "Request support",
-        description: "Open the pastoral support request form.",
-        url: "/requests/new",
+        name: "Ministry Dashboard",
+        short_name: "Dashboard",
+        description: "Open the ministry overview dashboard.",
+        url: "/",
       },
       {
-        name: "Track request",
-        short_name: "Track",
-        description: "Check the status of an existing support request.",
-        url: "/requests/status",
+        name: "Record Attendance",
+        short_name: "Attendance",
+        description: "Mark Sunday service attendance.",
+        url: "/attendance",
+      },
+      {
+        name: "Add Member",
+        short_name: "New Member",
+        description: "Register a new church member.",
+        url: "/members?add=1",
+      },
+      {
+        name: "Finance",
+        short_name: "Finance",
+        description: "View the church ledger and fund activity.",
+        url: "/finance",
       },
       {
         name: "Sign in",

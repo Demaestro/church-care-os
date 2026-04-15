@@ -31,7 +31,7 @@ function buildMessage({
   body,
   footer = "",
 }) {
-  const churchName = settings?.churchName || "Church Care OS";
+  const churchName = settings?.churchName || "Church OS";
   const parts = [churchName, body, footer].filter(Boolean);
 
   return compactText(parts.join(" | "), 320);
@@ -144,7 +144,7 @@ export function renderMessageTemplate(templateKey, context, channel = "sms") {
         purpose: "system-update",
         body: buildMessage({
           settings,
-          body: compactText(context.note || "A new Church Care OS update is available.", 220),
+          body: compactText(context.note || "A new Church OS update is available.", 220),
         }),
       };
   }

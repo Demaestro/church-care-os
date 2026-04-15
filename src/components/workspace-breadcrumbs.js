@@ -51,7 +51,7 @@ export function WorkspaceBreadcrumbs({
     <div className="flex min-w-0 flex-col gap-2">
       <div className="workspace-breadcrumbs">
         <Link href="/" className="workspace-breadcrumb-link">
-          {organizationName || "Church Care OS"}
+          {organizationName || "Church OS"}
         </Link>
         {branchName ? <span className="workspace-breadcrumb-separator">/</span> : null}
         {branchName ? <span className="workspace-breadcrumb-current">{branchName}</span> : null}

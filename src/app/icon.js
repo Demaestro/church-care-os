@@ -18,7 +18,7 @@ export default function Icon() {
           alignItems: "center",
           justifyContent: "center",
           background:
-            "linear-gradient(160deg, rgb(37, 99, 235) 0%, rgb(37, 99, 235) 34%, rgb(15, 23, 42) 100%)",
+            "linear-gradient(160deg, rgb(2, 2, 102) 0%, rgb(2, 2, 102) 34%, rgb(10, 10, 40) 100%)",
           color: "white",
           fontFamily: "Inter, Segoe UI, sans-serif",
         }}
@@ -37,68 +37,54 @@ export default function Icon() {
             boxShadow: "0 20px 80px rgba(15,23,42,0.24)",
           }}
         >
+          {/* Gold flame accent */}
           <div
             style={{
               display: "flex",
-              fontSize: 50,
-              fontWeight: 700,
-              letterSpacing: "0.28em",
-              textTransform: "uppercase",
-              opacity: 0.78,
+              width: 64,
+              height: 64,
+              borderRadius: 999,
+              background: "linear-gradient(135deg, #D4AF37 0%, #c9a227 100%)",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 38,
+              fontWeight: 800,
+              marginBottom: 16,
             }}
           >
-            Church Care
+            🔥
           </div>
           <div
             style={{
               display: "flex",
-              alignItems: "flex-end",
-              justifyContent: "space-between",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              gap: 8,
             }}
           >
             <div
               style={{
                 display: "flex",
-                flexDirection: "column",
-                gap: 14,
+                fontSize: 160,
+                lineHeight: 0.88,
+                fontWeight: 900,
+                letterSpacing: "-0.06em",
+                color: "#D4AF37",
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  fontSize: 186,
-                  lineHeight: 0.9,
-                  fontWeight: 800,
-                  letterSpacing: "-0.06em",
-                }}
-              >
-                CC
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  fontSize: 44,
-                  fontWeight: 600,
-                  opacity: 0.9,
-                }}
-              >
-                Care OS
-              </div>
+              FL
             </div>
             <div
               style={{
                 display: "flex",
-                width: 96,
-                height: 96,
-                borderRadius: 999,
-                background: "rgba(255,255,255,0.18)",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 42,
-                fontWeight: 700,
+                fontSize: 40,
+                fontWeight: 600,
+                opacity: 0.85,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
               }}
             >
-              +
+              Assembly
             </div>
           </div>
         </div>

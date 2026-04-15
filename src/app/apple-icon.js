@@ -18,7 +18,7 @@ export default function AppleIcon() {
           alignItems: "center",
           justifyContent: "center",
           background:
-            "linear-gradient(160deg, rgb(37, 99, 235) 0%, rgb(37, 99, 235) 34%, rgb(15, 23, 42) 100%)",
+            "linear-gradient(160deg, rgb(2, 2, 102) 0%, rgb(2, 2, 102) 40%, rgb(8, 8, 45) 100%)",
           color: "white",
           fontFamily: "Inter, Segoe UI, sans-serif",
         }}
@@ -29,36 +29,38 @@ export default function AppleIcon() {
             width: "76%",
             height: "76%",
             borderRadius: "32px",
-            background: "rgba(255,255,255,0.12)",
-            border: "2px solid rgba(255,255,255,0.18)",
+            background: "rgba(255,255,255,0.08)",
+            border: "2px solid rgba(212,175,55,0.35)",
             alignItems: "center",
             justifyContent: "center",
             flexDirection: "column",
-            gap: 6,
+            gap: 4,
           }}
         >
           <div
             style={{
               display: "flex",
-              fontSize: 70,
+              fontSize: 72,
               lineHeight: 1,
-              fontWeight: 800,
-              letterSpacing: "-0.08em",
+              fontWeight: 900,
+              letterSpacing: "-0.06em",
+              color: "#D4AF37",
             }}
           >
-            CC
+            FL
           </div>
           <div
             style={{
               display: "flex",
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: 700,
               letterSpacing: "0.2em",
               textTransform: "uppercase",
-              opacity: 0.82,
+              opacity: 0.85,
+              color: "white",
             }}
           >
-            Care OS
+            Assembly
           </div>
         </div>
       </div>

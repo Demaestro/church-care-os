@@ -23,7 +23,7 @@ import { headers } from "next/headers";
 // Use CARE_ENCRYPTION_KEY as the HMAC secret so fingerprints are scoped to
 // this deployment (a leaked DB can't be replayed against a different server).
 function getHmacSecret() {
-  return process.env.CARE_ENCRYPTION_KEY || "church-care-os-fp-dev-2026";
+  return process.env.CARE_ENCRYPTION_KEY || "church-os-fp-dev-2026";
 }
 
 /**
