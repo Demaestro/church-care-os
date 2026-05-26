@@ -1,14 +1,32 @@
+import { cookies } from "next/headers";
 import { requireCurrentUser } from "@/lib/auth";
 import { listMembers } from "@/lib/member-store";
 import { listRecentServices } from "@/lib/attendance-store";
 import { listFunds } from "@/lib/finance-store";
+import { getWorkspaceContext } from "@/lib/organization-store";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 export const metadata = { title: "Analytics" };
 
 export default async function AnalyticsPage() {
   const user = await requireCurrentUser(["leader", "pastor", "owner"]);
-  const members = listMembers({ organizationId: user.organizationId, branchId: user.branchId });
-  const services = listRecentServices({ organizationId: user.organizationId, branchId: user.branchId, limit: 8 });
+  const cookieStore = await cookies();
+  const workspace = getWorkspaceContext(
+    user,
+    cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || ""
+  );
+  const activeBranchId =
+    workspace.activeBranch?.id ||
+    (user.accessScope === "organization" ? "" : user.branchId);
+  const members = listMembers({
+    organizationId: user.organizationId,
+    branchId: activeBranchId,
+  });
+  const services = listRecentServices({
+    organizationId: user.organizationId,
+    branchId: activeBranchId,
+    limit: 8,
+  });
   const funds = listFunds({ organizationId: user.organizationId });
 
   return (
@@ -67,4 +85,3 @@ function MetricCard({ label, value, detail }) {
     </article>
   );
 }
-

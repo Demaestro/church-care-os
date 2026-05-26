@@ -5,6 +5,7 @@ import {
 } from "@/app/actions";
 import { MfaEnrollmentForm } from "@/components/mfa-enrollment-form";
 import { requireCurrentUser } from "@/lib/auth";
+import { findUserById } from "@/lib/auth-store";
 import { buildTotpProvisioningUri } from "@/lib/totp";
 
 const MFA_SETUP_PREVIEW_COOKIE = "cco-mfa-preview-codes";
@@ -22,16 +23,17 @@ export default async function SecurityPage({ searchParams }) {
     "pastor",
     "leader",
     "volunteer",
-  ]);
+  ], { allowMfaSetup: true });
+  const securityUser = findUserById(user.id);
   const cookieStore = await cookies();
   const previewCodes = JSON.parse(
     cookieStore.get(MFA_SETUP_PREVIEW_COOKIE)?.value || "[]"
   );
-  const setupInProgress = Boolean(user.mfaSecret) && !user.mfaEnabled;
+  const setupInProgress = Boolean(securityUser?.mfaSecret) && !user.mfaEnabled;
   const provisioningUri =
-    setupInProgress && user.mfaSecret
+    setupInProgress && securityUser?.mfaSecret
       ? buildTotpProvisioningUri({
-          secret: user.mfaSecret,
+          secret: securityUser.mfaSecret,
           accountName: user.email,
           issuer: "Church Care OS",
         })
@@ -96,7 +98,7 @@ export default async function SecurityPage({ searchParams }) {
 
           {setupInProgress ? (
             <div className="mt-6 space-y-5">
-              <InfoCard title="Authenticator secret" body={user.mfaSecret} mono />
+              <InfoCard title="Authenticator secret" body={securityUser.mfaSecret} mono />
               <InfoCard title="Provisioning link" body={provisioningUri} mono />
               <MfaEnrollmentForm />
             </div>

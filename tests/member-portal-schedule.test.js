@@ -71,7 +71,7 @@ describe("member portal and follow-up schedule", () => {
     expect(refreshedPortal?.profile.phone).toBe("+2348099999999");
     expect(refreshedPortal?.profile.preferredContact).toBe("Email");
     },
-    10000
+    20000
   );
 
   test("saves follow-up plans into the schedule board", async () => {

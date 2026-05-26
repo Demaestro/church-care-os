@@ -4,6 +4,7 @@ import {
   createPledge,
   recordJournalEntry,
 } from "@/app/actions";
+import { cookies } from "next/headers";
 import { requireCurrentUser } from "@/lib/auth";
 import {
   getFundActivitySummary,
@@ -14,11 +15,21 @@ import {
   listPledges,
 } from "@/lib/finance-store";
 import { listMembers } from "@/lib/member-store";
+import { getWorkspaceContext } from "@/lib/organization-store";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 export const metadata = { title: "Finance" };
 
 export default async function FinancePage() {
   const user = await requireCurrentUser(["pastor", "owner"]);
+  const cookieStore = await cookies();
+  const workspace = getWorkspaceContext(
+    user,
+    cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || ""
+  );
+  const activeBranchId =
+    workspace.activeBranch?.id ||
+    (user.accessScope === "organization" ? "" : user.branchId);
   const funds = listFunds({ organizationId: user.organizationId });
   const accounts = listLedgerAccounts({ organizationId: user.organizationId });
   const transactions = listLedgerTransactions({
@@ -28,7 +39,7 @@ export default async function FinancePage() {
   const pledges = listPledges({ organizationId: user.organizationId, limit: 12 });
   const members = listMembers({
     organizationId: user.organizationId,
-    branchId: user.branchId,
+    branchId: activeBranchId,
     limit: 200,
   });
   const trialBalance = getTrialBalance({ organizationId: user.organizationId });

@@ -19,7 +19,7 @@ Core product surfaces already included:
 
 ## Runtime requirements
 
-- Node.js `20.9.0` or newer
+- Node.js `22.16.0` or newer
 - npm `10` or newer
 
 ## Local development
@@ -33,10 +33,10 @@ Open [http://localhost:3000](http://localhost:3000).
 
 In local development, demo accounts are seeded automatically on first run:
 
-- `pastor@grace.demo` / `PastorDemo!2026`
-- `leader@grace.demo` / `LeaderDemo!2026`
-- `volunteer@grace.demo` / `VolunteerDemo!2026`
-- `owner@grace.demo` / `OwnerDemo!2026`
+- `owner@firstlove.demo` / `OwnerDemo!2026`
+- `pastor.lagos@firstlove.demo` / `PastorDemo!2026`
+- `leader.lagos@firstlove.demo` / `LeaderDemo!2026`
+- `volunteer.lagos@firstlove.demo` / `VolunteerDemo!2026`
 
 ## Production on a Node host
 
@@ -60,7 +60,7 @@ $env:CARE_DB_PATH = "$PWD/data/care.db"
 npm run start
 ```
 
-Before you start the app in production, set `AUTH_SECRET` to a long random value and keep it stable across restarts. If you ever move beyond one instance, also set a stable `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` at build time.
+Before you start the app in production, set `AUTH_SECRET` to a long random value and keep it stable across restarts. Also set `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` to a stable base64-encoded AES key; a 32-byte key is recommended for multi-instance builds.
 
 ## Standalone production bundle
 
@@ -201,6 +201,7 @@ For Vercel or other serverless hosts, do not use SQLite or local uploads. Set:
 - `CARE_ATTACHMENT_BACKEND=vercel-blob`
 - `BLOB_READ_WRITE_TOKEN=...`
 - `CRON_SECRET=...`
+- `CARE_SEED_DEMO_USERS=0`
 
 The repo now includes Vercel cron scheduling in `vercel.json` for:
 
@@ -230,7 +231,7 @@ For staging or performance work, also review:
 - Put a reverse proxy such as Nginx or Caddy in front of the Next.js server for TLS, rate limiting, and request buffering.
 - Run only one app instance with the current SQLite file. Multiple replicas will drift unless the data layer is replaced.
 - Internal routes now require login; only `/requests/new`, `/permissions`, `/login`, `/register`, `/register/church`, and `/health` should stay public.
-- If you later scale beyond one instance, set a stable `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` during build and move app data into a shared database.
+- If you later scale beyond one instance, keep `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` stable during build and move app data into a shared database.
 
 ## Verification
 

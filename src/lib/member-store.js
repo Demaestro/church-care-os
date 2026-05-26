@@ -68,7 +68,7 @@ export function listMembers({ organizationId, branchId, limit = 200 } = {}) {
   return rows || [];
 }
 
-export function getMemberById(memberId) {
+export function getMemberById(memberId, { organizationId, branchId } = {}) {
   if (!memberId) {
     return null;
   }
@@ -79,8 +79,16 @@ export function getMemberById(memberId) {
            gender, birthdate, marital_status, member_type, created_at
     FROM members
     WHERE id = ?
+      AND (? IS NULL OR organization_id = ?)
+      AND (? IS NULL OR branch_id = ?)
     LIMIT 1
-  `).get(memberId);
+  `).get(
+    memberId,
+    organizationId || null,
+    organizationId || null,
+    branchId || null,
+    branchId || null
+  );
 
   return row || null;
 }

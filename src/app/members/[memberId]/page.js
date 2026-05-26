@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { addMemberTimelineEvent } from "@/app/actions";
 import { requireCurrentUser } from "@/lib/auth";
 import {
@@ -6,6 +7,8 @@ import {
   listMemberAttendance,
   listMemberEvents,
 } from "@/lib/member-store";
+import { getWorkspaceContext } from "@/lib/organization-store";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 export const metadata = { title: "Member Profile" };
 
@@ -20,10 +23,21 @@ const TIMELINE_EVENT_OPTIONS = [
 ];
 
 export default async function MemberProfilePage({ params }) {
-  await requireCurrentUser(["leader", "pastor", "owner"]);
+  const user = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const cookieStore = await cookies();
+  const workspace = getWorkspaceContext(
+    user,
+    cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || ""
+  );
+  const activeBranchId =
+    workspace.activeBranch?.id ||
+    (user.accessScope === "organization" ? "" : user.branchId);
   const resolvedParams = await params;
   const memberId = resolvedParams?.memberId || "";
-  const member = getMemberById(memberId);
+  const member = getMemberById(memberId, {
+    organizationId: user.organizationId,
+    branchId: activeBranchId,
+  });
 
   if (!member) {
     return (

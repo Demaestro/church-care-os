@@ -5,7 +5,11 @@ import { redirect } from "next/navigation";
 import { findUserByEmail, findUserById } from "@/lib/auth-store";
 import { verifyPassword } from "@/lib/auth-crypto";
 import { getOptionalSession, getRoleLandingPage } from "@/lib/session";
-import { normalizeInternalRole, normalizeInternalRoles } from "@/lib/policies";
+import {
+  mfaRequiredRoles,
+  normalizeInternalRole,
+  normalizeInternalRoles,
+} from "@/lib/policies";
 
 export async function authenticateCredentials(email, password) {
   const user = findUserByEmail(email);
@@ -55,7 +59,7 @@ export const getCurrentUser = cache(async function getCurrentUser() {
   return sanitizeUser(user);
 });
 
-export async function requireCurrentUser(roles) {
+export async function requireCurrentUser(roles, options = {}) {
   const session = await getOptionalSession();
   if (!session?.userId) {
     redirect("/login");
@@ -73,7 +77,18 @@ export async function requireCurrentUser(roles) {
     redirect(getRoleLandingPage(user.role));
   }
 
+  if (!options.allowMfaSetup && requiresMfaSetup(user)) {
+    redirect("/security?mfa_required=1");
+  }
+
   return user;
+}
+
+function requiresMfaSetup(user) {
+  return (
+    mfaRequiredRoles.includes(normalizeInternalRole(user?.role)) &&
+    !user?.mfaConfigured
+  );
 }
 
 export function getRoleLabel(role) {
@@ -98,6 +113,8 @@ export function getUserLandingPage(user) {
 }
 
 function sanitizeUser(user) {
+  const mfaConfigured = Boolean(user.mfaEnabled && user.mfaSecret);
+
   return {
     id: user.id,
     name: user.name,
@@ -114,9 +131,9 @@ function sanitizeUser(user) {
     volunteerName: user.volunteerName || "",
     phone: user.phone || "",
     mfaEnabled: Boolean(user.mfaEnabled),
+    mfaConfigured,
+    mfaSetupInProgress: Boolean(user.mfaSecret && !user.mfaEnabled),
     mfaMode: user.mfaMode || "off",
-    mfaSecret: user.mfaSecret || "",
-    mfaBackupCodes: Array.isArray(user.mfaBackupCodes) ? user.mfaBackupCodes : [],
     emailVerifiedAt: user.emailVerifiedAt || "",
     failedLoginAttempts: Number(user.failedLoginAttempts || 0),
     lockedAt: user.lockedAt || "",

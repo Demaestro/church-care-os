@@ -131,6 +131,7 @@ import { saveChurchLogo } from "@/lib/church-branding";
 import { createGroupEntry } from "@/lib/group-store";
 import {
   createServiceEntry,
+  getServiceById,
   hasAttendanceRecord,
   recordAttendance,
 } from "@/lib/attendance-store";
@@ -138,9 +139,11 @@ import {
   createFundEntry,
   createLedgerAccountEntry,
   createPledgeEntry,
+  getFundById,
+  getLedgerAccountById,
   recordLedgerTransaction,
 } from "@/lib/finance-store";
-import { addMemberEvent } from "@/lib/member-store";
+import { addMemberEvent, getMemberById } from "@/lib/member-store";
 import {
   createVolunteerApplication as createVolunteerApplicationEntry,
   hasPendingApplication,
@@ -188,6 +191,46 @@ const registerRateLimit = {
   maxAttempts: 5,
   windowMs: 15 * 60 * 1000,
 };
+
+const mfaChallengeRateLimit = {
+  maxAttempts: 5,
+  windowMs: 10 * 60 * 1000,
+};
+
+const mfaSetupRateLimit = {
+  maxAttempts: 8,
+  windowMs: 15 * 60 * 1000,
+};
+
+const statusLookupRateLimit = {
+  maxAttempts: 10,
+  windowMs: 15 * 60 * 1000,
+};
+
+const passwordResetRateLimit = {
+  maxAttempts: 8,
+  windowMs: 15 * 60 * 1000,
+};
+
+const allowedMemberTimelineEventTypes = new Set([
+  "care_follow_up",
+  "service_attendance",
+  "small_group_joined",
+  "discipleship_class",
+  "serving_started",
+  "baptism",
+  "milestone_note",
+]);
+
+const allowedLedgerAccountTypes = new Set([
+  "asset",
+  "liability",
+  "income",
+  "expense",
+  "equity",
+]);
+
+const allowedAttendanceModes = new Set(["physical", "online"]);
 
 const loginLockoutThreshold = 10;
 const maxAuthFieldLengths = {
@@ -337,6 +380,34 @@ function getActionErrorMessage(error, fallback) {
 
   if (message.includes("UNIQUE constraint failed: teams.lane")) {
     return "That lane name is already being used by another team.";
+  }
+
+  if (
+    message.includes("UNIQUE constraint failed: funds.organization_id, funds.code") ||
+    message.includes("idx_funds_org_code") ||
+    message.includes("funds_organization_id_code_key")
+  ) {
+    return "A fund with that code already exists in this church.";
+  }
+
+  if (
+    message.includes(
+      "UNIQUE constraint failed: ledger_accounts.organization_id, ledger_accounts.code"
+    ) ||
+    message.includes("idx_ledger_accounts_org_code") ||
+    message.includes("ledger_accounts_organization_id_code_key")
+  ) {
+    return "A ledger account with that code already exists in this church.";
+  }
+
+  if (
+    message.includes(
+      "UNIQUE constraint failed: attendance_events.service_id, attendance_events.member_id"
+    ) ||
+    message.includes("idx_attendance_service_member") ||
+    message.includes("attendance_events_service_id_member_id_key")
+  ) {
+    return "Attendance has already been recorded for this member.";
   }
 
   return message || fallback;
@@ -571,7 +642,7 @@ function buildActorLog(user, scope = {}) {
       scope.organizationId || user.organizationId || defaultPrimaryOrganizationId,
     branchId:
       scope.branchId !== undefined
-        ? scope.branchId
+        ? scope.branchId || null
         : user.accessScope === "organization"
           ? null
           : user.branchId || defaultPrimaryBranchId,
@@ -591,7 +662,9 @@ async function getWorkspaceSelection(user) {
     workspace,
     preferredBranchId: workspace.activeBranch?.id || "",
     organizationId: workspace.organization.id,
-    branchId: workspace.activeBranch?.id || user.branchId || defaultPrimaryBranchId,
+    branchId:
+      workspace.activeBranch?.id ||
+      (isOrganizationScopedUser(user) ? "" : user.branchId || defaultPrimaryBranchId),
   };
 }
 
@@ -1014,6 +1087,16 @@ export async function verifyLoginChallenge(prevState, formData) {
     };
   }
 
+  const rateLimit = consumeRateLimit(
+    `mfa:${user.id}:${await getRequestFingerprint()}`,
+    mfaChallengeRateLimit
+  );
+  if (!rateLimit.allowed) {
+    return {
+      message: "Too many verification attempts. Please wait a moment and try again.",
+    };
+  }
+
   const code = getString(formData, "code");
   const backupCode = getString(formData, "backupCode").toUpperCase();
   let verified = false;
@@ -1091,7 +1174,7 @@ export async function logout() {
     "leader",
     "volunteer",
     "member",
-  ]);
+  ], { allowMfaSetup: true });
   const session = await getOptionalSession();
 
   recordAuditLog({
@@ -1113,7 +1196,7 @@ export async function startMfaEnrollment() {
     "pastor",
     "leader",
     "volunteer",
-  ]);
+  ], { allowMfaSetup: true });
 
   const secret = generateTotpSecret();
   const backupCodes = generateBackupCodes();
@@ -1144,13 +1227,23 @@ export async function completeMfaEnrollment(prevState, formData) {
     "pastor",
     "leader",
     "volunteer",
-  ]);
+  ], { allowMfaSetup: true });
   const code = getString(formData, "code");
   const freshUser = findUserById(user.id);
 
   if (!freshUser?.mfaSecret) {
     return {
       message: "Start MFA setup first so we can generate a secret for your account.",
+    };
+  }
+
+  const rateLimit = consumeRateLimit(
+    `mfa-setup:${user.id}:${await getRequestFingerprint()}`,
+    mfaSetupRateLimit
+  );
+  if (!rateLimit.allowed) {
+    return {
+      message: "Too many setup attempts. Please wait a moment and try again.",
     };
   }
 
@@ -1186,7 +1279,7 @@ export async function disableMfaEnrollment() {
     "pastor",
     "leader",
     "volunteer",
-  ]);
+  ], { allowMfaSetup: true });
 
   setUserMfaEntry(user.id, {
     enabled: false,
@@ -1917,6 +2010,21 @@ export async function lookupRequestStatus(prevState, formData) {
     };
   }
 
+  const rateLimit = consumeRateLimit(
+    `status:${await getRequestFingerprint()}`,
+    statusLookupRateLimit
+  );
+  if (!rateLimit.allowed) {
+    return {
+      message: statusCopy.actionMessages.notFound,
+      errors: {
+        trackingCode: statusCopy.actionMessages.notFoundField,
+      },
+      lookupCode: trackingCode,
+      result: null,
+    };
+  }
+
   const result = await getMemberRequestStatusByTrackingCode(trackingCode);
 
   if (!result) {
@@ -2166,6 +2274,21 @@ export async function completePasswordReset(prevState, formData) {
   const password = getBoundedPassword(formData, "password");
   const confirmPassword = getBoundedPassword(formData, "confirmPassword");
   const errors = {};
+
+  const rateLimit = consumeRateLimit(
+    `reset-password:${await getRequestFingerprint()}`,
+    passwordResetRateLimit
+  );
+  if (!rateLimit.allowed) {
+    return {
+      message: resetCopy.actionMessages.invalidLink,
+      errors: {
+        password: resetCopy.actionMessages.invalidLink,
+      },
+      submitted: false,
+    };
+  }
+
   const tokenState = getPasswordResetTokenEntry(token);
 
   if (!password) {
@@ -4285,11 +4408,18 @@ export async function createFund(formData) {
     redirectWithError("/finance", "Fund name and code are required.");
   }
 
-  createFundEntry({
-    organizationId: scope.organizationId,
-    name,
-    code,
-  });
+  try {
+    createFundEntry({
+      organizationId: scope.organizationId,
+      name,
+      code,
+    });
+  } catch (error) {
+    redirectWithError(
+      "/finance",
+      getActionErrorMessage(error, "We could not create that fund.")
+    );
+  }
 
   recordAuditLog({
     ...buildActorLog(actor, scope),
@@ -4313,12 +4443,23 @@ export async function createLedgerAccount(formData) {
     redirectWithError("/finance", "Account name, code, and type are required.");
   }
 
-  createLedgerAccountEntry({
-    organizationId: scope.organizationId,
-    name,
-    code,
-    type,
-  });
+  if (!allowedLedgerAccountTypes.has(type)) {
+    redirectWithError("/finance", "Select a valid ledger account type.");
+  }
+
+  try {
+    createLedgerAccountEntry({
+      organizationId: scope.organizationId,
+      name,
+      code,
+      type,
+    });
+  } catch (error) {
+    redirectWithError(
+      "/finance",
+      getActionErrorMessage(error, "We could not create that ledger account.")
+    );
+  }
 
   recordAuditLog({
     ...buildActorLog(actor, scope),
@@ -4342,11 +4483,46 @@ export async function recordAttendanceCheckIn(formData) {
     redirectWithError("/attendance", "Choose both a service and a member.");
   }
 
+  if (!allowedAttendanceModes.has(mode)) {
+    redirectWithError("/attendance", "Choose a valid attendance mode.");
+  }
+
+  const service = getServiceById(serviceId, {
+    organizationId: scope.organizationId,
+    branchId: scope.branchId,
+  });
+  const member = getMemberById(memberId, {
+    organizationId: scope.organizationId,
+    branchId: scope.branchId,
+  });
+
+  if (!service || !member) {
+    redirectWithError("/attendance", "Choose a service and member inside your workspace.");
+  }
+
+  if (
+    service.branch_id &&
+    member.branch_id &&
+    service.branch_id !== member.branch_id
+  ) {
+    redirectWithError(
+      "/attendance",
+      "Attendance can only be recorded for a member in the service campus."
+    );
+  }
+
   if (hasAttendanceRecord(serviceId, memberId)) {
     redirectWithError("/attendance", "Attendance has already been recorded for this member.");
   }
 
-  recordAttendance(serviceId, memberId, mode);
+  try {
+    recordAttendance(serviceId, memberId, mode);
+  } catch (error) {
+    redirectWithError(
+      "/attendance",
+      getActionErrorMessage(error, "We could not record attendance.")
+    );
+  }
   addMemberEvent(memberId, "service_attendance", {
     mode,
     serviceId,
@@ -4381,6 +4557,19 @@ export async function addMemberTimelineEvent(formData) {
     redirectWithError("/members", "Choose an event type before saving.");
   }
 
+  const member = getMemberById(memberId, {
+    organizationId: scope.organizationId,
+    branchId: scope.branchId,
+  });
+
+  if (!member) {
+    redirectWithError("/members", "Choose a member inside your workspace.");
+  }
+
+  if (!allowedMemberTimelineEventTypes.has(eventType)) {
+    redirectWithError("/members", "Choose a valid timeline event type.");
+  }
+
   addMemberEvent(memberId, eventType, {
     note,
     eventDate: eventDate || null,
@@ -4412,6 +4601,16 @@ export async function createPledge(formData) {
 
   if (!memberId || !fundId || amount <= 0) {
     redirectWithError("/finance", "Member, fund, and pledge amount are required.");
+  }
+
+  const member = getMemberById(memberId, {
+    organizationId: scope.organizationId,
+    branchId: scope.branchId,
+  });
+  const fund = getFundById(fundId, { organizationId: scope.organizationId });
+
+  if (!member || !fund) {
+    redirectWithError("/finance", "Choose a member and fund inside your workspace.");
   }
 
   const pledgeId = createPledgeEntry({
@@ -4460,6 +4659,25 @@ export async function recordJournalEntry(formData) {
 
   if (lines.length < 2) {
     redirectWithError("/finance", "At least two journal lines are required.");
+  }
+
+  if (fundId && !getFundById(fundId, { organizationId: scope.organizationId })) {
+    redirectWithError("/finance", "Choose a fund inside your workspace.");
+  }
+
+  const invalidLine = lines.find(
+    (line) =>
+      (line.debit > 0 && line.credit > 0) ||
+      !getLedgerAccountById(line.accountId, {
+        organizationId: scope.organizationId,
+      })
+  );
+
+  if (invalidLine) {
+    redirectWithError(
+      "/finance",
+      "Every journal line must use a workspace account and only one side of the ledger."
+    );
   }
 
   try {
@@ -4511,6 +4729,7 @@ export async function selfRegister(formData) {
     getBoundedString(formData, "phone", maxAuthFieldLengths.phone)
   );
   const password = getBoundedPassword(formData, "password");
+  const confirmPassword = getBoundedPassword(formData, "confirmPassword");
   const birthday = getString(formData, "birthday") || null;
   const rawGender = getString(formData, "gender") || "unspecified";
   const rawMemberType = getString(formData, "memberType") || "member";
@@ -4535,6 +4754,7 @@ export async function selfRegister(formData) {
   if (!email) return { error: "A valid email address is required." };
   if (!isValidEmailAddress(email)) return { error: "Please enter a valid email address." };
   if (!password || password.length < 8) return { error: "Password must be at least 8 characters." };
+  if (password !== confirmPassword) return { error: "Passwords do not match." };
   if (!organizationId || !branchId) return { error: "Please choose a valid church." };
 
   const existing = findUserByEmail(email);

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { getDatabase } from "@/lib/database";
+import { getDatabase, withTransaction } from "@/lib/database";
 
 export function listFunds({ organizationId } = {}) {
   const db = getDatabase();
@@ -14,6 +14,23 @@ export function listFunds({ organizationId } = {}) {
   return rows || [];
 }
 
+export function getFundById(fundId, { organizationId } = {}) {
+  if (!fundId) {
+    return null;
+  }
+
+  const db = getDatabase();
+  const row = db.prepare(`
+    SELECT id, organization_id, name, code
+    FROM funds
+    WHERE id = ?
+      AND (? IS NULL OR organization_id = ?)
+    LIMIT 1
+  `).get(fundId, organizationId || null, organizationId || null);
+
+  return row || null;
+}
+
 export function listLedgerAccounts({ organizationId } = {}) {
   const db = getDatabase();
   const rows = db.prepare(`
@@ -23,6 +40,23 @@ export function listLedgerAccounts({ organizationId } = {}) {
     ORDER BY code
   `).all(organizationId || null, organizationId || null);
   return rows || [];
+}
+
+export function getLedgerAccountById(accountId, { organizationId } = {}) {
+  if (!accountId) {
+    return null;
+  }
+
+  const db = getDatabase();
+  const row = db.prepare(`
+    SELECT id, organization_id, name, type, code
+    FROM ledger_accounts
+    WHERE id = ?
+      AND (? IS NULL OR organization_id = ?)
+    LIMIT 1
+  `).get(accountId, organizationId || null, organizationId || null);
+
+  return row || null;
 }
 
 export function listLedgerTransactions({ organizationId, limit = 50 } = {}) {
@@ -136,7 +170,7 @@ export function createFundEntry(input) {
     fundId,
     input.organizationId || null,
     input.name,
-    input.code.toUpperCase()
+    input.code.trim().toUpperCase()
   );
   return fundId;
 }
@@ -152,7 +186,7 @@ export function createLedgerAccountEntry(input) {
     input.organizationId || null,
     input.name,
     input.type,
-    input.code.toUpperCase()
+    input.code.trim().toUpperCase()
   );
   return accountId;
 }
@@ -178,40 +212,62 @@ export function createPledgeEntry(input) {
 }
 
 export function recordLedgerTransaction(input) {
-  const db = getDatabase();
-  const totalDebit = input.lines.reduce((sum, line) => sum + Number(line.debit || 0), 0);
-  const totalCredit = input.lines.reduce((sum, line) => sum + Number(line.credit || 0), 0);
+  const normalizedLines = (input.lines || []).map((line) => ({
+    accountId: line.accountId,
+    debit: Number(line.debit || 0),
+    credit: Number(line.credit || 0),
+  }));
+  const totalDebit = normalizedLines.reduce((sum, line) => sum + line.debit, 0);
+  const totalCredit = normalizedLines.reduce((sum, line) => sum + line.credit, 0);
   const roundedDebit = Number(totalDebit.toFixed(2));
   const roundedCredit = Number(totalCredit.toFixed(2));
+
+  if (normalizedLines.length < 2) {
+    throw new Error("Ledger transaction needs at least two lines.");
+  }
+
+  if (normalizedLines.some((line) => !line.accountId)) {
+    throw new Error("Every ledger line needs an account.");
+  }
+
+  if (normalizedLines.some((line) => line.debit > 0 && line.credit > 0)) {
+    throw new Error("A ledger line cannot contain both a debit and a credit.");
+  }
+
+  if (normalizedLines.some((line) => line.debit < 0 || line.credit < 0)) {
+    throw new Error("Ledger amounts cannot be negative.");
+  }
 
   if (roundedDebit !== roundedCredit) {
     throw new Error("Ledger transaction must balance.");
   }
 
-  const transactionId = randomUUID();
-  db.prepare(`
-    INSERT INTO ledger_transactions (id, organization_id, fund_id, memo, posted_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(
-    transactionId,
-    input.organizationId || null,
-    input.fundId || null,
-    input.memo || null,
-    input.postedAt || new Date().toISOString()
-  );
-
-  for (const line of input.lines) {
+  return withTransaction((db) => {
+    const transactionId = randomUUID();
     db.prepare(`
-      INSERT INTO ledger_lines (id, transaction_id, account_id, debit, credit)
+      INSERT INTO ledger_transactions (id, organization_id, fund_id, memo, posted_at)
       VALUES (?, ?, ?, ?, ?)
     `).run(
-      randomUUID(),
       transactionId,
-      line.accountId,
-      Number(line.debit || 0),
-      Number(line.credit || 0)
+      input.organizationId || null,
+      input.fundId || null,
+      input.memo || null,
+      input.postedAt || new Date().toISOString()
     );
-  }
 
-  return transactionId;
+    for (const line of normalizedLines) {
+      db.prepare(`
+        INSERT INTO ledger_lines (id, transaction_id, account_id, debit, credit)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(
+        randomUUID(),
+        transactionId,
+        line.accountId,
+        line.debit,
+        line.credit
+      );
+    }
+
+    return transactionId;
+  });
 }

@@ -433,32 +433,3 @@ export function getDefaultBranchById(branchId) {
 export function getDefaultBranchTeams(branchId) {
   return defaultBranchTeams.filter((team) => team.branchId === branchId);
 }
-
-/**
- * Named pastor accounts that are always seeded (INSERT OR IGNORE),
- * even in production.  Passwords should be changed on first login.
- */
-export const permanentPastorAccounts = [
-  {
-    id: "user-pastor-daniel-nnabugo",
-    name: "Pastor Daniel Nnabugo",
-    email: "daniel.nnabugo@firstloveassembly.org",
-    password: "Firstlove@Owerri1",
-    role: "pastor",
-    organizationId: "org-firstlove",
-    branchId: "branch-firstlove-owerri",
-    accessScope: "branch",
-    title: "Senior Pastor",
-  },
-  {
-    id: "user-pastor-linus-ochai",
-    name: "Pastor Linus Ochai",
-    email: "linus.ochai@firstloveassembly.org",
-    password: "Firstlove@PH1",
-    role: "pastor",
-    organizationId: "org-firstlove",
-    branchId: "branch-firstlove-port-harcourt",
-    accessScope: "branch",
-    title: "Senior Pastor",
-  },
-];

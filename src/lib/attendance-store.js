@@ -43,6 +43,30 @@ export function createServiceEntry(input) {
   return serviceId;
 }
 
+export function getServiceById(serviceId, { organizationId, branchId } = {}) {
+  if (!serviceId) {
+    return null;
+  }
+
+  const db = getDatabase();
+  const row = db.prepare(`
+    SELECT id, organization_id, branch_id, name, service_date, created_at
+    FROM services
+    WHERE id = ?
+      AND (? IS NULL OR organization_id = ?)
+      AND (? IS NULL OR branch_id = ?)
+    LIMIT 1
+  `).get(
+    serviceId,
+    organizationId || null,
+    organizationId || null,
+    branchId || null,
+    branchId || null
+  );
+
+  return row || null;
+}
+
 export function recordAttendance(serviceId, memberId, mode = "physical") {
   const db = getDatabase();
   const attendanceId = randomUUID();
@@ -65,15 +89,24 @@ export function hasAttendanceRecord(serviceId, memberId) {
   return Boolean(row?.id);
 }
 
-export function listAttendanceByService(serviceId) {
+export function listAttendanceByService(serviceId, { organizationId, branchId } = {}) {
   const db = getDatabase();
   const rows = db.prepare(`
     SELECT a.id, a.member_id, a.mode, a.recorded_at, m.full_name, m.email, m.phone
     FROM attendance_events a
+    INNER JOIN services s ON s.id = a.service_id
     LEFT JOIN members m ON m.id = a.member_id
     WHERE a.service_id = ?
+      AND (? IS NULL OR s.organization_id = ?)
+      AND (? IS NULL OR s.branch_id = ?)
     ORDER BY a.recorded_at DESC
-  `).all(serviceId);
+  `).all(
+    serviceId,
+    organizationId || null,
+    organizationId || null,
+    branchId || null,
+    branchId || null
+  );
 
   return rows || [];
 }

@@ -24,7 +24,8 @@ Church Care OS supports two production shapes:
 Recommended production env vars:
 
 - `AUTH_SECRET`
-- `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`
+- `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` as a stable base64-encoded AES key
+- `CARE_SEED_DEMO_USERS=0`
 - `CARE_DB_PATH`
 - `CARE_UPLOADS_PATH`
 - `CARE_ATTACHMENT_BACKEND`
@@ -154,7 +155,7 @@ Suggested layout:
 
 Suggested VPS flow:
 
-1. Install Node.js 20+ and Nginx.
+1. Install Node.js 22.16.0+ and Nginx.
 2. Clone the repo into `/srv/church-care-os`.
 3. Run `npm ci` and `npm run build`.
 4. Create a `churchcare` system user.

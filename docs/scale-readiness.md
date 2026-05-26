@@ -24,14 +24,16 @@ Use these settings in real production:
 - `CARE_ATTACHMENT_BACKEND=vercel-blob` or another object-storage backend
 - `BLOB_READ_WRITE_TOKEN=<private token>` when using Vercel Blob
 - `AUTH_SECRET=<strong secret>`
-- `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=<strong key>`
+- `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=<base64 AES key>`
 - `CRON_SECRET=<strong secret>`
+- `CARE_SEED_DEMO_USERS=0`
 - `PGPOOL_MAX=20`
 - `PGPOOL_MIN=2`
 - `PGPOOL_IDLE_TIMEOUT_MS=30000`
 - `PGPOOL_CONNECTION_TIMEOUT_MS=5000`
 
 Do not rely on local SQLite or local file uploads for high-scale production.
+Do not disable secure cookies in production.
 
 ## Why the current structure helps
 

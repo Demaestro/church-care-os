@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { getRuntimeReadiness } from "@/lib/runtime-readiness.mjs";
 
+const strongSecret = "launch-ready-auth-value-with-more-than-32-characters";
+const serverActionsKey = Buffer.from("12345678901234567890123456789012").toString("base64");
+
 describe("runtime readiness", () => {
   let tempDir = "";
 
@@ -42,8 +45,8 @@ describe("runtime readiness", () => {
       VERCEL_ENV: "production",
       CARE_DATABASE_DRIVER: "postgres",
       CARE_ATTACHMENT_BACKEND: "vercel-blob",
-      AUTH_SECRET: "secret",
-      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: "actions",
+      AUTH_SECRET: strongSecret,
+      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: serverActionsKey,
       APP_BASE_URL: "https://care.example.com",
     });
 
@@ -81,8 +84,8 @@ describe("runtime readiness", () => {
   test("marks sqlite production as single-host only but still launchable", () => {
     const readiness = getRuntimeReadiness({
       NODE_ENV: "production",
-      AUTH_SECRET: "secret",
-      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: "actions",
+      AUTH_SECRET: strongSecret,
+      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: serverActionsKey,
       APP_BASE_URL: "https://care.example.com",
       CARE_DATABASE_DRIVER: "sqlite",
       CARE_ATTACHMENT_BACKEND: "local",
@@ -94,5 +97,30 @@ describe("runtime readiness", () => {
     expect(
       readiness.warnings.some((warning) => warning.includes("SQLite keeps the app in single-host mode"))
     ).toBe(true);
+  });
+
+  test("rejects weak production secrets and demo seeding", () => {
+    const readiness = getRuntimeReadiness({
+      NODE_ENV: "production",
+      AUTH_SECRET: "secret",
+      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: "not-a-valid-key",
+      APP_BASE_URL: "https://care.example.com",
+      CARE_SEED_DEMO_USERS: "1",
+      CARE_SECURE_COOKIES: "false",
+    });
+
+    expect(readiness.readyForProduction).toBe(false);
+    expect(readiness.criticalIssues).toContain(
+      "AUTH_SECRET must be a strong random value in production."
+    );
+    expect(readiness.criticalIssues).toContain(
+      "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY must be a base64-encoded AES key with 16, 24, or 32 bytes."
+    );
+    expect(readiness.criticalIssues).toContain(
+      "CARE_SEED_DEMO_USERS must be disabled in production."
+    );
+    expect(readiness.criticalIssues).toContain(
+      "CARE_SECURE_COOKIES must not be disabled in production."
+    );
   });
 });

@@ -48,7 +48,12 @@ if (process.env.NODE_ENV === "production") {
 const nextConfig = {
   output: "standalone",
   turbopack: {
-    root: __dirname,   // absolute path — silences the turbopack.root warning
+    root: __dirname,
+  },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "12mb",
+    },
   },
   async headers() {
     return [

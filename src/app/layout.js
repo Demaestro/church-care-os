@@ -1,7 +1,6 @@
 ﻿import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { getCurrentUser, getUserLandingPage } from "@/lib/auth";
 import { getWorkspaceSearchIndex } from "@/lib/care-store";
@@ -16,7 +15,7 @@ import {
   getLanguageOptionsWithLabels,
   translateRoleLabel,
 } from "@/lib/i18n";
-import { normalizeInternalRole } from "@/lib/policies";
+import { mfaRequiredRoles, normalizeInternalRole } from "@/lib/policies";
 import { getUnreadNotificationCountForUser } from "@/lib/notifications-store";
 import {
   getPublicWorkspaceCatalog,
@@ -31,11 +30,6 @@ import {
   PUBLIC_ORGANIZATION_COOKIE,
   WORKSPACE_BRANCH_COOKIE,
 } from "@/lib/workspace-scope";
-
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-});
 
 export const metadata = {
   title: {
@@ -70,16 +64,26 @@ export default async function RootLayout({ children }) {
   const copy = getCopy(preferences.language);
   const cookieStore = await cookies();
   const user = await getCurrentUser();
-  const unreadNotificationCount = user
-    ? getUnreadNotificationCountForUser(user)
+  const mfaSetupRequired = Boolean(
+    user &&
+      mfaRequiredRoles.includes(normalizeInternalRole(user.role)) &&
+      !user.mfaConfigured
+  );
+  const workspaceUser = mfaSetupRequired ? null : user;
+  const unreadNotificationCount = workspaceUser
+    ? getUnreadNotificationCountForUser(workspaceUser)
     : 0;
-  const navSections = buildNavSections(user, unreadNotificationCount, copy);
+  const navSections = buildNavSections(workspaceUser, unreadNotificationCount, copy);
   const languageOptions = getLanguageOptionsWithLabels(preferences.language);
   const displayModeOptions = getDisplayModeOptionsWithLabels(preferences.language);
-  const workspaceHref = user ? getUserLandingPage(user) : "/login";
-  const workspace = user
+  const workspaceHref = workspaceUser
+    ? getUserLandingPage(workspaceUser)
+    : user
+      ? "/security?mfa_required=1"
+      : "/login";
+  const workspace = workspaceUser
     ? getWorkspaceContext(
-        user,
+        workspaceUser,
         cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || ""
       )
     : null;
@@ -105,7 +109,7 @@ export default async function RootLayout({ children }) {
     publicOrganization?.branches?.find((item) => item.id === defaultPrimaryBranchId) ||
     publicOrganization?.branches?.[0] ||
     null;
-  const workspaceSwitcher = user
+  const workspaceSwitcher = workspaceUser
       ? {
         menuLabel: "Campus",
         eyebrow: workspace?.organization?.name || "",
@@ -139,32 +143,36 @@ export default async function RootLayout({ children }) {
         name: user.name,
         buttonLabel: user.name.split(" ")[0] || user.name,
         roleLabel: translateRoleLabel(user.role, preferences.language),
-        detailLabel: workspace
+        detailLabel: mfaSetupRequired
+          ? "MFA setup required"
+          : workspace
           ? `${workspace.organization.shortName} - ${workspace.activeScopeLabel}`
           : "",
         workspaceHref,
         switchHref: "/login?switch=1",
       }
     : null;
-  const searchIndex = user
-    ? await getWorkspaceSearchIndex(user, workspace?.activeBranch?.id || "")
+  const searchIndex = workspaceUser
+    ? await getWorkspaceSearchIndex(workspaceUser, workspace?.activeBranch?.id || "")
     : { households: [], requests: [] };
-  const quickActions = buildQuickActions(user, copy);
+  const quickActions = buildQuickActions(workspaceUser, copy);
   const commandItems = buildCommandItems({
     sections: navSections,
     quickActions,
     searchIndex,
   });
   const routeLabels = buildRouteLabels(navSections, quickActions);
-  const bottomNavItems = buildBottomNav(user, unreadNotificationCount);
-  const scopeLabel = user
+  const bottomNavItems = buildBottomNav(workspaceUser, unreadNotificationCount);
+  const scopeLabel = workspaceUser
     ? workspace?.activeBranch
       ? `Church privacy is enforced inside ${workspace.organization.name}.`
       : `You are viewing ${workspace?.organization?.name || "this church"} across your allowed campuses.`
+    : user
+      ? "Complete MFA setup before opening workspace data."
     : publicBranch
       ? `Member tools are currently set to ${publicOrganization?.name || publicBranch.name}.`
       : "Member tools are ready for your selected church workspace.";
-  const brandOrganization = user ? workspace?.organization || null : publicOrganization;
+  const brandOrganization = workspaceUser ? workspace?.organization || null : publicOrganization;
   const brandLogoHref = brandOrganization?.logoHref || "";
   const brandInitials = (brandOrganization?.shortName || brandOrganization?.name || "CC")
     .slice(0, 2)
@@ -177,7 +185,7 @@ export default async function RootLayout({ children }) {
       data-theme={preferences.theme}
       data-privacy-mode={preferences.privacyMode}
       suppressHydrationWarning
-      className={`${inter.className} h-full antialiased`}
+      className="h-full antialiased"
     >
       <body suppressHydrationWarning className="min-h-full text-foreground">
         <div className="relative isolate min-h-screen overflow-x-hidden">
@@ -226,12 +234,12 @@ export default async function RootLayout({ children }) {
                   <WorkspaceBreadcrumbs
                     routeLabels={routeLabels}
                     organizationName={
-                      user
+                      workspaceUser
                         ? workspace?.organization?.name || ""
                         : publicOrganization?.name || ""
                     }
                     branchName={
-                      user
+                      workspaceUser
                         ? workspace?.activeBranch?.name || workspace?.activeScopeLabel || ""
                         : publicBranch?.name || ""
                     }
@@ -243,7 +251,7 @@ export default async function RootLayout({ children }) {
                       items={commandItems}
                       quickActions={quickActions}
                       placeholder={
-                        user
+                        workspaceUser
                           ? "Jump to a person, request, household, or workflow"
                           : "Jump to request care, track a request, or open the member portal"
                       }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { requireCurrentUser } from "@/lib/auth";
 import {
   listAttendanceByService,
@@ -6,20 +7,30 @@ import {
 } from "@/lib/attendance-store";
 import { listMembers } from "@/lib/member-store";
 import { createService, recordAttendanceCheckIn } from "@/app/actions";
+import { getWorkspaceContext } from "@/lib/organization-store";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 export const metadata = { title: "Attendance" };
 
 export default async function AttendancePage({ searchParams }) {
   const user = await requireCurrentUser(["leader", "pastor", "owner"]);
   const params = await searchParams;
+  const cookieStore = await cookies();
+  const workspace = getWorkspaceContext(
+    user,
+    cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || ""
+  );
+  const activeBranchId =
+    workspace.activeBranch?.id ||
+    (user.accessScope === "organization" ? "" : user.branchId);
   const members = listMembers({
     organizationId: user.organizationId,
-    branchId: user.branchId,
+    branchId: activeBranchId,
     limit: 200,
   });
   const services = listRecentServices({
     organizationId: user.organizationId,
-    branchId: user.branchId,
+    branchId: activeBranchId,
   });
   const selectedServiceId =
     (typeof params?.service === "string" ? params.service : "") ||
@@ -28,7 +39,10 @@ export default async function AttendancePage({ searchParams }) {
   const selectedService =
     services.find((service) => service.id === selectedServiceId) || null;
   const roster = selectedServiceId
-    ? listAttendanceByService(selectedServiceId)
+    ? listAttendanceByService(selectedServiceId, {
+        organizationId: user.organizationId,
+        branchId: activeBranchId,
+      })
     : [];
 
   return (

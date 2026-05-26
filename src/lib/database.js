@@ -15,7 +15,6 @@ import {
   defaultPrimaryBranchId,
   defaultPrimaryOrganizationId,
   defaultRegions,
-  permanentPastorAccounts,
 } from "@/lib/organization-defaults";
 import { demoAuthUsers, retentionPolicy } from "@/lib/policies";
 import {
@@ -744,14 +743,16 @@ function createSchema(db) {
       service_id TEXT NOT NULL REFERENCES services(id) ON DELETE CASCADE,
       member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
       mode TEXT NOT NULL,
-      recorded_at TEXT NOT NULL
+      recorded_at TEXT NOT NULL,
+      UNIQUE (service_id, member_id)
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS funds (
       id TEXT PRIMARY KEY,
       organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
-      code TEXT NOT NULL UNIQUE
+      code TEXT NOT NULL,
+      UNIQUE (organization_id, code)
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS ledger_accounts (
@@ -759,7 +760,8 @@ function createSchema(db) {
       organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       type TEXT NOT NULL,
-      code TEXT NOT NULL UNIQUE
+      code TEXT NOT NULL,
+      UNIQUE (organization_id, code)
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS ledger_transactions (
@@ -825,8 +827,12 @@ function createSchema(db) {
       ON members (organization_id, branch_id);
     CREATE INDEX IF NOT EXISTS idx_member_events_member
       ON member_events (member_id, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_attendance_service_member
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_service_member
       ON attendance_events (service_id, member_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_org_code
+      ON funds (organization_id, code);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_accounts_org_code
+      ON ledger_accounts (organization_id, code);
     CREATE INDEX IF NOT EXISTS idx_ledger_lines_tx
       ON ledger_lines (transaction_id);
   `);
@@ -1361,14 +1367,16 @@ function ensureSchemaMigrations(db) {
       service_id TEXT NOT NULL,
       member_id TEXT NOT NULL,
       mode TEXT NOT NULL,
-      recorded_at TEXT NOT NULL
+      recorded_at TEXT NOT NULL,
+      UNIQUE (service_id, member_id)
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS funds (
       id TEXT PRIMARY KEY,
       organization_id TEXT NOT NULL,
       name TEXT NOT NULL,
-      code TEXT NOT NULL UNIQUE
+      code TEXT NOT NULL,
+      UNIQUE (organization_id, code)
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS ledger_accounts (
@@ -1376,7 +1384,8 @@ function ensureSchemaMigrations(db) {
       organization_id TEXT NOT NULL,
       name TEXT NOT NULL,
       type TEXT NOT NULL,
-      code TEXT NOT NULL UNIQUE
+      code TEXT NOT NULL,
+      UNIQUE (organization_id, code)
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS ledger_transactions (
@@ -1406,14 +1415,29 @@ function ensureSchemaMigrations(db) {
       status TEXT NOT NULL DEFAULT 'active'
     ) STRICT;
 
+    DROP INDEX IF EXISTS idx_attendance_service_member;
+
     CREATE INDEX IF NOT EXISTS idx_members_scope
       ON members (organization_id, branch_id);
     CREATE INDEX IF NOT EXISTS idx_member_events_member
       ON member_events (member_id, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_attendance_service_member
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_service_member
       ON attendance_events (service_id, member_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_org_code
+      ON funds (organization_id, code);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_accounts_org_code
+      ON ledger_accounts (organization_id, code);
     CREATE INDEX IF NOT EXISTS idx_ledger_lines_tx
       ON ledger_lines (transaction_id);
+  `);
+
+  ensureTenantScopedFinanceCodeTables(db);
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_org_code
+      ON funds (organization_id, code);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_accounts_org_code
+      ON ledger_accounts (organization_id, code);
   `);
 
   db.exec(`
@@ -1450,6 +1474,88 @@ function addColumnIfMissing(db, tableName, columnName, columnDefinition) {
 
   if (!exists) {
     db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`);
+  }
+}
+
+function getTableDefinition(db, tableName) {
+  return (
+    db
+      .prepare(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1"
+      )
+      .get(tableName)?.sql || ""
+  );
+}
+
+function hasGlobalCodeUniqueConstraint(db, tableName) {
+  return /\bcode\s+TEXT\s+NOT\s+NULL\s+UNIQUE\b/i.test(
+    getTableDefinition(db, tableName)
+  );
+}
+
+function rebuildFinanceCodeTable(db, tableName, createTableSql, columns) {
+  const tempTableName = `${tableName}_tenant_scope_next`;
+  const foreignKeysEnabled =
+    db.prepare("PRAGMA foreign_keys").get()?.foreign_keys === 1;
+
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN IMMEDIATE");
+
+  try {
+    db.exec(`
+      DROP TABLE IF EXISTS ${tempTableName};
+      ${createTableSql(tempTableName)}
+      INSERT INTO ${tempTableName} (${columns})
+        SELECT ${columns}
+        FROM ${tableName};
+      DROP TABLE ${tableName};
+      ALTER TABLE ${tempTableName} RENAME TO ${tableName};
+    `);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  } finally {
+    if (foreignKeysEnabled) {
+      db.exec("PRAGMA foreign_keys = ON");
+    }
+  }
+}
+
+function ensureTenantScopedFinanceCodeTables(db) {
+  if (hasGlobalCodeUniqueConstraint(db, "funds")) {
+    rebuildFinanceCodeTable(
+      db,
+      "funds",
+      (tableName) => `
+        CREATE TABLE ${tableName} (
+          id TEXT PRIMARY KEY,
+          organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          code TEXT NOT NULL,
+          UNIQUE (organization_id, code)
+        ) STRICT;
+      `,
+      "id, organization_id, name, code"
+    );
+  }
+
+  if (hasGlobalCodeUniqueConstraint(db, "ledger_accounts")) {
+    rebuildFinanceCodeTable(
+      db,
+      "ledger_accounts",
+      (tableName) => `
+        CREATE TABLE ${tableName} (
+          id TEXT PRIMARY KEY,
+          organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          code TEXT NOT NULL,
+          UNIQUE (organization_id, code)
+        ) STRICT;
+      `,
+      "id, organization_id, name, type, code"
+    );
   }
 }
 
@@ -1725,7 +1831,6 @@ function bootstrapDatabase(db) {
   seedTeams(db);
   seedChurchSettings(db);
   seedUsers(db);
-  seedPermanentPastors(db);
 
   seedDemoBranchCoverage(db);
 }
@@ -1850,33 +1955,6 @@ function seedChurchSettings(db) {
       settings.smsFromNumber,
       settings.whatsappFromNumber,
       serializeJson(settings.notificationChannels),
-      now
-    );
-  }
-}
-
-function seedPermanentPastors(db) {
-  const insert = db.prepare(`
-    INSERT OR IGNORE INTO users (
-      id, organization_id, branch_id, name, email, role, access_scope,
-      title, managed_branch_ids_json, password_hash, active, email_verified_at, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const now = new Date().toISOString();
-  for (const u of permanentPastorAccounts) {
-    insert.run(
-      u.id,
-      u.organizationId,
-      u.branchId,
-      u.name,
-      u.email.toLowerCase(),
-      u.role,
-      u.accessScope || "branch",
-      u.title || null,
-      serializeJson([u.branchId]),
-      hashPassword(u.password),
-      1,
-      now,
       now
     );
   }

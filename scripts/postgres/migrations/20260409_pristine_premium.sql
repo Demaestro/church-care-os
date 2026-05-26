@@ -79,14 +79,16 @@ CREATE TABLE IF NOT EXISTS attendance_events (
   service_id text NOT NULL REFERENCES services(id) ON DELETE CASCADE,
   member_id text NOT NULL REFERENCES members(id) ON DELETE CASCADE,
   mode text NOT NULL,
-  recorded_at timestamptz NOT NULL DEFAULT now()
+  recorded_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (service_id, member_id)
 );
 
 CREATE TABLE IF NOT EXISTS funds (
   id text PRIMARY KEY,
   organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name text NOT NULL,
-  code text NOT NULL UNIQUE
+  code text NOT NULL,
+  UNIQUE (organization_id, code)
 );
 
 CREATE TABLE IF NOT EXISTS ledger_accounts (
@@ -94,7 +96,8 @@ CREATE TABLE IF NOT EXISTS ledger_accounts (
   organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name text NOT NULL,
   type text NOT NULL,
-  code text NOT NULL UNIQUE
+  code text NOT NULL,
+  UNIQUE (organization_id, code)
 );
 
 CREATE TABLE IF NOT EXISTS ledger_transactions (
@@ -128,8 +131,13 @@ CREATE INDEX IF NOT EXISTS idx_members_scope
   ON members (organization_id, branch_id);
 CREATE INDEX IF NOT EXISTS idx_member_events_member
   ON member_events (member_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_attendance_service_member
+ALTER TABLE IF EXISTS funds DROP CONSTRAINT IF EXISTS funds_code_key;
+ALTER TABLE IF EXISTS ledger_accounts DROP CONSTRAINT IF EXISTS ledger_accounts_code_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_service_member
   ON attendance_events (service_id, member_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_org_code
+  ON funds (organization_id, code);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_accounts_org_code
+  ON ledger_accounts (organization_id, code);
 CREATE INDEX IF NOT EXISTS idx_ledger_lines_tx
   ON ledger_lines (transaction_id);
-

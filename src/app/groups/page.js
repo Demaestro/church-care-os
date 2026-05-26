@@ -1,12 +1,26 @@
+import { cookies } from "next/headers";
 import { requireCurrentUser } from "@/lib/auth";
 import { listGroups } from "@/lib/group-store";
 import { createGroup } from "@/app/actions";
+import { getWorkspaceContext } from "@/lib/organization-store";
+import { WORKSPACE_BRANCH_COOKIE } from "@/lib/workspace-scope";
 
 export const metadata = { title: "Groups" };
 
 export default async function GroupsPage() {
   const user = await requireCurrentUser(["leader", "pastor", "owner"]);
-  const groups = listGroups({ organizationId: user.organizationId, branchId: user.branchId });
+  const cookieStore = await cookies();
+  const workspace = getWorkspaceContext(
+    user,
+    cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || ""
+  );
+  const activeBranchId =
+    workspace.activeBranch?.id ||
+    (user.accessScope === "organization" ? "" : user.branchId);
+  const groups = listGroups({
+    organizationId: user.organizationId,
+    branchId: activeBranchId,
+  });
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10 lg:px-10">
@@ -71,4 +85,3 @@ export default async function GroupsPage() {
     </div>
   );
 }
-

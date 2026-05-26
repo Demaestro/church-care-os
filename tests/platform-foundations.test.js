@@ -139,4 +139,58 @@ describe("platform foundations", () => {
     expect(organizationColumns).toContain("website_url");
     expect(defaultOrganization?.id).toBe("org-firstlove");
   });
+
+  test("finance codes are tenant-scoped and failed journals roll back fully", async () => {
+    const {
+      createFundEntry,
+      createLedgerAccountEntry,
+      recordLedgerTransaction,
+    } = await import("@/lib/finance-store");
+    const { getDatabase } = await import("@/lib/database");
+
+    createFundEntry({
+      organizationId: "org-firstlove",
+      name: "Building Fund",
+      code: "BUILD",
+    });
+    expect(() =>
+      createFundEntry({
+        organizationId: "org-rccg",
+        name: "Building Fund",
+        code: "BUILD",
+      })
+    ).not.toThrow();
+    expect(() =>
+      createFundEntry({
+        organizationId: "org-firstlove",
+        name: "Duplicate Building Fund",
+        code: "BUILD",
+      })
+    ).toThrow();
+
+    const cashAccountId = createLedgerAccountEntry({
+      organizationId: "org-firstlove",
+      name: "Cash",
+      type: "asset",
+      code: "CASH",
+    });
+
+    expect(() =>
+      recordLedgerTransaction({
+        organizationId: "org-firstlove",
+        memo: "Rollback probe",
+        lines: [
+          { accountId: cashAccountId, debit: 25, credit: 0 },
+          { accountId: "missing-ledger-account", debit: 0, credit: 25 },
+        ],
+      })
+    ).toThrow();
+
+    const persisted = getDatabase()
+      .prepare(
+        "SELECT COUNT(*) AS count FROM ledger_transactions WHERE memo = ?"
+      )
+      .get("Rollback probe");
+    expect(persisted?.count).toBe(0);
+  });
 });

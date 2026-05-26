@@ -12,9 +12,12 @@ export default async function MembersPage() {
   const cookieStore = await cookies();
   const preferredBranchId = cookieStore.get(WORKSPACE_BRANCH_COOKIE)?.value || "";
   const workspace = getWorkspaceContext(user, preferredBranchId);
+  const activeBranchId =
+    workspace.activeBranch?.id ||
+    (user.accessScope === "organization" ? "" : user.branchId);
   const members = listMembers({
     organizationId: user.organizationId,
-    branchId: workspace.activeBranch?.id || user.branchId,
+    branchId: activeBranchId,
     limit: 200,
   });
 
