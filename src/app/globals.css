@@ -942,6 +942,15 @@ html[data-theme="dark"] .surface-card-elevated {
   justify-content: center;
 }
 
+.mobile-bottom-nav-link .truncate {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 639px) {
   .command-bar-overlay {
     padding-top: 4rem;
@@ -961,6 +970,14 @@ html[data-theme="dark"] .surface-card-elevated {
   }
 
   .mobile-bottom-nav-inner {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.25rem;
+    padding: 0.4rem;
+  }
+
+  .mobile-bottom-nav-link {
+    padding-inline: 0.2rem;
+    font-size: 0.62rem;
+    letter-spacing: 0;
   }
 }

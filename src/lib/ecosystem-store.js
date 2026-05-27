@@ -14,6 +14,7 @@ import { listFunds, listPledges, getTrialBalance } from "@/lib/finance-store";
 import { listGroups } from "@/lib/group-store";
 import { listMembers } from "@/lib/member-store";
 import { getNewMemberStats, listJourneys } from "@/lib/new-member-store";
+import { getOperationsSummaryData } from "@/lib/operations-store";
 import { normalizeInternalRole } from "@/lib/policies";
 
 const attentionToneWeights = {
@@ -65,6 +66,7 @@ export const getEcosystemCommandData = cache(async function getEcosystemCommandD
         trialBalance: getTrialBalance({ organizationId }),
       }
     : null;
+  const operations = getOperationsSummaryData(viewer, activeBranchId);
 
   const overdueFollowUps = getOverdueHouseholds(dashboard.households);
   const urgentHouseholds = dashboard.households.filter(
@@ -109,6 +111,7 @@ export const getEcosystemCommandData = cache(async function getEcosystemCommandD
     ministryHealth,
     branchMatrix,
     finance,
+    operations,
   });
 
   return {
@@ -193,6 +196,7 @@ export const getEcosystemCommandData = cache(async function getEcosystemCommandD
       canSeeFinance,
       finance,
       report,
+      operations,
     }),
     finance: canSeeFinance
       ? {
@@ -448,6 +452,7 @@ function buildSignals({
   ministryHealth,
   branchMatrix,
   finance,
+  operations,
 }) {
   const signals = [
     {
@@ -544,6 +549,21 @@ function buildSignals({
     });
   }
 
+  if (operations?.summary?.signals > 0) {
+    signals.push({
+      title:
+        operations.summary.lowFuel > 0
+          ? `${operations.summary.lowFuel} diesel tracker${operations.summary.lowFuel === 1 ? "" : "s"} below reserve`
+          : `${operations.summary.signals} operations signal${operations.summary.signals === 1 ? "" : "s"}`,
+      detail:
+        operations.summary.lowFuel > 0
+          ? "Management should review fuel reserve before the next service window."
+          : "Inventory, maintenance, or procurement needs management attention.",
+      tone: operations.summary.lowFuel > 0 ? "high" : "medium",
+      href: "/operations",
+    });
+  }
+
   return signals
     .sort(
       (first, second) =>
@@ -612,6 +632,7 @@ function buildCommandTiles({
   canSeeFinance,
   finance,
   report,
+  operations,
 }) {
   const tiles = [
     {
@@ -637,6 +658,12 @@ function buildCommandTiles({
       value: activeTeams.length,
       detail: "active teams",
       href: "/teams",
+    },
+    {
+      label: "Operations",
+      value: operations?.summary?.signals || 0,
+      detail: "resource signals",
+      href: "/operations",
     },
     {
       label: "Events",

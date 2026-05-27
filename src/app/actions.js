@@ -143,6 +143,15 @@ import {
   getLedgerAccountById,
   recordLedgerTransaction,
 } from "@/lib/finance-store";
+import {
+  adjustInventoryItemEntry,
+  createAssetEntry,
+  createFuelTankEntry,
+  createInventoryItemEntry,
+  createPurchaseRequestEntry,
+  createWorkOrderEntry,
+  recordFuelLogEntry,
+} from "@/lib/operations-store";
 import { addMemberEvent, getMemberById } from "@/lib/member-store";
 import {
   createVolunteerApplication as createVolunteerApplicationEntry,
@@ -231,6 +240,11 @@ const allowedLedgerAccountTypes = new Set([
 ]);
 
 const allowedAttendanceModes = new Set(["physical", "online"]);
+const allowedFuelLogTypes = new Set(["refill", "usage"]);
+const allowedOperationPriorities = new Set(["low", "medium", "high", "critical"]);
+const allowedAssetStatuses = new Set(["active", "needs_service", "retired"]);
+const allowedWorkOrderStatuses = new Set(["open", "in_progress", "completed"]);
+const allowedPurchaseStatuses = new Set(["requested", "approved", "ordered"]);
 
 const loginLockoutThreshold = 10;
 const maxAuthFieldLengths = {
@@ -303,6 +317,10 @@ function getMoneyAmount(formData, key) {
     return 0;
   }
   return Number(value.toFixed(2));
+}
+
+function getPositiveNumber(formData, key) {
+  return Math.max(0, getMoneyAmount(formData, key));
 }
 
 function getGenericRegistrationResponse() {
@@ -666,6 +684,41 @@ async function getWorkspaceSelection(user) {
       workspace.activeBranch?.id ||
       (isOrganizationScopedUser(user) ? "" : user.branchId || defaultPrimaryBranchId),
   };
+}
+
+async function getOperationsMutationScope(user, formData) {
+  const scope = await getWorkspaceSelection(user);
+  const requestedBranchId = getString(formData, "branchId");
+  const fallbackBranchId =
+    scope.branchId ||
+    user.branchId ||
+    scope.workspace.visibleBranches[0]?.id ||
+    defaultPrimaryBranchId;
+  const branchId = requestedBranchId || fallbackBranchId;
+  const canUseBranch = scope.workspace.visibleBranches.some(
+    (branch) => branch.id === branchId
+  );
+
+  if (!canUseBranch) {
+    throw new Error("Choose a branch inside your workspace.");
+  }
+
+  return {
+    ...scope,
+    branchId,
+    preferredBranchId: branchId,
+  };
+}
+
+async function getOperationsScopeOrRedirect(user, formData, path = "/operations") {
+  try {
+    return await getOperationsMutationScope(user, formData);
+  } catch (error) {
+    redirectWithError(
+      path,
+      getActionErrorMessage(error, "Choose a branch inside your workspace.")
+    );
+  }
 }
 
 function canManageRole(actorRole, role) {
@@ -4708,6 +4761,285 @@ export async function recordJournalEntry(formData) {
   }
 
   redirectWithNotice("/finance", "Journal entry posted.");
+}
+
+export async function createInventoryItem(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getOperationsScopeOrRedirect(actor, formData);
+  const name = getBoundedString(formData, "name", maxAuthFieldLengths.name);
+  const category = getBoundedString(formData, "category", maxAuthFieldLengths.name) || "General";
+  const unit = getBoundedString(formData, "unit", 24) || "units";
+  const quantity = getPositiveNumber(formData, "quantity");
+  const reorderLevel = getPositiveNumber(formData, "reorderLevel");
+
+  if (!name) {
+    redirectWithError("/operations", "Inventory item name is required.");
+  }
+
+  createInventoryItemEntry({
+    organizationId: scope.organizationId,
+    branchId: scope.branchId,
+    name,
+    category,
+    unit,
+    quantity,
+    reorderLevel,
+    preferredVendor: getBoundedString(formData, "preferredVendor", 120),
+    storageLocation: getBoundedString(formData, "storageLocation", 120),
+    notes: getBoundedString(formData, "notes", maxAuthFieldLengths.note),
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "operations.inventory_created",
+    targetType: "inventory_item",
+    targetId: name,
+    summary: `${actor.name} added ${name} to operations inventory.`,
+  });
+
+  revalidatePath("/operations");
+  redirectWithNotice("/operations#inventory", "Inventory item added.");
+}
+
+export async function adjustInventoryItem(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const itemId = getString(formData, "itemId");
+  const mode = getString(formData, "mode") === "set" ? "set" : "add";
+  const quantity = getMoneyAmount(formData, "quantity");
+
+  if (!itemId) {
+    redirectWithError("/operations#inventory", "Choose an inventory item first.");
+  }
+
+  try {
+    adjustInventoryItemEntry(
+      itemId,
+      {
+        mode,
+        quantity,
+        notes: getBoundedString(formData, "notes", maxAuthFieldLengths.note),
+      },
+      actor,
+      scope.branchId
+    );
+  } catch (error) {
+    redirectWithError(
+      "/operations#inventory",
+      getActionErrorMessage(error, "We could not update that inventory item.")
+    );
+  }
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "operations.inventory_adjusted",
+    targetType: "inventory_item",
+    targetId: itemId,
+    summary: `${actor.name} updated an inventory quantity.`,
+    metadata: { mode, quantity },
+  });
+
+  revalidatePath("/operations");
+  redirectWithNotice("/operations#inventory", "Inventory updated.");
+}
+
+export async function createFuelTank(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getOperationsScopeOrRedirect(actor, formData, "/operations#fuel");
+  const assetName = getBoundedString(formData, "assetName", maxAuthFieldLengths.name);
+
+  if (!assetName) {
+    redirectWithError("/operations#fuel", "Generator or tank name is required.");
+  }
+
+  createFuelTankEntry({
+    organizationId: scope.organizationId,
+    branchId: scope.branchId,
+    assetName,
+    fuelType: getBoundedString(formData, "fuelType", 32) || "diesel",
+    capacityLitres: getPositiveNumber(formData, "capacityLitres"),
+    currentLitres: getPositiveNumber(formData, "currentLitres"),
+    reorderLevelLitres: getPositiveNumber(formData, "reorderLevelLitres"),
+    averageDailyLitres: getPositiveNumber(formData, "averageDailyLitres"),
+    notes: getBoundedString(formData, "notes", maxAuthFieldLengths.note),
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "operations.fuel_tank_created",
+    targetType: "fuel_tank",
+    targetId: assetName,
+    summary: `${actor.name} added ${assetName} fuel tracking.`,
+  });
+
+  revalidatePath("/operations");
+  redirectWithNotice("/operations#fuel", "Fuel tracker added.");
+}
+
+export async function recordFuelLog(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getWorkspaceSelection(actor);
+  const tankId = getString(formData, "tankId");
+  const logType = getString(formData, "logType") || "refill";
+  const quantityLitres = getPositiveNumber(formData, "quantityLitres");
+
+  if (!tankId || quantityLitres <= 0) {
+    redirectWithError("/operations#fuel", "Choose a fuel tracker and enter litres.");
+  }
+
+  if (!allowedFuelLogTypes.has(logType)) {
+    redirectWithError("/operations#fuel", "Choose refill or usage.");
+  }
+
+  try {
+    recordFuelLogEntry(
+      tankId,
+      {
+        logType,
+        quantityLitres,
+        generatorHours: getString(formData, "generatorHours"),
+        readingAt: getString(formData, "readingAt"),
+        recordedByName: actor.name,
+        notes: getBoundedString(formData, "notes", maxAuthFieldLengths.note),
+      },
+      actor,
+      scope.branchId
+    );
+  } catch (error) {
+    redirectWithError(
+      "/operations#fuel",
+      getActionErrorMessage(error, "We could not record that fuel movement.")
+    );
+  }
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "operations.fuel_logged",
+    targetType: "fuel_tank",
+    targetId: tankId,
+    summary: `${actor.name} recorded a ${logType} fuel movement.`,
+    metadata: { quantityLitres },
+  });
+
+  revalidatePath("/operations");
+  redirectWithNotice("/operations#fuel", "Fuel movement recorded.");
+}
+
+export async function createOperationsAsset(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getOperationsScopeOrRedirect(actor, formData, "/operations#assets");
+  const name = getBoundedString(formData, "name", maxAuthFieldLengths.name);
+  const status = getString(formData, "status") || "active";
+
+  if (!name) {
+    redirectWithError("/operations#assets", "Asset name is required.");
+  }
+
+  if (!allowedAssetStatuses.has(status)) {
+    redirectWithError("/operations#assets", "Choose a valid asset status.");
+  }
+
+  createAssetEntry({
+    organizationId: scope.organizationId,
+    branchId: scope.branchId,
+    name,
+    assetType: getBoundedString(formData, "assetType", maxAuthFieldLengths.name),
+    location: getBoundedString(formData, "location", 120),
+    status,
+    serviceIntervalDays: getPositiveNumber(formData, "serviceIntervalDays"),
+    lastServicedAt: getString(formData, "lastServicedAt"),
+    nextServiceAt: getString(formData, "nextServiceAt"),
+    notes: getBoundedString(formData, "notes", maxAuthFieldLengths.note),
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "operations.asset_created",
+    targetType: "asset",
+    targetId: name,
+    summary: `${actor.name} added ${name} to asset tracking.`,
+  });
+
+  revalidatePath("/operations");
+  redirectWithNotice("/operations#assets", "Asset added.");
+}
+
+export async function createOperationsWorkOrder(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getOperationsScopeOrRedirect(actor, formData, "/operations#maintenance");
+  const title = getBoundedString(formData, "title", 180);
+  const priority = getString(formData, "priority") || "medium";
+  const status = getString(formData, "status") || "open";
+
+  if (!title) {
+    redirectWithError("/operations#maintenance", "Work order title is required.");
+  }
+
+  if (!allowedOperationPriorities.has(priority) || !allowedWorkOrderStatuses.has(status)) {
+    redirectWithError("/operations#maintenance", "Choose valid work order status and priority.");
+  }
+
+  createWorkOrderEntry({
+    organizationId: scope.organizationId,
+    branchId: scope.branchId,
+    assetId: getString(formData, "assetId"),
+    title,
+    priority,
+    status,
+    dueAt: getString(formData, "dueAt"),
+    assignedTo: getBoundedString(formData, "assignedTo", 120),
+    vendor: getBoundedString(formData, "vendor", 120),
+    notes: getBoundedString(formData, "notes", maxAuthFieldLengths.note),
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "operations.work_order_created",
+    targetType: "work_order",
+    targetId: title,
+    summary: `${actor.name} opened a ${priority} work order.`,
+  });
+
+  revalidatePath("/operations");
+  redirectWithNotice("/operations#maintenance", "Work order opened.");
+}
+
+export async function createOperationsPurchaseRequest(formData) {
+  const actor = await requireCurrentUser(["leader", "pastor", "owner"]);
+  const scope = await getOperationsScopeOrRedirect(actor, formData, "/operations#purchases");
+  const title = getBoundedString(formData, "title", 180);
+  const status = getString(formData, "status") || "requested";
+
+  if (!title) {
+    redirectWithError("/operations#purchases", "Purchase request title is required.");
+  }
+
+  if (!allowedPurchaseStatuses.has(status)) {
+    redirectWithError("/operations#purchases", "Choose a valid purchase status.");
+  }
+
+  createPurchaseRequestEntry({
+    organizationId: scope.organizationId,
+    branchId: scope.branchId,
+    title,
+    category: getBoundedString(formData, "category", maxAuthFieldLengths.name),
+    estimatedAmount: getPositiveNumber(formData, "estimatedAmount"),
+    status,
+    neededBy: getString(formData, "neededBy"),
+    requestedByName: actor.name,
+    notes: getBoundedString(formData, "notes", maxAuthFieldLengths.note),
+  });
+
+  recordAuditLog({
+    ...buildActorLog(actor, scope),
+    action: "operations.purchase_requested",
+    targetType: "purchase_request",
+    targetId: title,
+    summary: `${actor.name} opened an operations purchase request.`,
+  });
+
+  revalidatePath("/operations");
+  redirectWithNotice("/operations#purchases", "Purchase request opened.");
 }
 
 // -- Self-registration (public - no auth required) -----------------------------

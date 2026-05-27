@@ -39,6 +39,7 @@ describe("ecosystem command data", () => {
     ]);
     expect(data.graph.nodes.find((node) => node.id === "church")).toBeTruthy();
     expect(data.signals.length).toBeGreaterThan(0);
+    expect(data.commandTiles.some((tile) => tile.label === "Operations")).toBe(true);
     expect(data.commandTiles.some((tile) => tile.label === "Giving")).toBe(true);
     expect(data.finance).toMatchObject({
       balanced: true,

@@ -94,22 +94,26 @@ export function AppShellNav({
           currentPrivacyMode={currentPrivacyMode}
           redirectTo={redirectTo}
         />
-        <ThemeToggleButton
-          currentTheme={currentTheme}
-          redirectTo={redirectTo}
-          copy={copy}
-        />
+        <div className="hidden sm:block">
+          <ThemeToggleButton
+            currentTheme={currentTheme}
+            redirectTo={redirectTo}
+            copy={copy}
+          />
+        </div>
 
         {userSummary ? (
-          <DesktopMenu
-            menuKey="account"
-            label={userSummary.buttonLabel}
-            accent
-            openKey={desktopOpenKey}
-            setOpenKey={setDesktopOpenKey}
-          >
-            <AccountMenuPanel copy={copy} userSummary={userSummary} />
-          </DesktopMenu>
+          <div className="hidden sm:block">
+            <DesktopMenu
+              menuKey="account"
+              label={userSummary.buttonLabel}
+              accent
+              openKey={desktopOpenKey}
+              setOpenKey={setDesktopOpenKey}
+            >
+              <AccountMenuPanel copy={copy} userSummary={userSummary} />
+            </DesktopMenu>
+          </div>
         ) : (
           <Link
             href="/login"

@@ -37,7 +37,7 @@ export const metadata = {
     template: "%s | Church Care OS",
   },
   description:
-    "An innovative church ecosystem for people, discipleship, ministries, care, branches, stewardship, and Sunday readiness.",
+    "An innovative church ecosystem for people, discipleship, ministries, care, branch operations, stewardship, and Sunday readiness.",
   applicationName: "Church Care OS",
   appleWebApp: {
     title: "Church Care OS",
@@ -46,7 +46,7 @@ export const metadata = {
   openGraph: {
     title: "Church Care OS",
     description:
-      "A connected church operating system for pastoral care, discipleship, ministries, branch oversight, and member journeys.",
+      "A connected church operating system for pastoral care, discipleship, ministries, branch operations, and member journeys.",
     type: "website",
   },
 };
@@ -384,22 +384,32 @@ function buildQuickActions(user, copy) {
   const normalizedRole = normalizeInternalRole(user.role);
 
   if (["leader", "pastor", "owner"].includes(normalizedRole)) {
-    items.unshift({
-      id: "action:new-request",
-      href: "/requests/new",
-      label: "New request",
-      description: "Capture a fresh care need without leaving the workspace",
-      section: "Quick actions",
-      type: "action",
-    });
-    items.unshift({
-      id: "action:ecosystem-command",
-      href: "/ecosystem",
-      label: "Ecosystem Command",
-      description: "Open the connected church command surface",
-      section: "Quick actions",
-      type: "action",
-    });
+    items.unshift(
+      {
+        id: "action:ecosystem-command",
+        href: "/ecosystem",
+        label: "Ecosystem Command",
+        description: "Open the connected church command surface",
+        section: "Quick actions",
+        type: "action",
+      },
+      {
+        id: "action:operations-command",
+        href: "/operations",
+        label: "Operations Command",
+        description: "Review inventory, diesel, assets, maintenance, and purchases",
+        section: "Quick actions",
+        type: "action",
+      },
+      {
+        id: "action:new-request",
+        href: "/requests/new",
+        label: "New request",
+        description: "Capture a fresh care need without leaving the workspace",
+        section: "Quick actions",
+        type: "action",
+      }
+    );
   }
 
   return items;
@@ -488,7 +498,8 @@ function buildBottomNav(user, unreadNotificationCount = 0) {
   return [
     { href: "/ecosystem", label: "Command", type: "action" },
     { href: "/follow-up", label: "Follow-up", type: "follow-up" },
-    { href: "/households", label: "Households", type: "household" },
+    { href: "/households", label: "Homes", type: "household" },
+    { href: "/operations", label: "Ops", type: "action" },
     { href: "/inbox", label: "Inbox", type: "inbox" },
   ];
 }
@@ -577,6 +588,10 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
     operationItems.push({
       href: "/schedule",
       label: copy.layout.nav.schedule,
+    });
+    operationItems.push({
+      href: "/operations",
+      label: "Operations Command",
     });
     operationItems.push({
       href: "/households",

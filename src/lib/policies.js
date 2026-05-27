@@ -35,6 +35,7 @@ export const internalRoles = normalizeInternalRoles(Object.keys(roleLandingPages
 
 export const protectedRouteRoles = {
   ecosystem: ["leader", "pastor", "owner"],
+  operations: ["leader", "pastor", "owner"],
   dashboard: ["pastor", "owner"],
   leader: ["leader", "pastor", "owner"],
   schedule: ["leader", "pastor", "owner"],

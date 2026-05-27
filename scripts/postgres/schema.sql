@@ -588,6 +588,99 @@ CREATE TABLE IF NOT EXISTS pledges (
   status text NOT NULL DEFAULT 'active'
 );
 
+CREATE TABLE IF NOT EXISTS operations_inventory_items (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id text NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  category text NOT NULL DEFAULT 'General',
+  unit text NOT NULL DEFAULT 'units',
+  quantity numeric(12,2) NOT NULL DEFAULT 0,
+  reorder_level numeric(12,2) NOT NULL DEFAULT 0,
+  preferred_vendor text,
+  storage_location text,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS operations_fuel_tanks (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id text NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  asset_name text NOT NULL,
+  fuel_type text NOT NULL DEFAULT 'diesel',
+  capacity_litres numeric(12,2) NOT NULL DEFAULT 0,
+  current_litres numeric(12,2) NOT NULL DEFAULT 0,
+  reorder_level_litres numeric(12,2) NOT NULL DEFAULT 0,
+  average_daily_litres numeric(12,2) NOT NULL DEFAULT 0,
+  last_dip_at timestamptz,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS operations_fuel_logs (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id text NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  tank_id text NOT NULL REFERENCES operations_fuel_tanks(id) ON DELETE CASCADE,
+  log_type text NOT NULL,
+  quantity_litres numeric(12,2) NOT NULL DEFAULT 0,
+  generator_hours numeric(12,2),
+  reading_at timestamptz NOT NULL DEFAULT now(),
+  recorded_by_name text,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS operations_assets (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id text NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  asset_type text NOT NULL DEFAULT 'Equipment',
+  location text,
+  status text NOT NULL DEFAULT 'active',
+  service_interval_days integer,
+  last_serviced_at timestamptz,
+  next_service_at timestamptz,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS operations_work_orders (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id text NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  asset_id text REFERENCES operations_assets(id) ON DELETE SET NULL,
+  title text NOT NULL,
+  priority text NOT NULL DEFAULT 'medium',
+  status text NOT NULL DEFAULT 'open',
+  due_at timestamptz,
+  assigned_to text,
+  vendor text,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS operations_purchase_requests (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  branch_id text NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  category text NOT NULL DEFAULT 'General',
+  estimated_amount numeric(12,2) NOT NULL DEFAULT 0,
+  status text NOT NULL DEFAULT 'requested',
+  needed_by date,
+  requested_by_name text,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_household_notes_household_slug
   ON household_notes (household_slug, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_requests_household_slug
@@ -656,6 +749,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_accounts_org_code
   ON ledger_accounts (organization_id, code);
 CREATE INDEX IF NOT EXISTS idx_ledger_lines_tx
   ON ledger_lines (transaction_id);
+CREATE INDEX IF NOT EXISTS idx_operations_inventory_scope
+  ON operations_inventory_items (organization_id, branch_id, category, name);
+CREATE INDEX IF NOT EXISTS idx_operations_fuel_scope
+  ON operations_fuel_tanks (organization_id, branch_id, fuel_type);
+CREATE INDEX IF NOT EXISTS idx_operations_fuel_logs_tank
+  ON operations_fuel_logs (tank_id, reading_at DESC);
+CREATE INDEX IF NOT EXISTS idx_operations_assets_scope
+  ON operations_assets (organization_id, branch_id, status, next_service_at);
+CREATE INDEX IF NOT EXISTS idx_operations_work_orders_scope
+  ON operations_work_orders (organization_id, branch_id, status, due_at);
+CREATE INDEX IF NOT EXISTS idx_operations_purchases_scope
+  ON operations_purchase_requests (organization_id, branch_id, status, needed_by);
 CREATE INDEX IF NOT EXISTS idx_organizations_active_slug
   ON organizations (active, slug);
 CREATE INDEX IF NOT EXISTS idx_branches_org_active_name

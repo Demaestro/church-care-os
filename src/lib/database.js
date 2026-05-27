@@ -791,6 +791,99 @@ function createSchema(db) {
       status TEXT NOT NULL DEFAULT 'active'
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS operations_inventory_items (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'General',
+      unit TEXT NOT NULL DEFAULT 'units',
+      quantity REAL NOT NULL DEFAULT 0,
+      reorder_level REAL NOT NULL DEFAULT 0,
+      preferred_vendor TEXT,
+      storage_location TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS operations_fuel_tanks (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      asset_name TEXT NOT NULL,
+      fuel_type TEXT NOT NULL DEFAULT 'diesel',
+      capacity_litres REAL NOT NULL DEFAULT 0,
+      current_litres REAL NOT NULL DEFAULT 0,
+      reorder_level_litres REAL NOT NULL DEFAULT 0,
+      average_daily_litres REAL NOT NULL DEFAULT 0,
+      last_dip_at TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS operations_fuel_logs (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      tank_id TEXT NOT NULL REFERENCES operations_fuel_tanks(id) ON DELETE CASCADE,
+      log_type TEXT NOT NULL,
+      quantity_litres REAL NOT NULL DEFAULT 0,
+      generator_hours REAL,
+      reading_at TEXT NOT NULL,
+      recorded_by_name TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS operations_assets (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      asset_type TEXT NOT NULL DEFAULT 'Equipment',
+      location TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      service_interval_days INTEGER,
+      last_serviced_at TEXT,
+      next_service_at TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS operations_work_orders (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      asset_id TEXT REFERENCES operations_assets(id) ON DELETE SET NULL,
+      title TEXT NOT NULL,
+      priority TEXT NOT NULL DEFAULT 'medium',
+      status TEXT NOT NULL DEFAULT 'open',
+      due_at TEXT,
+      assigned_to TEXT,
+      vendor TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS operations_purchase_requests (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'General',
+      estimated_amount REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'requested',
+      needed_by TEXT,
+      requested_by_name TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
     CREATE INDEX IF NOT EXISTS idx_message_outbox_status_created
       ON message_outbox (status, created_at DESC);
 
@@ -835,6 +928,18 @@ function createSchema(db) {
       ON ledger_accounts (organization_id, code);
     CREATE INDEX IF NOT EXISTS idx_ledger_lines_tx
       ON ledger_lines (transaction_id);
+    CREATE INDEX IF NOT EXISTS idx_operations_inventory_scope
+      ON operations_inventory_items (organization_id, branch_id, category, name);
+    CREATE INDEX IF NOT EXISTS idx_operations_fuel_scope
+      ON operations_fuel_tanks (organization_id, branch_id, fuel_type);
+    CREATE INDEX IF NOT EXISTS idx_operations_fuel_logs_tank
+      ON operations_fuel_logs (tank_id, reading_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_operations_assets_scope
+      ON operations_assets (organization_id, branch_id, status, next_service_at);
+    CREATE INDEX IF NOT EXISTS idx_operations_work_orders_scope
+      ON operations_work_orders (organization_id, branch_id, status, due_at);
+    CREATE INDEX IF NOT EXISTS idx_operations_purchases_scope
+      ON operations_purchase_requests (organization_id, branch_id, status, needed_by);
   `);
 }
 
@@ -1415,6 +1520,99 @@ function ensureSchemaMigrations(db) {
       status TEXT NOT NULL DEFAULT 'active'
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS operations_inventory_items (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'General',
+      unit TEXT NOT NULL DEFAULT 'units',
+      quantity REAL NOT NULL DEFAULT 0,
+      reorder_level REAL NOT NULL DEFAULT 0,
+      preferred_vendor TEXT,
+      storage_location TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS operations_fuel_tanks (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      asset_name TEXT NOT NULL,
+      fuel_type TEXT NOT NULL DEFAULT 'diesel',
+      capacity_litres REAL NOT NULL DEFAULT 0,
+      current_litres REAL NOT NULL DEFAULT 0,
+      reorder_level_litres REAL NOT NULL DEFAULT 0,
+      average_daily_litres REAL NOT NULL DEFAULT 0,
+      last_dip_at TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS operations_fuel_logs (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      tank_id TEXT NOT NULL,
+      log_type TEXT NOT NULL,
+      quantity_litres REAL NOT NULL DEFAULT 0,
+      generator_hours REAL,
+      reading_at TEXT NOT NULL,
+      recorded_by_name TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS operations_assets (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      asset_type TEXT NOT NULL DEFAULT 'Equipment',
+      location TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      service_interval_days INTEGER,
+      last_serviced_at TEXT,
+      next_service_at TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS operations_work_orders (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      asset_id TEXT,
+      title TEXT NOT NULL,
+      priority TEXT NOT NULL DEFAULT 'medium',
+      status TEXT NOT NULL DEFAULT 'open',
+      due_at TEXT,
+      assigned_to TEXT,
+      vendor TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS operations_purchase_requests (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      branch_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'General',
+      estimated_amount REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'requested',
+      needed_by TEXT,
+      requested_by_name TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+
     DROP INDEX IF EXISTS idx_attendance_service_member;
 
     CREATE INDEX IF NOT EXISTS idx_members_scope
@@ -1429,6 +1627,18 @@ function ensureSchemaMigrations(db) {
       ON ledger_accounts (organization_id, code);
     CREATE INDEX IF NOT EXISTS idx_ledger_lines_tx
       ON ledger_lines (transaction_id);
+    CREATE INDEX IF NOT EXISTS idx_operations_inventory_scope
+      ON operations_inventory_items (organization_id, branch_id, category, name);
+    CREATE INDEX IF NOT EXISTS idx_operations_fuel_scope
+      ON operations_fuel_tanks (organization_id, branch_id, fuel_type);
+    CREATE INDEX IF NOT EXISTS idx_operations_fuel_logs_tank
+      ON operations_fuel_logs (tank_id, reading_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_operations_assets_scope
+      ON operations_assets (organization_id, branch_id, status, next_service_at);
+    CREATE INDEX IF NOT EXISTS idx_operations_work_orders_scope
+      ON operations_work_orders (organization_id, branch_id, status, due_at);
+    CREATE INDEX IF NOT EXISTS idx_operations_purchases_scope
+      ON operations_purchase_requests (organization_id, branch_id, status, needed_by);
   `);
 
   ensureTenantScopedFinanceCodeTables(db);
@@ -1833,6 +2043,7 @@ function bootstrapDatabase(db) {
   seedUsers(db);
 
   seedDemoBranchCoverage(db);
+  seedDemoOperations(db);
 }
 
 function seedBranchSettings(db) {
@@ -2173,4 +2384,194 @@ function seedDemoBranchCoverage(db) {
       null
     );
   }
+}
+
+function seedDemoOperations(db) {
+  if (process.env.NODE_ENV === "production") {
+    return;
+  }
+
+  const existing =
+    db
+      .prepare("SELECT COUNT(*) AS count FROM operations_fuel_tanks")
+      .get()?.count || 0;
+
+  if (existing > 0) {
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const overdue = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+
+  const insertInventory = db.prepare(`
+    INSERT OR IGNORE INTO operations_inventory_items (
+      id, organization_id, branch_id, name, category, unit, quantity,
+      reorder_level, preferred_vendor, storage_location, notes, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const insertFuelTank = db.prepare(`
+    INSERT OR IGNORE INTO operations_fuel_tanks (
+      id, organization_id, branch_id, asset_name, fuel_type, capacity_litres,
+      current_litres, reorder_level_litres, average_daily_litres, last_dip_at,
+      notes, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const insertAsset = db.prepare(`
+    INSERT OR IGNORE INTO operations_assets (
+      id, organization_id, branch_id, name, asset_type, location, status,
+      service_interval_days, last_serviced_at, next_service_at, notes,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const insertWorkOrder = db.prepare(`
+    INSERT OR IGNORE INTO operations_work_orders (
+      id, organization_id, branch_id, asset_id, title, priority, status, due_at,
+      assigned_to, vendor, notes, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const insertPurchase = db.prepare(`
+    INSERT OR IGNORE INTO operations_purchase_requests (
+      id, organization_id, branch_id, title, category, estimated_amount, status,
+      needed_by, requested_by_name, notes, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  insertInventory.run(
+    "ops-inv-firstlove-lagos-communion-cups",
+    "org-firstlove",
+    "branch-firstlove-lagos-hq",
+    "Communion cups",
+    "Service supplies",
+    "packs",
+    5,
+    12,
+    "Sunday Supplies Ltd",
+    "Sanctuary store",
+    "Restock before the next first-Sunday communion service.",
+    now,
+    now
+  );
+  insertInventory.run(
+    "ops-inv-firstlove-lagos-kids-labels",
+    "org-firstlove",
+    "branch-firstlove-lagos-hq",
+    "Children check-in labels",
+    "Children ministry",
+    "rolls",
+    1,
+    4,
+    "PrintHub",
+    "Children church desk",
+    "Low stock affects Sunday child check-in.",
+    now,
+    now
+  );
+  insertInventory.run(
+    "ops-inv-firstlove-abuja-diesel-filter",
+    "org-firstlove",
+    "branch-firstlove-abuja-central",
+    "Generator diesel filters",
+    "Facilities",
+    "units",
+    8,
+    4,
+    "PowerCare Services",
+    "Facilities cabinet",
+    "Enough filters for scheduled maintenance.",
+    now,
+    now
+  );
+
+  insertFuelTank.run(
+    "ops-fuel-firstlove-lagos-main-generator",
+    "org-firstlove",
+    "branch-firstlove-lagos-hq",
+    "Main sanctuary generator",
+    "diesel",
+    1000,
+    180,
+    250,
+    46,
+    now,
+    "Current stock is below reorder level.",
+    now,
+    now
+  );
+  insertFuelTank.run(
+    "ops-fuel-firstlove-abuja-backup-generator",
+    "org-firstlove",
+    "branch-firstlove-abuja-central",
+    "Backup generator",
+    "diesel",
+    800,
+    420,
+    200,
+    28,
+    now,
+    "Healthy reserve for midweek services.",
+    now,
+    now
+  );
+
+  insertAsset.run(
+    "ops-asset-firstlove-lagos-main-generator",
+    "org-firstlove",
+    "branch-firstlove-lagos-hq",
+    "Main sanctuary generator",
+    "Generator",
+    "Generator house",
+    "active",
+    30,
+    new Date(Date.now() - 32 * 24 * 60 * 60 * 1000).toISOString(),
+    overdue,
+    "Service oil and inspect belts after extended use.",
+    now,
+    now
+  );
+  insertAsset.run(
+    "ops-asset-firstlove-lagos-projector",
+    "org-firstlove",
+    "branch-firstlove-lagos-hq",
+    "Main hall projector",
+    "AV equipment",
+    "Main hall",
+    "active",
+    90,
+    new Date(Date.now() - 80 * 24 * 60 * 60 * 1000).toISOString(),
+    nextWeek,
+    "Lamp hours should be reviewed before conference weekend.",
+    now,
+    now
+  );
+
+  insertWorkOrder.run(
+    "ops-work-firstlove-lagos-generator-service",
+    "org-firstlove",
+    "branch-firstlove-lagos-hq",
+    "ops-asset-firstlove-lagos-main-generator",
+    "Service main generator before next Sunday",
+    "critical",
+    "open",
+    nextWeek,
+    "Facilities lead",
+    "PowerCare Services",
+    "Fuel is low and service is overdue.",
+    now,
+    now
+  );
+  insertPurchase.run(
+    "ops-purchase-firstlove-lagos-diesel-refill",
+    "org-firstlove",
+    "branch-firstlove-lagos-hq",
+    "Order 600L diesel refill",
+    "Fuel",
+    900000,
+    "requested",
+    nextWeek,
+    "Facilities lead",
+    "Reorder before diesel reserve drops below weekend operating need.",
+    now,
+    now
+  );
 }
