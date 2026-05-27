@@ -8,8 +8,8 @@
 
 const englishDictionary = {
   layout: {
-    brandKicker: "Church Care",
-    brandTitle: "Operations board",
+    brandKicker: "Church Ecosystem",
+    brandTitle: "Command OS",
     signIn: "Sign in",
     signOut: "Sign out",
     switchAccount: "Switch account",
@@ -50,7 +50,7 @@ const englishDictionary = {
     },
     navGroups: {
       public: "Member tools",
-      operations: "Care work",
+      operations: "Ecosystem",
       oversight: "Oversight",
     },
     workspaceReady: "Workspace ready",
@@ -62,9 +62,9 @@ const englishDictionary = {
     internalEntryBody:
       "Use the switch-account path to move between owner, pastor, leader, and volunteer workspaces more smoothly during review or training.",
     footerPrimary:
-      "Built for care teams who want clarity, warmth, and fewer dropped handoffs.",
+      "Built for churches connecting people, care, discipleship, ministries, and branches.",
     footerSecondary:
-      "Pastors, deacons, and volunteers stay in one visible rhythm.",
+      "Pastors, leaders, volunteers, and members stay in one visible rhythm.",
   },
   displayModes: {
     standard: "Standard",

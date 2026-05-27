@@ -17,9 +17,9 @@ export function normalizeInternalRoles(roles = []) {
 }
 
 export const roleLandingPages = {
-  owner: "/",
-  pastor: "/",
-  leader: "/leader",
+  owner: "/ecosystem",
+  pastor: "/ecosystem",
+  leader: "/ecosystem",
   volunteer: "/volunteer",
   member: "/",
 };
@@ -34,6 +34,7 @@ export const mfaRequiredRoles = ["owner", "pastor"];
 export const internalRoles = normalizeInternalRoles(Object.keys(roleLandingPages));
 
 export const protectedRouteRoles = {
+  ecosystem: ["leader", "pastor", "owner"],
   dashboard: ["pastor", "owner"],
   leader: ["leader", "pastor", "owner"],
   schedule: ["leader", "pastor", "owner"],

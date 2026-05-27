@@ -4,7 +4,7 @@ export default function manifest() {
     name: "Church Care OS",
     short_name: "Church Care",
     description:
-      "A secure pastoral care workspace for requests, follow-up, branch oversight, and discipleship.",
+      "A secure church ecosystem for care, discipleship, ministries, branch oversight, Sunday readiness, and stewardship.",
     start_url: "/",
     scope: "/",
     display: "standalone",
@@ -31,6 +31,12 @@ export default function manifest() {
       },
     ],
     shortcuts: [
+      {
+        name: "Ecosystem Command",
+        short_name: "Command",
+        description: "Open the connected church command surface.",
+        url: "/ecosystem",
+      },
       {
         name: "Request care",
         short_name: "Request care",

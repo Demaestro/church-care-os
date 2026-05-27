@@ -37,7 +37,7 @@ export const metadata = {
     template: "%s | Church Care OS",
   },
   description:
-    "Care coordination for pastors, deacons, and volunteers with one shared rhythm for requests, assignments, and follow-up.",
+    "An innovative church ecosystem for people, discipleship, ministries, care, branches, stewardship, and Sunday readiness.",
   applicationName: "Church Care OS",
   appleWebApp: {
     title: "Church Care OS",
@@ -46,7 +46,7 @@ export const metadata = {
   openGraph: {
     title: "Church Care OS",
     description:
-      "A warm operating system for care requests, volunteer coordination, and pastoral follow-up.",
+      "A connected church operating system for pastoral care, discipleship, ministries, branch oversight, and member journeys.",
     type: "website",
   },
 };
@@ -392,6 +392,14 @@ function buildQuickActions(user, copy) {
       section: "Quick actions",
       type: "action",
     });
+    items.unshift({
+      id: "action:ecosystem-command",
+      href: "/ecosystem",
+      label: "Ecosystem Command",
+      description: "Open the connected church command surface",
+      section: "Quick actions",
+      type: "action",
+    });
   }
 
   return items;
@@ -478,11 +486,10 @@ function buildBottomNav(user, unreadNotificationCount = 0) {
   }
 
   return [
-    { href: "/", label: "Home", type: "action" },
+    { href: "/ecosystem", label: "Command", type: "action" },
     { href: "/follow-up", label: "Follow-up", type: "follow-up" },
     { href: "/households", label: "Households", type: "household" },
     { href: "/inbox", label: "Inbox", type: "inbox" },
-    { href: "/member", label: "Member", type: "member" },
   ];
 }
 
@@ -544,8 +551,12 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
 
   if (["pastor", "owner"].includes(normalizedRole)) {
     operationItems.push({
+      href: "/ecosystem",
+      label: "Ecosystem Command",
+    });
+    operationItems.push({
       href: "/",
-      label: copy.layout.nav.dashboard,
+      label: "Care Overview",
     });
     operationItems.push({ href: "/follow-up", label: "Follow-up" });
     operationItems.push({ href: "/inbox", label: "Inbox" });
@@ -553,6 +564,12 @@ function buildNavSections(user, unreadNotificationCount = 0, copy) {
   }
 
   if (["leader", "pastor", "owner"].includes(normalizedRole)) {
+    if (normalizedRole === "leader") {
+      operationItems.push({
+        href: "/ecosystem",
+        label: "Ecosystem Command",
+      });
+    }
     operationItems.push({
       href: "/leader",
       label: copy.layout.nav.leaderView,
